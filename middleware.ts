@@ -8,6 +8,7 @@ import { NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY } from '@/lib/e
  */
 const PUBLIC_ROUTES = [
   '/apply',
+  '/volunteer/apply',
   '/login',
   '/auth/callback',
   '/auth/confirm',
