@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import { FamilyShell, PageHeader, ActionCard, StatusBadge } from '@/components/ui'
 
 const CHECKLIST: Array<{
@@ -13,9 +15,18 @@ const CHECKLIST: Array<{
   { label: 'Team', status: 'Pending', variant: 'info' },
 ]
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
   return (
-    <FamilyShell familyName="Miller Family" maxWidth="lg">
+    <FamilyShell familyName={user.email ?? 'Your Family'} maxWidth="lg">
       <PageHeader title="Your Dashboard" subtitle="Welcome back. Here's where Maya's enrollment stands." />
 
       <ActionCard
