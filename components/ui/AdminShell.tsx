@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: '/admin/volunteers', label: 'Volunteers' },
   { href: '/admin/sync', label: 'Sync Issues' },
   { href: '/admin/settings', label: 'Settings' },
+  { href: '/admin/import', label: 'Import' },
 ]
 
 export function AdminShell({ children, activePath = '/admin' }: AdminShellProps) {
