@@ -12,21 +12,14 @@ import {
   InfoAlert,
   SuccessAlert,
   ErrorAlert,
-  ProgramBadge,
 } from '@/components/ui'
 import { FinancialAidCallout } from '@/components/FinancialAidCallout'
 
-// Apply form is V5 / Combat / Not Sure only (PRD §5). VEX IQ (grades 3–6) is
-// handled via the IQ Coordinator / registration path, not the public form.
-type Program = 'vex_v5' | 'combat' | 'not_sure'
-
-const PROGRAMS: { value: Program; name: string; grades: string }[] = [
-  { value: 'vex_v5', name: 'VEX V5 Robotics', grades: 'Grades 7–12 (6th grade by exception)' },
-  { value: 'combat', name: 'Combat Robotics', grades: 'Grades 7–12' },
-  { value: 'not_sure', name: 'Not sure yet', grades: 'We’ll help you choose' },
-]
-
-const EXPERIENCE_OPTIONS = ['VEX IQ', 'VEX V5', 'Combat Robotics', 'FRC/FTC', 'FLL', 'PLTW', 'None']
+// Mirrors the live Google Form "Placer Robotics – 2026–27 Application".
+// Programs are a multi-select (V5 / Combat / Not Sure); a single program_interest
+// is derived server-side for the pipeline. VEX IQ (grades 3–6) applies elsewhere.
+const PROGRAM_OPTIONS = ['VEX V5', 'Combat Robotics', 'Not Sure']
+const EXPERIENCE_OPTIONS = ['VEX IQ', 'VEX V5', 'Combat Robotics', 'FRC/FTC', 'FLL', 'PTLW']
 const SKILLS_OPTIONS = [
   'Coding (VEXcode, Python)',
   'CAD (Fusion 360, Onshape)',
@@ -36,12 +29,12 @@ const SKILLS_OPTIONS = [
 ]
 const VOLUNTEER_OPTIONS = [
   'Lab Supervision',
-  'General Activities & Events',
-  'Combat Advisor/Mentor',
-  'Robotics Center Operations/Facilities',
-  'VEX Equipment Manager',
-  'Fundraising/Grants/Sponsorships',
-  'Business/Marketing',
+  'General Activities / Events Volunteer',
+  'Combat Advisor / Mentor',
+  'Robotics Center Operations / Facilities',
+  'VEX Equipment Managers',
+  'Fundraising / Grants / Sponsorships',
+  'Business / Marketing',
   'Summer Camps',
 ]
 const SUMMER_OPTIONS: { value: 'yes' | 'maybe' | 'no'; label: string }[] = [
@@ -87,7 +80,7 @@ const selectStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
-// ── Checkbox / radio helpers ─────────────────────────────────────────────────
+const req = <span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span>
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
@@ -104,25 +97,15 @@ function CheckGroup({
 }) {
   return (
     <div style={{ display: 'grid', gap: '0.5rem' }}>
-      {options.map((opt) => {
-        const on = selected.includes(opt)
-        return (
-          <label
-            key={opt}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.625rem',
-              fontSize: '0.9375rem',
-              color: 'var(--color-text-primary)',
-              cursor: 'pointer',
-            }}
-          >
-            <input type="checkbox" checked={on} onChange={() => onToggle(opt)} style={{ width: 16, height: 16 }} />
-            {opt}
-          </label>
-        )
-      })}
+      {options.map((opt) => (
+        <label
+          key={opt}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontSize: '0.9375rem', color: 'var(--color-text-primary)', cursor: 'pointer' }}
+        >
+          <input type="checkbox" checked={selected.includes(opt)} onChange={() => onToggle(opt)} style={{ width: 16, height: 16 }} />
+          {opt}
+        </label>
+      ))}
     </div>
   )
 }
@@ -133,49 +116,50 @@ export default function ApplyPage() {
   const [error, setError] = useState('')
   const [successName, setSuccessName] = useState('')
 
-  // Step 1 — program interests (PRD §2)
-  const [program, setProgram] = useState<Program | ''>('')
-  const [experience, setExperience] = useState<string[]>([])
-  const [skills, setSkills] = useState<string[]>([])
-  const [teammates, setTeammates] = useState('')
-
-  // Step 2 — student information (PRD §1)
+  // Section 1 — Student Information
   const [stuFirst, setStuFirst] = useState('')
   const [stuLast, setStuLast] = useState('')
   const [preferred, setPreferred] = useState('')
+  const [studentEmail, setStudentEmail] = useState('')
+  const [studentPhone, setStudentPhone] = useState('')
+  const [dob, setDob] = useState('')
+  const [address, setAddress] = useState('')
   const [grade, setGrade] = useState('')
   const [schoolId, setSchoolId] = useState('')
   const [schoolOther, setSchoolOther] = useState('')
   const [schools, setSchools] = useState<
     { id: string; name: string; grade_min: number | null; grade_max: number | null }[]
   >([])
-  const [city, setCity] = useState('')
-  const [zip, setZip] = useState('')
-  const [studentEmail, setStudentEmail] = useState('')
   const [gpaOverall, setGpaOverall] = useState('')
   const [gpaRecent, setGpaRecent] = useState('')
   const [referral, setReferral] = useState('')
 
-  // Step 3 — about you (PRD §3)
-  const [bgBackground, setBgBackground] = useState('')
-  const [bgGoals, setBgGoals] = useState('')
+  // Section 2 — Program Interests
+  const [programs, setPrograms] = useState<string[]>([])
+  const [experience, setExperience] = useState<string[]>([])
+  const [skills, setSkills] = useState<string[]>([])
+  const [teammates, setTeammates] = useState('')
+
+  // Section 3 — Student Motivation & Goals
+  const [background, setBackground] = useState('')
+  const [whyJoin, setWhyJoin] = useState('')
+  const [whyCompetitive, setWhyCompetitive] = useState('')
+  const [goals, setGoals] = useState('')
+  const [commitment, setCommitment] = useState('')
   const [extracurriculars, setExtracurriculars] = useState('')
+  const [extracurricularHours, setExtracurricularHours] = useState('')
   const [summer, setSummer] = useState<'yes' | 'maybe' | 'no' | ''>('')
 
-  // Step 4 — parent / guardian (PRD §4)
-  const [g1First, setG1First] = useState('')
-  const [g1Last, setG1Last] = useState('')
-  const [g1Email, setG1Email] = useState('')
-  const [g1Phone, setG1Phone] = useState('')
-  const [g2First, setG2First] = useState('')
-  const [g2Last, setG2Last] = useState('')
-  const [g2Email, setG2Email] = useState('')
-  const [g2Phone, setG2Phone] = useState('')
+  // Section 4 — Parent / Guardian Information
+  const [pFirst, setPFirst] = useState('')
+  const [pLast, setPLast] = useState('')
+  const [pEmail, setPEmail] = useState('')
+  const [pPhone, setPPhone] = useState('')
   const [volunteerInterests, setVolunteerInterests] = useState<string[]>([])
-  const [occupation, setOccupation] = useState('')
   const [volunteerNotes, setVolunteerNotes] = useState('')
+  const [occupation, setOccupation] = useState('')
 
-  // Step 5 — final (PRD §5)
+  // Section 5 — Final
   const [additionalNotes, setAdditionalNotes] = useState('')
   const [certified, setCertified] = useState(false)
 
@@ -200,20 +184,27 @@ export default function ApplyPage() {
     }
   }, [visibleSchools, schoolId])
 
-  const step1Valid = program !== ''
-  const step2Valid =
+  const step1Valid =
     stuFirst.trim() &&
     stuLast.trim() &&
+    studentEmail.trim() &&
+    studentPhone.trim() &&
+    dob.trim() &&
+    address.trim() &&
     grade &&
-    (schoolId !== OTHER_SCHOOL ? schoolId : schoolOther.trim()) &&
-    schoolId &&
-    city.trim() &&
-    zip.trim() &&
-    gpaOverall.trim() &&
-    gpaRecent.trim() &&
+    (schoolId === OTHER_SCHOOL ? schoolOther.trim() : schoolId) &&
     referral.trim()
-  const step3Valid = bgBackground.trim() && bgGoals.trim() && extracurriculars.trim() && summer !== ''
-  const step4Valid = g1First.trim() && g1Last.trim() && g1Email.trim() && g1Phone.trim()
+  const step2Valid = programs.length > 0
+  const step3Valid =
+    background.trim() &&
+    whyJoin.trim() &&
+    whyCompetitive.trim() &&
+    goals.trim() &&
+    commitment.trim() &&
+    extracurriculars.trim() &&
+    extracurricularHours.trim() &&
+    summer !== ''
+  const step4Valid = pFirst.trim() && pLast.trim() && pEmail.trim() && pPhone.trim()
   const step5Valid = certified
 
   async function handleSubmit() {
@@ -221,43 +212,45 @@ export default function ApplyPage() {
     setSubmitting(true)
     setError('')
     const payload = {
-      program,
+      programs,
       student: {
         first_name: stuFirst.trim(),
         last_name: stuLast.trim(),
         preferred_name: preferred.trim() || null,
+        communication_email: studentEmail.trim(),
+        phone: studentPhone.trim(),
+        birthdate: dob || null,
+        home_address: address.trim(),
         grade: Number(grade),
         school_id: schoolId && schoolId !== OTHER_SCHOOL ? schoolId : null,
         school_raw: schoolId === OTHER_SCHOOL ? schoolOther.trim() : null,
-        city: city.trim(),
-        zip_code: zip.trim(),
-        communication_email: studentEmail.trim() || null,
       },
       application: {
-        gpa_overall: gpaOverall.trim(),
-        gpa_recent_term: gpaRecent.trim(),
+        gpa_overall: gpaOverall.trim() || null,
+        gpa_recent_term: gpaRecent.trim() || null,
         referral_source: referral.trim(),
         previous_experience: experience,
         skills_interest: skills,
         teammate_preference: teammates.trim() || null,
-        motivation_background: bgBackground.trim(),
-        motivation_goals: bgGoals.trim(),
+        motivation_background: background.trim(),
+        motivation_why_join: whyJoin.trim(),
+        motivation_why_competitive: whyCompetitive.trim(),
+        motivation_goals: goals.trim(),
+        commitment_level: commitment.trim(),
         extracurriculars: extracurriculars.trim(),
+        extracurricular_hours: extracurricularHours.trim(),
         summer_availability: summer,
         additional_notes: additionalNotes.trim() || null,
       },
-      guardian1: {
-        first_name: g1First.trim(),
-        last_name: g1Last.trim(),
-        email: g1Email.trim(),
-        phone: g1Phone.trim(),
+      guardian: {
+        first_name: pFirst.trim(),
+        last_name: pLast.trim(),
+        email: pEmail.trim(),
+        phone: pPhone.trim(),
         occupation: occupation.trim() || null,
         volunteer_interests: volunteerInterests,
         volunteer_notes: volunteerNotes.trim() || null,
       },
-      guardian2: g2Email.trim()
-        ? { first_name: g2First.trim(), last_name: g2Last.trim(), email: g2Email.trim(), phone: g2Phone.trim() }
-        : null,
       data_certified: certified,
     }
     try {
@@ -286,7 +279,7 @@ export default function ApplyPage() {
         <div style={{ marginTop: '1.5rem' }}>
           <SuccessAlert title={`We received ${successName}'s application`}>
             Thanks for applying to Placer Robotics for the 2026–27 season. Our team reviews applications
-            on a rolling basis and will email {g1Email} once a decision is made.
+            on a rolling basis and will email {pEmail} once a decision is made.
           </SuccessAlert>
         </div>
         <div style={{ ...cardBase, marginTop: '1.5rem' }}>
@@ -306,16 +299,10 @@ export default function ApplyPage() {
 
   return (
     <PublicShell maxWidth="md">
-      <h1 className="text-page-title">Apply for 2026–27 Placer Robotics</h1>
-      <p className="text-help" style={{ marginTop: '0.5rem' }}>Step {step} of {TOTAL_STEPS}</p>
-
-      {step === 1 && (
-        <p className="text-help" style={{ marginTop: '0.75rem', lineHeight: 1.5 }}>
-          This program is a serious time commitment — most students spend 8–15 hours per week during the
-          season. This form has 5 short sections (about 15–20 minutes). Sections 1–3 should be completed by
-          the student; the last section is for a parent or guardian.
-        </p>
-      )}
+      <h1 className="text-page-title">Placer Robotics — 2026–27 Application</h1>
+      <p className="text-help" style={{ marginTop: '0.5rem' }}>
+        For students in grades 7–12 applying to join Placer Robotics competition teams. Step {step} of {TOTAL_STEPS}.
+      </p>
 
       {error && (
         <div style={{ marginTop: '1rem' }}>
@@ -323,85 +310,42 @@ export default function ApplyPage() {
         </div>
       )}
 
-      {/* Step 1 — program interests */}
+      {/* Section 1 — Student Information */}
       {step === 1 && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <h2 className="text-section-title" style={{ marginBottom: '1rem' }}>Which program interests your family?</h2>
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {PROGRAMS.map((p) => {
-              const selected = program === p.value
-              return (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setProgram(p.value)}
-                  style={{
-                    ...cardBase,
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    borderColor: selected ? 'var(--color-navy-deep)' : 'var(--color-border)',
-                    borderWidth: selected ? '2px' : '1px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '1rem',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  <span>
-                    <span className="text-card-title">{p.name}</span>
-                    <span className="text-help" style={{ display: 'block' }}>{p.grades}</span>
-                  </span>
-                  {p.value !== 'not_sure' && <ProgramBadge program={p.value} />}
-                </button>
-              )
-            })}
-          </div>
-
-          <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div>
-              <label style={labelStyle}>Previous robotics experience <span className="text-help">(optional)</span></label>
-              <CheckGroup options={EXPERIENCE_OPTIONS} selected={experience} onToggle={(v) => setExperience((s) => toggle(s, v))} />
-            </div>
-            <div>
-              <label style={labelStyle}>Skills you’re excited about or already familiar with <span className="text-help">(optional)</span></label>
-              <CheckGroup options={SKILLS_OPTIONS} selected={skills} onToggle={(v) => setSkills((s) => toggle(s, v))} />
-            </div>
-            <FormField label="Any teammates you’d like to work with?" htmlFor="teammates">
-              <TextArea id="teammates" value={teammates} onChange={(e) => setTeammates(e.target.value)} style={{ minHeight: '70px' }} />
-            </FormField>
-          </div>
-
-          <div style={{ marginTop: '1.5rem' }}>
-            <PrimaryButton fullWidth disabled={!step1Valid} onClick={() => setStep(2)}>Continue</PrimaryButton>
-          </div>
-        </div>
-      )}
-
-      {/* Step 2 — student information */}
-      {step === 2 && (
         <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <h2 className="text-section-title">Student information</h2>
-          <FormField label="First name" htmlFor="stuFirst" required>
+          <FormField label="Student first name" htmlFor="stuFirst" required>
             <TextInput id="stuFirst" value={stuFirst} onChange={(e) => setStuFirst(e.target.value)} />
           </FormField>
-          <FormField label="Last name" htmlFor="stuLast" required>
+          <FormField label="Student last name" htmlFor="stuLast" required>
             <TextInput id="stuLast" value={stuLast} onChange={(e) => setStuLast(e.target.value)} />
           </FormField>
-          <FormField label="Preferred name / nickname" htmlFor="preferred">
+          <FormField label="Preferred name / nickname (optional)" htmlFor="preferred">
             <TextInput id="preferred" value={preferred} onChange={(e) => setPreferred(e.target.value)} />
           </FormField>
+          <FormField label="Student email" htmlFor="studentEmail" required>
+            <TextInput id="studentEmail" type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} />
+          </FormField>
+          <FormField label="Student phone number" htmlFor="studentPhone" required>
+            <TextInput id="studentPhone" type="tel" value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} />
+          </FormField>
+          <FormField label="Date of birth" htmlFor="dob" required helpText="Required for age-group cut-offs.">
+            <TextInput id="dob" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+          </FormField>
+          <FormField label="Home address (City, State, ZIP)" htmlFor="address" required>
+            <TextInput id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Roseville, CA 95661" />
+          </FormField>
           <div>
-            <label htmlFor="grade" style={labelStyle}>Grade entering Fall 2026<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
+            <label htmlFor="grade" style={labelStyle}>Grade entering (Fall 2026){req}</label>
             <select id="grade" value={grade} onChange={(e) => setGrade(e.target.value)} style={selectStyle}>
-              <option value="">Select grade…</option>
+              <option value="">Choose…</option>
               {[6, 7, 8, 9, 10, 11, 12].map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
           </div>
           <div>
-            <label htmlFor="school" style={labelStyle}>School attending (Fall 2026)<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
+            <label htmlFor="school" style={labelStyle}>School attending (Fall 2026){req}</label>
             <select id="school" value={schoolId} onChange={(e) => setSchoolId(e.target.value)} style={selectStyle}>
               <option value="">{grade ? 'Select school…' : 'Select grade first…'}</option>
               {visibleSchools.map((s) => (
@@ -415,49 +359,74 @@ export default function ApplyPage() {
               </div>
             )}
           </div>
-          <FormField label="City" htmlFor="city" required>
-            <TextInput id="city" value={city} onChange={(e) => setCity(e.target.value)} />
-          </FormField>
-          <FormField label="ZIP code" htmlFor="zip" required>
-            <TextInput id="zip" value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" />
-          </FormField>
-          <FormField label="Student email" htmlFor="studentEmail" helpText="We may use this to communicate with you directly. Optional.">
-            <TextInput id="studentEmail" type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} />
-          </FormField>
-          <FormField label="Current overall GPA" htmlFor="gpaOverall" required>
+          <FormField label="Current overall GPA" htmlFor="gpaOverall">
             <TextInput id="gpaOverall" value={gpaOverall} onChange={(e) => setGpaOverall(e.target.value)} inputMode="decimal" placeholder="e.g. 3.8" />
           </FormField>
-          <FormField label="Most recent term GPA" htmlFor="gpaRecent" required>
+          <FormField label="Most recent GPA (last term)" htmlFor="gpaRecent">
             <TextInput id="gpaRecent" value={gpaRecent} onChange={(e) => setGpaRecent(e.target.value)} inputMode="decimal" placeholder="e.g. 3.9" />
           </FormField>
           <FormField label="Who referred you to Placer Robotics?" htmlFor="referral" required helpText="Put N/A if none.">
             <TextInput id="referral" value={referral} onChange={(e) => setReferral(e.target.value)} />
           </FormField>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
-            <SecondaryButton onClick={() => setStep(1)}>Back</SecondaryButton>
-            <PrimaryButton disabled={!step2Valid} onClick={() => setStep(3)}>Continue</PrimaryButton>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <PrimaryButton disabled={!step1Valid} onClick={() => setStep(2)}>Next</PrimaryButton>
           </div>
         </div>
       )}
 
-      {/* Step 3 — about you */}
+      {/* Section 2 — Program Interests */}
+      {step === 2 && (
+        <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <h2 className="text-section-title">Program interests</h2>
+          <div>
+            <label style={labelStyle}>Which programs are you interested in?{req}</label>
+            <CheckGroup options={PROGRAM_OPTIONS} selected={programs} onToggle={(v) => setPrograms((s) => toggle(s, v))} />
+          </div>
+          <div>
+            <label style={labelStyle}>Previous robotics experience</label>
+            <CheckGroup options={EXPERIENCE_OPTIONS} selected={experience} onToggle={(v) => setExperience((s) => toggle(s, v))} />
+          </div>
+          <div>
+            <label style={labelStyle}>What skills are you excited about or already familiar with?</label>
+            <CheckGroup options={SKILLS_OPTIONS} selected={skills} onToggle={(v) => setSkills((s) => toggle(s, v))} />
+          </div>
+          <FormField label="List any teammates you’d like to work with (optional)" htmlFor="teammates">
+            <TextArea id="teammates" value={teammates} onChange={(e) => setTeammates(e.target.value)} style={{ minHeight: '70px' }} />
+          </FormField>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+            <SecondaryButton onClick={() => setStep(1)}>Back</SecondaryButton>
+            <PrimaryButton disabled={!step2Valid} onClick={() => setStep(3)}>Next</PrimaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* Section 3 — Student Motivation & Goals */}
       {step === 3 && (
         <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <h2 className="text-section-title">About you</h2>
-          <p className="text-help" style={{ marginTop: '-0.5rem', fontStyle: 'italic' }}>
-            Please answer these questions in your own words. We want to hear from you directly.
-          </p>
-          <FormField label="Tell us about yourself — your background, interests, and what draws you to robotics." htmlFor="bg" required>
-            <TextArea id="bg" value={bgBackground} onChange={(e) => setBgBackground(e.target.value)} />
+          <h2 className="text-section-title">Student motivation &amp; goals</h2>
+          <FormField label="Student background — tell us about yourself" htmlFor="bg" required>
+            <TextArea id="bg" value={background} onChange={(e) => setBackground(e.target.value)} />
           </FormField>
-          <FormField label="What are your goals for this season, and what are you willing to commit to make them happen?" htmlFor="goals" required>
-            <TextArea id="goals" value={bgGoals} onChange={(e) => setBgGoals(e.target.value)} />
+          <FormField label="Why do you want to join Placer Robotics?" htmlFor="whyJoin" required>
+            <TextArea id="whyJoin" value={whyJoin} onChange={(e) => setWhyJoin(e.target.value)} />
           </FormField>
-          <FormField label="What other activities are you involved in, and how much time do they take?" htmlFor="extra" required>
+          <FormField label="Why do you want to be on a competitive robotics team?" htmlFor="whyComp" required>
+            <TextArea id="whyComp" value={whyCompetitive} onChange={(e) => setWhyCompetitive(e.target.value)} />
+          </FormField>
+          <FormField label="What are your personal goals for the 2026–27 season?" htmlFor="goals" required>
+            <TextArea id="goals" value={goals} onChange={(e) => setGoals(e.target.value)} />
+          </FormField>
+          <FormField label="Describe your commitment level for the season. How many hours per week do you expect to spend on robotics?" htmlFor="commit" required>
+            <TextArea id="commit" value={commitment} onChange={(e) => setCommitment(e.target.value)} />
+          </FormField>
+          <FormField label="List your other extracurriculars (sports, band, clubs, etc.)" htmlFor="extra" required>
             <TextArea id="extra" value={extracurriculars} onChange={(e) => setExtracurriculars(e.target.value)} />
           </FormField>
+          <FormField label="How many hours/week do you spend on those activities?" htmlFor="extraHours" required>
+            <TextInput id="extraHours" value={extracurricularHours} onChange={(e) => setExtracurricularHours(e.target.value)} />
+          </FormField>
           <div>
-            <label style={labelStyle}>Are you available to help with summer camps or get an early start this summer?<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
+            <label style={labelStyle}>Are you available to volunteer at camps this summer or get started early?{req}</label>
             <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.25rem' }}>
               {SUMMER_OPTIONS.map((o) => (
                 <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9375rem', cursor: 'pointer' }}>
@@ -469,78 +438,58 @@ export default function ApplyPage() {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
             <SecondaryButton onClick={() => setStep(2)}>Back</SecondaryButton>
-            <PrimaryButton disabled={!step3Valid} onClick={() => setStep(4)}>Continue</PrimaryButton>
+            <PrimaryButton disabled={!step3Valid} onClick={() => setStep(4)}>Next</PrimaryButton>
           </div>
         </div>
       )}
 
-      {/* Step 4 — parent / guardian */}
+      {/* Section 4 — Parent / Guardian Information */}
       {step === 4 && (
         <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ ...cardBase, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <h2 className="text-section-title">Guardian 1</h2>
-            <FormField label="First name" htmlFor="g1First" required>
-              <TextInput id="g1First" value={g1First} onChange={(e) => setG1First(e.target.value)} />
+            <h2 className="text-section-title">Parent / guardian information</h2>
+            <FormField label="Parent/guardian first name" htmlFor="pFirst" required>
+              <TextInput id="pFirst" value={pFirst} onChange={(e) => setPFirst(e.target.value)} />
             </FormField>
-            <FormField label="Last name" htmlFor="g1Last" required>
-              <TextInput id="g1Last" value={g1Last} onChange={(e) => setG1Last(e.target.value)} />
+            <FormField label="Parent/guardian last name" htmlFor="pLast" required>
+              <TextInput id="pLast" value={pLast} onChange={(e) => setPLast(e.target.value)} />
             </FormField>
-            <FormField label="Email" htmlFor="g1Email" required helpText="This becomes your sign-in email.">
-              <TextInput id="g1Email" type="email" value={g1Email} onChange={(e) => setG1Email(e.target.value)} />
+            <FormField label="Parent/guardian email" htmlFor="pEmail" required helpText="This becomes your sign-in email.">
+              <TextInput id="pEmail" type="email" value={pEmail} onChange={(e) => setPEmail(e.target.value)} />
             </FormField>
-            <FormField label="Mobile phone" htmlFor="g1Phone" required>
-              <TextInput id="g1Phone" type="tel" value={g1Phone} onChange={(e) => setG1Phone(e.target.value)} />
+            <FormField label="Parent/guardian phone number" htmlFor="pPhone" required>
+              <TextInput id="pPhone" type="tel" value={pPhone} onChange={(e) => setPPhone(e.target.value)} />
             </FormField>
-          </div>
-
-          <div style={{ ...cardBase, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <h2 className="text-section-title">Guardian 2 <span className="text-help">(optional)</span></h2>
-            <FormField label="First name" htmlFor="g2First">
-              <TextInput id="g2First" value={g2First} onChange={(e) => setG2First(e.target.value)} />
-            </FormField>
-            <FormField label="Last name" htmlFor="g2Last">
-              <TextInput id="g2Last" value={g2Last} onChange={(e) => setG2Last(e.target.value)} />
-            </FormField>
-            <FormField label="Email" htmlFor="g2Email">
-              <TextInput id="g2Email" type="email" value={g2Email} onChange={(e) => setG2Email(e.target.value)} />
-            </FormField>
-            <FormField label="Mobile phone" htmlFor="g2Phone">
-              <TextInput id="g2Phone" type="tel" value={g2Phone} onChange={(e) => setG2Phone(e.target.value)} />
-            </FormField>
-          </div>
-
-          <div style={{ ...cardBase, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <h2 className="text-section-title">Volunteering <span className="text-help">(optional)</span></h2>
             <div>
-              <label style={labelStyle}>Areas you’re interested in volunteering</label>
+              <label style={labelStyle}>Areas interested in volunteering (parents)</label>
               <CheckGroup options={VOLUNTEER_OPTIONS} selected={volunteerInterests} onToggle={(v) => setVolunteerInterests((s) => toggle(s, v))} />
             </div>
-            <FormField label="Your profession or field" htmlFor="occupation" helpText="Helps us match mentoring opportunities.">
-              <TextInput id="occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} />
-            </FormField>
-            <FormField label="Volunteering comments or notes" htmlFor="volNotes">
+            <FormField label="Parent volunteering comments or notes" htmlFor="volNotes">
               <TextArea id="volNotes" value={volunteerNotes} onChange={(e) => setVolunteerNotes(e.target.value)} style={{ minHeight: '70px' }} />
+            </FormField>
+            <FormField label="Parent occupation / career" htmlFor="occupation" helpText="Helpful for mentoring, operations, etc.">
+              <TextInput id="occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} />
             </FormField>
           </div>
 
-          <InfoAlert title="Both guardians receive all communications">
-            We send notifications to every guardian on the account. Add a second guardian if you’d like them included.
+          <InfoAlert title="Guardians receive all communications">
+            We send notifications to the guardian on the account.
           </InfoAlert>
 
           <FinancialAidCallout href="https://forms.gle/nqjneY9ESyLRdZ8V9" />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
             <SecondaryButton onClick={() => setStep(3)}>Back</SecondaryButton>
-            <PrimaryButton disabled={!step4Valid} onClick={() => setStep(5)}>Continue</PrimaryButton>
+            <PrimaryButton disabled={!step4Valid} onClick={() => setStep(5)}>Next</PrimaryButton>
           </div>
         </div>
       )}
 
-      {/* Step 5 — final confirmation */}
+      {/* Section 5 — Final confirmation */}
       {step === 5 && (
         <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <h2 className="text-section-title">Final confirmation</h2>
-          <FormField label="Anything else we should know?" htmlFor="anything">
+          <FormField label="Anything else we should know? (optional)" htmlFor="anything">
             <TextArea id="anything" value={additionalNotes} onChange={(e) => setAdditionalNotes(e.target.value)} />
           </FormField>
           <div
@@ -560,7 +509,7 @@ export default function ApplyPage() {
             <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} style={{ width: 16, height: 16, marginTop: 3 }} />
             <span>
               I am the parent or guardian and certify that I am authorized to provide this information on behalf
-              of the student.<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span>
+              of the student.{req}
             </span>
           </label>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>

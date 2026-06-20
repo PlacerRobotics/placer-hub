@@ -57,7 +57,7 @@ export default async function ApplicationDetailPage({
   const { data: app } = await supabase
     .from('student_application')
     .select(
-      '*, student:student_id ( first_name, last_name, grade, school_raw, school:school_id ( name ) ), family:family_id ( id, primary_email )'
+      '*, student:student_id ( first_name, last_name, preferred_name, birthdate, communication_email, phone, street_address, city, state, zip_code, grade, school_raw, school:school_id ( name ) ), family:family_id ( id, primary_email )'
     )
     .eq('id', id)
     .maybeSingle()
@@ -145,6 +145,55 @@ export default async function ApplicationDetailPage({
     },
   ]
 
+  // ---- Full application responses (mirrors the apply form field set) ----
+  const list = (a: unknown): string => (Array.isArray(a) && a.length ? a.join(', ') : '—')
+  const longText = (v: unknown): React.ReactNode =>
+    v && String(v).trim() ? <span style={{ whiteSpace: 'pre-wrap' }}>{String(v)}</span> : '—'
+  const plain = (v: unknown): string => (v != null && String(v).trim() ? String(v) : '—')
+  const addr =
+    student?.street_address ||
+    [student?.city, student?.state, student?.zip_code].filter(Boolean).join(', ') ||
+    '—'
+
+  const contactFields = [
+    { label: 'Preferred name', value: plain(student?.preferred_name) },
+    { label: 'Date of birth', value: plain(student?.birthdate) },
+    { label: 'Student email', value: plain(student?.communication_email) },
+    { label: 'Student phone', value: plain(student?.phone) },
+    { label: 'Home address', value: addr },
+    {
+      label: 'Overall GPA',
+      value: (
+        <>
+          {plain(app.gpa_overall)}
+          {app.gpa_flagged && (
+            <span style={{ marginLeft: 8 }}>
+              <StatusBadge label="below threshold" variant="warning" />
+            </span>
+          )}
+        </>
+      ),
+    },
+    { label: 'Recent term GPA', value: plain(app.gpa_recent_term) },
+    { label: 'Referral', value: plain(app.referral_source) },
+    { label: 'Programs interested', value: list(app.program_interests) },
+    { label: 'Previous experience', value: list(app.previous_experience) },
+    { label: 'Skills', value: list(app.skills_interest) },
+    { label: 'Teammate preference', value: longText(app.teammate_preference) },
+  ]
+
+  const responseFields = [
+    { label: 'Background', value: longText(app.motivation_background) },
+    { label: 'Why join', value: longText(app.motivation_why_join) },
+    { label: 'Why competitive', value: longText(app.motivation_why_competitive) },
+    { label: 'Season goals', value: longText(app.motivation_goals) },
+    { label: 'Commitment / hours', value: longText(app.commitment_level) },
+    { label: 'Other extracurriculars', value: longText(app.extracurriculars) },
+    { label: 'Hours on those', value: plain(app.extracurricular_hours) },
+    { label: 'Summer availability', value: plain(app.summer_availability) },
+    { label: 'Anything else', value: longText(app.additional_notes) },
+  ]
+
   return (
     <AdminShell activePath="/admin/applications">
       <PageHeader
@@ -205,6 +254,9 @@ export default async function ApplicationDetailPage({
           </div>
         )}
       </AdminDetailPanel>
+
+      <AdminDetailPanel title="Student contact & profile" fields={contactFields} />
+      <AdminDetailPanel title="Application responses" fields={responseFields} />
     </AdminShell>
   )
 }
