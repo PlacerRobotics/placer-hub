@@ -21,6 +21,31 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 
   admin_waived: 'neutral',
 }
 
+const FS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = {
+  prospect: 'neutral',
+  applied: 'info',
+  accepted: 'success',
+  cleared_to_register: 'success',
+  registered: 'success',
+  declined: 'error',
+  suspended: 'error',
+}
+
+const acceptBtn: React.CSSProperties = {
+  padding: '10px 20px',
+  backgroundColor: 'var(--color-gold)',
+  color: 'var(--color-navy-darker)',
+  border: 'none',
+  borderRadius: '6px',
+  fontWeight: 600,
+  fontSize: '0.9375rem',
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  minHeight: '44px',
+}
+const navyBtn: React.CSSProperties = { ...acceptBtn, backgroundColor: 'var(--color-navy-deep)', color: '#fff' }
+const dangerBtn: React.CSSProperties = { ...acceptBtn, backgroundColor: 'var(--color-error)', color: '#fff', alignSelf: 'flex-start' }
+
 export default async function ApplicationDetailPage({
   params,
 }: {
@@ -51,7 +76,15 @@ export default async function ApplicationDetailPage({
   const familyId: string = app.family_id
   const student = app.student
   const studentName = student ? `${student.first_name} ${student.last_name}` : 'Unknown applicant'
-  const decided = app.status !== 'submitted'
+
+  const { data: familySeason } = await supabase
+    .from('family_season')
+    .select('status')
+    .eq('family_id', familyId)
+    .eq('season', SEASON)
+    .maybeSingle()
+  const fsStatus: string = familySeason?.status ?? 'prospect'
+  const isCleared = fsStatus === 'cleared_to_register' || fsStatus === 'registered'
 
   // ---- Server actions ----
   async function acceptApplication() {
@@ -64,7 +97,7 @@ export default async function ApplicationDetailPage({
     await db
       .from('family_season')
       .upsert({ family_id: familyId, season: SEASON, status: 'accepted' }, { onConflict: 'family_id,season' })
-    redirect('/admin/applications')
+    redirect(`/admin/applications/${id}`)
   }
 
   async function declineApplication(formData: FormData) {
@@ -79,6 +112,18 @@ export default async function ApplicationDetailPage({
     redirect('/admin/applications')
   }
 
+  async function clearToRegister() {
+    'use server'
+    const db = await createClient()
+    await db
+      .from('family_season')
+      .upsert(
+        { family_id: familyId, season: SEASON, status: 'cleared_to_register' },
+        { onConflict: 'family_id,season' }
+      )
+    redirect(`/admin/applications/${id}`)
+  }
+
   const fields = [
     { label: 'Student', value: studentName },
     { label: 'Grade', value: student?.grade ?? '—' },
@@ -87,8 +132,12 @@ export default async function ApplicationDetailPage({
     { label: 'Family email', value: app.family?.primary_email ?? '—' },
     { label: 'Source', value: app.source },
     {
-      label: 'Status',
+      label: 'Application status',
       value: <StatusBadge label={app.status} variant={STATUS_VARIANT[app.status] ?? 'neutral'} />,
+    },
+    {
+      label: 'Family season',
+      value: <StatusBadge label={fsStatus} variant={FS_VARIANT[fsStatus] ?? 'neutral'} />,
     },
     {
       label: 'Submitted',
@@ -105,30 +154,11 @@ export default async function ApplicationDetailPage({
       />
 
       <AdminDetailPanel title="Application details" fields={fields}>
-        {decided ? (
-          <p className="text-help">This application has already been {app.status}.</p>
-        ) : (
+        {app.status === 'submitted' ? (
           <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <form action={acceptApplication}>
-              <button
-                type="submit"
-                style={{
-                  padding: '10px 20px',
-                  backgroundColor: 'var(--color-gold)',
-                  color: 'var(--color-navy-darker)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 600,
-                  fontSize: '0.9375rem',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  minHeight: '44px',
-                }}
-              >
-                Accept
-              </button>
+              <button type="submit" style={acceptBtn}>Accept</button>
             </form>
-
             <form action={declineApplication} style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', flex: 1, minWidth: '260px' }}>
               <textarea
                 name="reason"
@@ -148,25 +178,30 @@ export default async function ApplicationDetailPage({
                   boxSizing: 'border-box',
                 }}
               />
-              <button
-                type="submit"
-                style={{
-                  alignSelf: 'flex-start',
-                  padding: '10px 20px',
-                  backgroundColor: 'var(--color-error)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 600,
-                  fontSize: '0.9375rem',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  minHeight: '44px',
-                }}
-              >
-                Decline
-              </button>
+              <button type="submit" style={dangerBtn}>Decline</button>
             </form>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <p className="text-help" style={{ margin: 0 }}>
+              This application has been {app.status}.
+            </p>
+            {app.status === 'accepted' && !isCleared && (
+              <div>
+                <form action={clearToRegister}>
+                  <button type="submit" style={navyBtn}>Clear family to register</button>
+                </form>
+                <p className="text-help" style={{ marginTop: '0.5rem' }}>
+                  This opens the registration wizard for the family (sets the family to{' '}
+                  <code>cleared_to_register</code>).
+                </p>
+              </div>
+            )}
+            {isCleared && (
+              <p style={{ margin: 0, fontSize: '0.9375rem', color: 'var(--color-success)', fontWeight: 600 }}>
+                ✓ Family is cleared to register.
+              </p>
+            )}
           </div>
         )}
       </AdminDetailPanel>
