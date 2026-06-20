@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   FamilyShell,
@@ -36,7 +36,7 @@ type Props = {
     tshirt_size: string | null
     fusion_education_email: string | null
   }
-  schools: { id: string; name: string }[]
+  schools: { id: string; name: string; grade_min: number | null; grade_max: number | null }[]
   waivers: { id: string; waiver_type: string; version: string; title: string; body_markdown: string; body_hash: string }[]
   paymentReferenceCode: string
   guardianName: string
@@ -150,6 +150,23 @@ export default function RegisterWizard({
     return schools.find((s) => s.id === schoolId)?.name ?? '—'
   }, [schoolId, schoolOther, schools])
 
+  // Narrow the school list to those serving the selected grade. NULL min/max are
+  // treated as open-ended so a school without a range is never hidden.
+  const visibleSchools = useMemo(() => {
+    if (!grade) return schools
+    const g = Number(grade)
+    return schools.filter(
+      (s) => g >= (s.grade_min ?? -Infinity) && g <= (s.grade_max ?? Infinity)
+    )
+  }, [schools, grade])
+
+  // If a previously-selected school no longer serves the chosen grade, clear it.
+  useEffect(() => {
+    if (schoolId && schoolId !== OTHER_SCHOOL && !visibleSchools.some((s) => s.id === schoolId)) {
+      setSchoolId('')
+    }
+  }, [visibleSchools, schoolId])
+
   const step1Valid = first.trim() && last.trim() && dob && grade && tshirt && (schoolId !== OTHER_SCHOOL || schoolOther.trim()) && schoolId
   const step2Valid = ec1First.trim() && ec1Last.trim() && ec1Rel.trim() && ec1Phone.trim()
   const allWaiversAgreed = waivers.length > 0 ? waivers.every((w) => agreed[w.id]) : true
@@ -239,14 +256,14 @@ export default function RegisterWizard({
               <label htmlFor="grade" style={labelStyle}>Grade<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
               <select id="grade" value={grade} onChange={(e) => setGrade(e.target.value)} style={selectStyle}>
                 <option value="">Select grade…</option>
-                {[6, 7, 8, 9, 10, 11, 12].map((g) => <option key={g} value={g}>{g}</option>)}
+                {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="school" style={labelStyle}>School<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
               <select id="school" value={schoolId} onChange={(e) => setSchoolId(e.target.value)} style={selectStyle}>
-                <option value="">Select school…</option>
-                {schools.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <option value="">{grade ? 'Select school…' : 'Select grade first…'}</option>
+                {visibleSchools.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 <option value={OTHER_SCHOOL}>Other (not listed)</option>
               </select>
               {schoolId === OTHER_SCHOOL && (

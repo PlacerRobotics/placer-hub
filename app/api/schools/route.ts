@@ -7,7 +7,7 @@ export async function GET() {
   const db = createAdminClient()
   const { data, error } = await db
     .from('school')
-    .select('id, name')
+    .select('id, name, grade_min, grade_max')
     .eq('active', true)
     .order('name', { ascending: true })
 

@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   PublicShell,
   FormField,
   TextInput,
+  TextArea,
   PrimaryButton,
   SecondaryButton,
   InfoAlert,
@@ -15,15 +16,48 @@ import {
 } from '@/components/ui'
 import { FinancialAidCallout } from '@/components/FinancialAidCallout'
 
-type Program = 'vex_v5' | 'combat' | 'vex_iq' | 'not_sure'
+// Apply form is V5 / Combat / Not Sure only (PRD §5). VEX IQ (grades 3–6) is
+// handled via the IQ Coordinator / registration path, not the public form.
+type Program = 'vex_v5' | 'combat' | 'not_sure'
 
 const PROGRAMS: { value: Program; name: string; grades: string }[] = [
-  { value: 'vex_v5', name: 'VEX V5 Robotics', grades: 'Grades 6–12' },
-  { value: 'combat', name: 'Combat Robotics', grades: 'Grades 9–12' },
-  { value: 'vex_iq', name: 'VEX IQ Robotics', grades: 'Grades 2–8' },
+  { value: 'vex_v5', name: 'VEX V5 Robotics', grades: 'Grades 7–12 (6th grade by exception)' },
+  { value: 'combat', name: 'Combat Robotics', grades: 'Grades 7–12' },
   { value: 'not_sure', name: 'Not sure yet', grades: 'We’ll help you choose' },
 ]
 
+const EXPERIENCE_OPTIONS = ['VEX IQ', 'VEX V5', 'Combat Robotics', 'FRC/FTC', 'FLL', 'PLTW', 'None']
+const SKILLS_OPTIONS = [
+  'Coding (VEXcode, Python)',
+  'CAD (Fusion 360, Onshape)',
+  'Mechanical Building',
+  'Electrical Engineering',
+  'None yet',
+]
+const VOLUNTEER_OPTIONS = [
+  'Lab Supervision',
+  'General Activities & Events',
+  'Combat Advisor/Mentor',
+  'Robotics Center Operations/Facilities',
+  'VEX Equipment Manager',
+  'Fundraising/Grants/Sponsorships',
+  'Business/Marketing',
+  'Summer Camps',
+]
+const SUMMER_OPTIONS: { value: 'yes' | 'maybe' | 'no'; label: string }[] = [
+  { value: 'yes', label: 'Yes' },
+  { value: 'maybe', label: 'Maybe' },
+  { value: 'no', label: 'No' },
+]
+
+const DATA_NOTICE =
+  'Placer Advanced Robotics and Technology (Placer Robotics) collects information about student ' +
+  'participants for the purpose of program registration, safety, team administration, and program ' +
+  'communications. Student information is not sold, shared with advertisers, or used for purposes ' +
+  'unrelated to program operations. By submitting this application, the parent or guardian certifies ' +
+  'they are authorized to provide this information on behalf of the student.'
+
+const TOTAL_STEPS = 5
 const OTHER_SCHOOL = '__other__'
 
 const cardBase: React.CSSProperties = {
@@ -53,22 +87,82 @@ const selectStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
+// ── Checkbox / radio helpers ─────────────────────────────────────────────────
+
+function toggle(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
+}
+
+function CheckGroup({
+  options,
+  selected,
+  onToggle,
+}: {
+  options: string[]
+  selected: string[]
+  onToggle: (value: string) => void
+}) {
+  return (
+    <div style={{ display: 'grid', gap: '0.5rem' }}>
+      {options.map((opt) => {
+        const on = selected.includes(opt)
+        return (
+          <label
+            key={opt}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.625rem',
+              fontSize: '0.9375rem',
+              color: 'var(--color-text-primary)',
+              cursor: 'pointer',
+            }}
+          >
+            <input type="checkbox" checked={on} onChange={() => onToggle(opt)} style={{ width: 16, height: 16 }} />
+            {opt}
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function ApplyPage() {
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [successName, setSuccessName] = useState('')
 
-  // Step 1
+  // Step 1 — program interests (PRD §2)
   const [program, setProgram] = useState<Program | ''>('')
-  // Step 2
+  const [experience, setExperience] = useState<string[]>([])
+  const [skills, setSkills] = useState<string[]>([])
+  const [teammates, setTeammates] = useState('')
+
+  // Step 2 — student information (PRD §1)
   const [stuFirst, setStuFirst] = useState('')
   const [stuLast, setStuLast] = useState('')
+  const [preferred, setPreferred] = useState('')
   const [grade, setGrade] = useState('')
   const [schoolId, setSchoolId] = useState('')
   const [schoolOther, setSchoolOther] = useState('')
-  const [schools, setSchools] = useState<{ id: string; name: string }[]>([])
-  // Step 3
+  const [schools, setSchools] = useState<
+    { id: string; name: string; grade_min: number | null; grade_max: number | null }[]
+  >([])
+  const [city, setCity] = useState('')
+  const [zip, setZip] = useState('')
+  const [studentEmail, setStudentEmail] = useState('')
+  const [gpaOverall, setGpaOverall] = useState('')
+  const [gpaRecent, setGpaRecent] = useState('')
+  const [referral, setReferral] = useState('')
+
+  // Step 3 — about you (PRD §3)
+  const [bgBackground, setBgBackground] = useState('')
+  const [bgGoals, setBgGoals] = useState('')
+  const [extracurriculars, setExtracurriculars] = useState('')
+  const [summer, setSummer] = useState<'yes' | 'maybe' | 'no' | ''>('')
+
+  // Step 4 — parent / guardian (PRD §4)
   const [g1First, setG1First] = useState('')
   const [g1Last, setG1Last] = useState('')
   const [g1Email, setG1Email] = useState('')
@@ -77,6 +171,13 @@ export default function ApplyPage() {
   const [g2Last, setG2Last] = useState('')
   const [g2Email, setG2Email] = useState('')
   const [g2Phone, setG2Phone] = useState('')
+  const [volunteerInterests, setVolunteerInterests] = useState<string[]>([])
+  const [occupation, setOccupation] = useState('')
+  const [volunteerNotes, setVolunteerNotes] = useState('')
+
+  // Step 5 — final (PRD §5)
+  const [additionalNotes, setAdditionalNotes] = useState('')
+  const [certified, setCertified] = useState(false)
 
   useEffect(() => {
     fetch('/api/schools')
@@ -85,12 +186,38 @@ export default function ApplyPage() {
       .catch(() => setSchools([]))
   }, [])
 
+  // Narrow the school list to those serving the selected grade. NULL min/max are
+  // treated as open-ended so a school without a range is never hidden.
+  const visibleSchools = useMemo(() => {
+    if (!grade) return schools
+    const g = Number(grade)
+    return schools.filter((s) => g >= (s.grade_min ?? -Infinity) && g <= (s.grade_max ?? Infinity))
+  }, [schools, grade])
+
+  useEffect(() => {
+    if (schoolId && schoolId !== OTHER_SCHOOL && !visibleSchools.some((s) => s.id === schoolId)) {
+      setSchoolId('')
+    }
+  }, [visibleSchools, schoolId])
+
   const step1Valid = program !== ''
-  const step2Valid = stuFirst.trim() && stuLast.trim() && grade && (schoolId !== OTHER_SCHOOL || schoolOther.trim())
-  const step3Valid = g1First.trim() && g1Last.trim() && g1Email.trim() && g1Phone.trim()
+  const step2Valid =
+    stuFirst.trim() &&
+    stuLast.trim() &&
+    grade &&
+    (schoolId !== OTHER_SCHOOL ? schoolId : schoolOther.trim()) &&
+    schoolId &&
+    city.trim() &&
+    zip.trim() &&
+    gpaOverall.trim() &&
+    gpaRecent.trim() &&
+    referral.trim()
+  const step3Valid = bgBackground.trim() && bgGoals.trim() && extracurriculars.trim() && summer !== ''
+  const step4Valid = g1First.trim() && g1Last.trim() && g1Email.trim() && g1Phone.trim()
+  const step5Valid = certified
 
   async function handleSubmit() {
-    if (!step3Valid || submitting) return
+    if (!step5Valid || submitting) return
     setSubmitting(true)
     setError('')
     const payload = {
@@ -98,19 +225,40 @@ export default function ApplyPage() {
       student: {
         first_name: stuFirst.trim(),
         last_name: stuLast.trim(),
+        preferred_name: preferred.trim() || null,
         grade: Number(grade),
         school_id: schoolId && schoolId !== OTHER_SCHOOL ? schoolId : null,
         school_raw: schoolId === OTHER_SCHOOL ? schoolOther.trim() : null,
+        city: city.trim(),
+        zip_code: zip.trim(),
+        communication_email: studentEmail.trim() || null,
+      },
+      application: {
+        gpa_overall: gpaOverall.trim(),
+        gpa_recent_term: gpaRecent.trim(),
+        referral_source: referral.trim(),
+        previous_experience: experience,
+        skills_interest: skills,
+        teammate_preference: teammates.trim() || null,
+        motivation_background: bgBackground.trim(),
+        motivation_goals: bgGoals.trim(),
+        extracurriculars: extracurriculars.trim(),
+        summer_availability: summer,
+        additional_notes: additionalNotes.trim() || null,
       },
       guardian1: {
         first_name: g1First.trim(),
         last_name: g1Last.trim(),
         email: g1Email.trim(),
         phone: g1Phone.trim(),
+        occupation: occupation.trim() || null,
+        volunteer_interests: volunteerInterests,
+        volunteer_notes: volunteerNotes.trim() || null,
       },
       guardian2: g2Email.trim()
         ? { first_name: g2First.trim(), last_name: g2Last.trim(), email: g2Email.trim(), phone: g2Phone.trim() }
         : null,
+      data_certified: certified,
     }
     try {
       const res = await fetch('/api/apply', {
@@ -159,7 +307,15 @@ export default function ApplyPage() {
   return (
     <PublicShell maxWidth="md">
       <h1 className="text-page-title">Apply for 2026–27 Placer Robotics</h1>
-      <p className="text-help" style={{ marginTop: '0.5rem' }}>Step {step} of 3</p>
+      <p className="text-help" style={{ marginTop: '0.5rem' }}>Step {step} of {TOTAL_STEPS}</p>
+
+      {step === 1 && (
+        <p className="text-help" style={{ marginTop: '0.75rem', lineHeight: 1.5 }}>
+          This program is a serious time commitment — most students spend 8–15 hours per week during the
+          season. This form has 5 short sections (about 15–20 minutes). Sections 1–3 should be completed by
+          the student; the last section is for a parent or guardian.
+        </p>
+      )}
 
       {error && (
         <div style={{ marginTop: '1rem' }}>
@@ -167,7 +323,7 @@ export default function ApplyPage() {
         </div>
       )}
 
-      {/* Step 1 — program selection */}
+      {/* Step 1 — program interests */}
       {step === 1 && (
         <div style={{ marginTop: '1.5rem' }}>
           <h2 className="text-section-title" style={{ marginBottom: '1rem' }}>Which program interests your family?</h2>
@@ -196,18 +352,33 @@ export default function ApplyPage() {
                     <span className="text-card-title">{p.name}</span>
                     <span className="text-help" style={{ display: 'block' }}>{p.grades}</span>
                   </span>
-                  {p.value !== 'not_sure' && <ProgramBadge program={p.value === 'vex_v5' ? 'vex_v5' : p.value === 'combat' ? 'combat' : 'vex_iq'} />}
+                  {p.value !== 'not_sure' && <ProgramBadge program={p.value} />}
                 </button>
               )
             })}
           </div>
+
+          <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div>
+              <label style={labelStyle}>Previous robotics experience <span className="text-help">(optional)</span></label>
+              <CheckGroup options={EXPERIENCE_OPTIONS} selected={experience} onToggle={(v) => setExperience((s) => toggle(s, v))} />
+            </div>
+            <div>
+              <label style={labelStyle}>Skills you’re excited about or already familiar with <span className="text-help">(optional)</span></label>
+              <CheckGroup options={SKILLS_OPTIONS} selected={skills} onToggle={(v) => setSkills((s) => toggle(s, v))} />
+            </div>
+            <FormField label="Any teammates you’d like to work with?" htmlFor="teammates">
+              <TextArea id="teammates" value={teammates} onChange={(e) => setTeammates(e.target.value)} style={{ minHeight: '70px' }} />
+            </FormField>
+          </div>
+
           <div style={{ marginTop: '1.5rem' }}>
             <PrimaryButton fullWidth disabled={!step1Valid} onClick={() => setStep(2)}>Continue</PrimaryButton>
           </div>
         </div>
       )}
 
-      {/* Step 2 — student info */}
+      {/* Step 2 — student information */}
       {step === 2 && (
         <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <h2 className="text-section-title">Student information</h2>
@@ -217,8 +388,11 @@ export default function ApplyPage() {
           <FormField label="Last name" htmlFor="stuLast" required>
             <TextInput id="stuLast" value={stuLast} onChange={(e) => setStuLast(e.target.value)} />
           </FormField>
+          <FormField label="Preferred name / nickname" htmlFor="preferred">
+            <TextInput id="preferred" value={preferred} onChange={(e) => setPreferred(e.target.value)} />
+          </FormField>
           <div>
-            <label htmlFor="grade" style={labelStyle}>Grade (2026–27)<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
+            <label htmlFor="grade" style={labelStyle}>Grade entering Fall 2026<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
             <select id="grade" value={grade} onChange={(e) => setGrade(e.target.value)} style={selectStyle}>
               <option value="">Select grade…</option>
               {[6, 7, 8, 9, 10, 11, 12].map((g) => (
@@ -227,10 +401,10 @@ export default function ApplyPage() {
             </select>
           </div>
           <div>
-            <label htmlFor="school" style={labelStyle}>School</label>
+            <label htmlFor="school" style={labelStyle}>School attending (Fall 2026)<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
             <select id="school" value={schoolId} onChange={(e) => setSchoolId(e.target.value)} style={selectStyle}>
-              <option value="">Select school…</option>
-              {schools.map((s) => (
+              <option value="">{grade ? 'Select school…' : 'Select grade first…'}</option>
+              {visibleSchools.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
               <option value={OTHER_SCHOOL}>Other (not listed)</option>
@@ -241,6 +415,24 @@ export default function ApplyPage() {
               </div>
             )}
           </div>
+          <FormField label="City" htmlFor="city" required>
+            <TextInput id="city" value={city} onChange={(e) => setCity(e.target.value)} />
+          </FormField>
+          <FormField label="ZIP code" htmlFor="zip" required>
+            <TextInput id="zip" value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" />
+          </FormField>
+          <FormField label="Student email" htmlFor="studentEmail" helpText="We may use this to communicate with you directly. Optional.">
+            <TextInput id="studentEmail" type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} />
+          </FormField>
+          <FormField label="Current overall GPA" htmlFor="gpaOverall" required>
+            <TextInput id="gpaOverall" value={gpaOverall} onChange={(e) => setGpaOverall(e.target.value)} inputMode="decimal" placeholder="e.g. 3.8" />
+          </FormField>
+          <FormField label="Most recent term GPA" htmlFor="gpaRecent" required>
+            <TextInput id="gpaRecent" value={gpaRecent} onChange={(e) => setGpaRecent(e.target.value)} inputMode="decimal" placeholder="e.g. 3.9" />
+          </FormField>
+          <FormField label="Who referred you to Placer Robotics?" htmlFor="referral" required helpText="Put N/A if none.">
+            <TextInput id="referral" value={referral} onChange={(e) => setReferral(e.target.value)} />
+          </FormField>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
             <SecondaryButton onClick={() => setStep(1)}>Back</SecondaryButton>
             <PrimaryButton disabled={!step2Valid} onClick={() => setStep(3)}>Continue</PrimaryButton>
@@ -248,8 +440,42 @@ export default function ApplyPage() {
         </div>
       )}
 
-      {/* Step 3 — guardian info */}
+      {/* Step 3 — about you */}
       {step === 3 && (
+        <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <h2 className="text-section-title">About you</h2>
+          <p className="text-help" style={{ marginTop: '-0.5rem', fontStyle: 'italic' }}>
+            Please answer these questions in your own words. We want to hear from you directly.
+          </p>
+          <FormField label="Tell us about yourself — your background, interests, and what draws you to robotics." htmlFor="bg" required>
+            <TextArea id="bg" value={bgBackground} onChange={(e) => setBgBackground(e.target.value)} />
+          </FormField>
+          <FormField label="What are your goals for this season, and what are you willing to commit to make them happen?" htmlFor="goals" required>
+            <TextArea id="goals" value={bgGoals} onChange={(e) => setBgGoals(e.target.value)} />
+          </FormField>
+          <FormField label="What other activities are you involved in, and how much time do they take?" htmlFor="extra" required>
+            <TextArea id="extra" value={extracurriculars} onChange={(e) => setExtracurriculars(e.target.value)} />
+          </FormField>
+          <div>
+            <label style={labelStyle}>Are you available to help with summer camps or get an early start this summer?<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
+            <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.25rem' }}>
+              {SUMMER_OPTIONS.map((o) => (
+                <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9375rem', cursor: 'pointer' }}>
+                  <input type="radio" name="summer" checked={summer === o.value} onChange={() => setSummer(o.value)} />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+            <SecondaryButton onClick={() => setStep(2)}>Back</SecondaryButton>
+            <PrimaryButton disabled={!step3Valid} onClick={() => setStep(4)}>Continue</PrimaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4 — parent / guardian */}
+      {step === 4 && (
         <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div style={{ ...cardBase, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <h2 className="text-section-title">Guardian 1</h2>
@@ -283,6 +509,20 @@ export default function ApplyPage() {
             </FormField>
           </div>
 
+          <div style={{ ...cardBase, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <h2 className="text-section-title">Volunteering <span className="text-help">(optional)</span></h2>
+            <div>
+              <label style={labelStyle}>Areas you’re interested in volunteering</label>
+              <CheckGroup options={VOLUNTEER_OPTIONS} selected={volunteerInterests} onToggle={(v) => setVolunteerInterests((s) => toggle(s, v))} />
+            </div>
+            <FormField label="Your profession or field" htmlFor="occupation" helpText="Helps us match mentoring opportunities.">
+              <TextInput id="occupation" value={occupation} onChange={(e) => setOccupation(e.target.value)} />
+            </FormField>
+            <FormField label="Volunteering comments or notes" htmlFor="volNotes">
+              <TextArea id="volNotes" value={volunteerNotes} onChange={(e) => setVolunteerNotes(e.target.value)} style={{ minHeight: '70px' }} />
+            </FormField>
+          </div>
+
           <InfoAlert title="Both guardians receive all communications">
             We send notifications to every guardian on the account. Add a second guardian if you’d like them included.
           </InfoAlert>
@@ -290,8 +530,42 @@ export default function ApplyPage() {
           <FinancialAidCallout href="https://forms.gle/nqjneY9ESyLRdZ8V9" />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
-            <SecondaryButton onClick={() => setStep(2)}>Back</SecondaryButton>
-            <PrimaryButton disabled={!step3Valid} loading={submitting} onClick={handleSubmit}>
+            <SecondaryButton onClick={() => setStep(3)}>Back</SecondaryButton>
+            <PrimaryButton disabled={!step4Valid} onClick={() => setStep(5)}>Continue</PrimaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* Step 5 — final confirmation */}
+      {step === 5 && (
+        <div style={{ ...cardBase, marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <h2 className="text-section-title">Final confirmation</h2>
+          <FormField label="Anything else we should know?" htmlFor="anything">
+            <TextArea id="anything" value={additionalNotes} onChange={(e) => setAdditionalNotes(e.target.value)} />
+          </FormField>
+          <div
+            style={{
+              backgroundColor: 'var(--color-bg)',
+              border: '1px solid var(--color-border)',
+              borderRadius: '8px',
+              padding: '1rem',
+              fontSize: '0.8125rem',
+              lineHeight: 1.55,
+              color: 'var(--color-text-muted)',
+            }}
+          >
+            {DATA_NOTICE}
+          </div>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem', fontSize: '0.9375rem', cursor: 'pointer' }}>
+            <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} style={{ width: 16, height: 16, marginTop: 3 }} />
+            <span>
+              I am the parent or guardian and certify that I am authorized to provide this information on behalf
+              of the student.<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span>
+            </span>
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
+            <SecondaryButton onClick={() => setStep(4)}>Back</SecondaryButton>
+            <PrimaryButton disabled={!step5Valid} loading={submitting} onClick={handleSubmit}>
               Submit application
             </PrimaryButton>
           </div>

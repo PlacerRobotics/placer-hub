@@ -69,7 +69,7 @@ export default async function RegisterPage() {
 
   const { data: schools } = await supabase
     .from('school')
-    .select('id, name')
+    .select('id, name, grade_min, grade_max')
     .eq('active', true)
     .order('name', { ascending: true })
 
