@@ -89,6 +89,20 @@ export async function POST(request: NextRequest) {
     ? config?.iq_default_fundraising_target ?? 0
     : config?.one_program_fundraising_target ?? 550
 
+  // Honor an approved financial-aid resolution (waiver / adjusted target).
+  const { data: aid } = await db
+    .from('financial_aid')
+    .select('registration_fee_waived, adjusted_fundraising_target')
+    .eq('family_id', familyId)
+    .eq('season', SEASON)
+    .eq('status', 'approved')
+    .order('resolved_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const feeStatus = aid?.registration_fee_waived ? 'waived' : 'unpaid'
+  const fundraisingTarget =
+    aid && aid.adjusted_fundraising_target != null ? aid.adjusted_fundraising_target : target
+
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
   const paymentRef: string = body.paymentReferenceCode
 
@@ -104,8 +118,8 @@ export async function POST(request: NextRequest) {
         division,
         payment_reference_code: paymentRef,
         registration_fee_amount: fee,
-        registration_fee_status: 'unpaid',
-        fundraising_target: target,
+        registration_fee_status: feeStatus,
+        fundraising_target: fundraisingTarget,
         waiver_status: 'complete',
         submitted_at: new Date().toISOString(),
         submission_ip: ip,
