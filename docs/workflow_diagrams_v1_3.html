@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Placer Robotics — Platform Workflow Diagrams</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f5f5; color: #1a1a2e; }
+
+  .cover {
+    background: #1a1a2e;
+    color: white;
+    padding: 60px 40px;
+    text-align: center;
+    page-break-after: always;
+  }
+  .cover h1 { font-size: 2.4em; font-weight: 700; margin-bottom: 12px; color: #D4AE04; }
+  .cover h2 { font-size: 1.3em; font-weight: 400; margin-bottom: 30px; opacity: 0.85; }
+  .cover .meta { font-size: 0.9em; opacity: 0.6; margin-top: 40px; }
+
+  .legend {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 20px 30px;
+    margin: 30px 40px;
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .legend h3 { width: 100%; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 4px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.9em; }
+  .legend-box { width: 28px; height: 20px; border-radius: 4px; }
+  .lb-family { background: #4A90D9; }
+  .lb-admin { background: #E8743B; }
+  .lb-system { background: #6BAE75; }
+  .lb-decision { background: #F5C842; border: 2px solid #C9A200; }
+  .lb-start { background: #1a1a2e; border-radius: 50%; }
+  .lb-end { background: #D4AE04; border-radius: 50%; }
+
+  .diagram-page {
+    padding: 30px 40px;
+    page-break-after: always;
+    background: white;
+    margin-bottom: 2px;
+  }
+  .diagram-page:last-child { page-break-after: auto; }
+
+  .diagram-title {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: #1a1a2e;
+    border-bottom: 3px solid #D4AE04;
+    padding-bottom: 10px;
+    margin-bottom: 6px;
+  }
+  .diagram-subtitle {
+    font-size: 0.88em;
+    color: #666;
+    margin-bottom: 24px;
+  }
+
+  /* Flow diagram */
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  .step {
+    display: flex;
+    width: 100%;
+    max-width: 780px;
+    align-items: stretch;
+    position: relative;
+  }
+
+  .step-actor {
+    width: 110px;
+    min-width: 110px;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 14px;
+    color: #555;
+  }
+
+  .step-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 30px;
+    min-width: 30px;
+  }
+  .step-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 3px solid white;
+    flex-shrink: 0;
+    margin-top: 18px;
+  }
+  .step-line {
+    width: 3px;
+    flex: 1;
+    background: #ddd;
+    min-height: 12px;
+  }
+  .step-line.last { display: none; }
+
+  .step-box {
+    flex: 1;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 5px 0;
+    font-size: 0.88em;
+    line-height: 1.45;
+  }
+  .step-box strong { display: block; font-size: 0.9em; margin-bottom: 2px; }
+
+  /* Actor colors */
+  .family .step-dot { background: #4A90D9; }
+  .family .step-box { background: #EDF4FC; border-left: 4px solid #4A90D9; }
+  .family .step-actor { color: #4A90D9; }
+
+  .admin .step-dot { background: #E8743B; }
+  .admin .step-box { background: #FEF3EC; border-left: 4px solid #E8743B; }
+  .admin .step-actor { color: #E8743B; }
+
+  .system .step-dot { background: #6BAE75; }
+  .system .step-box { background: #EFF7F1; border-left: 4px solid #6BAE75; }
+  .system .step-actor { color: #6BAE75; }
+
+  .decision .step-dot { background: #F5C842; border: 3px solid #C9A200; }
+  .decision .step-box {
+    background: #FFFBEA;
+    border: 2px dashed #C9A200;
+    border-radius: 8px;
+    font-style: italic;
+  }
+  .decision .step-actor { color: #A07800; }
+
+  /* Start / End nodes */
+  .node {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 8px 0;
+    width: 100%;
+    max-width: 780px;
+  }
+  .node-spacer { width: 110px; min-width: 110px; }
+  .node-line-wrap { display: flex; flex-direction: column; align-items: center; width: 30px; }
+  .node-circle {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.75em;
+    color: white;
+    flex-shrink: 0;
+  }
+  .node-start { background: #1a1a2e; }
+  .node-end { background: #D4AE04; }
+  .node-line { width: 3px; height: 12px; background: #ddd; }
+  .node-label { font-size: 0.82em; font-weight: 600; color: #555; letter-spacing: 0.3px; }
+
+  /* Branch / decision section */
+  .branch-section {
+    width: 100%;
+    max-width: 780px;
+    margin: 4px 0;
+    display: flex;
+    gap: 10px;
+  }
+  .branch-spacer { width: 140px; min-width: 140px; }
+  .branch-paths { flex: 1; display: flex; gap: 12px; }
+  .branch-path {
+    flex: 1;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.82em;
+    line-height: 1.4;
+  }
+  .branch-yes { background: #EFF7F1; border: 2px solid #6BAE75; }
+  .branch-no { background: #FEEEEE; border: 2px solid #E05252; }
+  .branch-label {
+    font-weight: 700;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .branch-yes .branch-label { color: #3B8A4A; }
+  .branch-no .branch-label { color: #C03030; }
+
+  /* Outcome table */
+  .outcome-table {
+    width: 100%;
+    max-width: 780px;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.84em;
+  }
+  .outcome-table th {
+    background: #1a1a2e;
+    color: #D4AE04;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+  }
+  .outcome-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+  }
+  .outcome-table tr:nth-child(even) td { background: #f8f8f8; }
+
+  .section-divider {
+    width: 100%;
+    max-width: 780px;
+    border: none;
+    border-top: 2px dashed #e0e0e0;
+    margin: 16px 0;
+  }
+
+  @media print {
+    .diagram-page { page-break-after: always; box-shadow: none; }
+    body { background: white; }
+  }
+
+  .toc { padding: 30px 40px; background: white; margin-bottom: 2px; }
+  .toc h2 { font-size: 1.2em; color: #1a1a2e; margin-bottom: 16px; border-bottom: 2px solid #D4AE04; padding-bottom: 8px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { padding: 6px 0; font-size: 0.92em; color: #333; }
+  .toc li span { color: #888; font-size: 0.85em; margin-left: 8px; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <h1>Placer Robotics</h1>
+  <h2>Registration Platform — Workflow Diagrams</h2>
+  <div style="color:#D4AE04;font-size:1em;margin:20px 0;">Version 1.3 &nbsp;|&nbsp; June 2026</div>
+  <div style="color:rgba(255,255,255,0.5);font-size:0.85em;margin-top:8px;">Companion to product_requirements_v1_7.md and functional_flow_v1_1.md</div>
+  <div class="meta">Placer Advanced Robotics and Technology &nbsp;•&nbsp; Confidential — Internal Use Only</div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h2>Diagrams in This Document</h2>
+  <ol>
+    <li>New Family — Application through Payment <span>Family, Admin, System</span></li>
+    <li>Volunteer Clearance — 5-Step Process <span>Volunteer, Admin, System</span></li>
+    <li>Annual Volunteer Renewal with APS Gate <span>Volunteer, System</span></li>
+    <li>VEX IQ Coach — Team Creation through Student Registration <span>IQ Coach, Admin, System, IQ Family</span></li>
+    <li>V5 Coach Onboarding <span>Admin, V5 Coach, System</span></li>
+    <li>Combat Team Manager Onboarding <span>Admin, Manager, System</span></li>
+    <li>"Not Sure" Applicant Triage <span>Family, Admin, System</span></li>
+    <li>Google Group / Slack Sync Cycle <span>System, Admin</span></li>
+    <li>Returning Family — Six Paths <span>Family, Admin, System</span></li>
+    <li>Annual Renewal — Full Flow with APS Gate Detail <span>Volunteer, System</span></li>
+  </ol>
+</div>
+
+<!-- LEGEND -->
+<div style="padding:20px 40px 0;background:white;">
+<div class="legend">
+  <h3>Color Key — Who is Acting</h3>
+  <div class="legend-item"><div class="legend-box lb-family"></div> Family / Parent / Coach (public user)</div>
+  <div class="legend-item"><div class="legend-box lb-admin"></div> Admin (Placer Robotics staff)</div>
+  <div class="legend-item"><div class="legend-box lb-system"></div> System (automated)</div>
+  <div class="legend-item"><div class="legend-box lb-decision"></div> Decision point</div>
+  <div class="legend-item"><div class="legend-box lb-start"></div> Start</div>
+  <div class="legend-item"><div class="legend-box lb-end"></div> End / Done</div>
+</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 1: New Family Application through Payment -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">1. New Family — Application through Payment</div>
+  <div class="diagram-subtitle">VEX V5 and Combat Robotics. Covers application, financial aid gate, registration, and payment confirmation.</div>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">Family learns about Placer Robotics</div></div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Submits application at <strong>placerrobotics.org/apply</strong> — no account required. Student info, program interest, long-form motivation answers, guardian contacts.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Creates family, guardian, and student records. Sends confirmation email to both guardians. Application appears in admin queue.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Reviews application (cannot see financial information). Reads long-form answers and GPA. Makes acceptance decision. <strong>If applicant selected both programs or Not Sure, admin confirms final program at this step.</strong></div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Decision</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Application accepted or declined?</div>
+    </div>
+
+    <div class="branch-section">
+      <div class="branch-spacer"></div>
+      <div class="branch-paths">
+        <div class="branch-path branch-no"><div class="branch-label">✗ Declined</div>Decline notification sent. Workflow ends for this application.</div>
+        <div class="branch-path branch-yes"><div class="branch-label">✓ Accepted</div>Acceptance email sent with login link. Family directed to financial aid prompt.</div>
+      </div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Logs in via magic link. Proceeds directly to registration form — no intermediate gate.</div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Note</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Financial aid is self-service, never a gate.</strong> The registration form includes a callout: "Need financial assistance? Submit a request here — before or after registration." Families who request aid can continue registering immediately. Financial Aid Admin resolves the request and admin adjusts enrollment records if needed. Registration is never locked for financial aid.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Completes multi-section registration form: participant info, program selection, fees and fundraising, volunteer interest, expectations acknowledgment, waivers.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Creates enrollment record. Records waiver signatures with legal evidence (typed name, IP, timestamp, waiver version). Generates payment reference code. Triggers Google Group sync.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Sees confirmation page with: Zeffy payment link, payment reference code, fundraising target, deadline, offline payment instructions.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Makes payment via Zeffy, check, Benevity, or corporate match using their payment reference code.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line last"></div></div>
+      <div class="step-box">Receives Zeffy webhook. Matches payment to enrollment. Updates fee/fundraising status. Sends payment confirmation email to family.</div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Family enrolled and payment confirmed</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 2: Volunteer Clearance -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">2. Volunteer Clearance — 5-Step Process</div>
+  <div class="diagram-subtitle">All programs. Same workflow for V5 coaches, IQ coaches, Combat managers, and general cleared volunteers.</div>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">Guardian initiates clearance from family dashboard</div></div>
+
+    <div class="step family">
+      <div class="step-actor">Volunteer</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Step 1 — Policy Acknowledgment (required for insurance)</strong>Volunteer reviews current season youth protection policy, lab use policy, and volunteer conduct policy. Types name as electronic acknowledgment with full evidence capture (version, hash, IP, timestamp). Required written confirmation for insurance. For parents already in the system, no new guardian record is created.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Creates volunteer profile. Opens all 5 clearance steps with status = pending.</div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Step 1 — CA DOJ Background Check</strong>Volunteer completes Live Scan fingerprinting through external provider. Admin marks Step 1 complete in dashboard after DOJ result confirmed. Date and notes recorded. No API — manual step.</div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Step 2 — APS Youth Protection Training (starts automatically)</strong>System calls APS API: creates user, assigns training, retrieves training link. Sends training link to volunteer by email.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Volunteer</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Completes ~90 min APS youth protection training on the APS/MinistrySafe website (outside this platform).</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">APS sends completion webhook. System stores certificate URL, issue date, and expiration date. Step 2 marked complete automatically.</div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="step family">
+      <div class="step-actor">Volunteer</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Step 3 — Youth Protection Policy Quiz</strong>Takes in-platform quiz. Must score 90% or higher. Unlimited retakes allowed.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Records all attempts. On passing attempt, Step 3 marked complete. Volunteer notified.</div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="step family">
+      <div class="step-actor">Volunteer</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Step 4 — Lab Use Policy Quiz</strong>Takes in-platform quiz. Must score 90% or higher. Unlimited retakes.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">On passing attempt, Step 4 marked complete.</div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Step 5 — Lab Orientation</strong>Volunteer completes in-person lab orientation at the Placer Robotics facility. Admin marks Step 5 complete in dashboard. Date recorded.</div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Auto-Clearance — all steps complete</strong>Volunteer status → Cleared. Clearance notification sent. Slack workspace invite sent. Google Group sync triggered. <strong>UniFi door credentials provisioned via API.</strong></div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Volunteer cleared — full access granted</div></div>
+  </div>
+
+  <br>
+  <table class="outcome-table">
+    <tr><th colspan="3">Clearance Status Lifecycle</th></tr>
+    <tr><th>Status</th><th>Meaning</th><th>How to Resolve</th></tr>
+    <tr><td>Pending</td><td>Applied, not all steps complete</td><td>Complete remaining steps</td></tr>
+    <tr><td>Cleared</td><td>All 5 steps complete, active</td><td>—</td></tr>
+    <tr><td>Expired</td><td>APS cert expired past May 31. UniFi door access revoked. Google Groups and Slack remain active.</td><td>Complete new APS training — auto-reinstates and re-provisions UniFi</td></tr>
+    <tr><td>Suspended</td><td>Admin action required</td><td>Super Admin reinstates</td></tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 3: Annual Renewal -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">3. Annual Volunteer Renewal</div>
+  <div class="diagram-subtitle">Standard: renewal opens July 1, target complete August 31 (both configurable in season_config). All cleared volunteers. Live Scan not repeated on standard renewal.</div>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">July 1 (standard) — renewal opens per season_config.volunteer_renewal_open_at</div></div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Sends renewal invitation email to all cleared volunteers. Renewal link in volunteer dashboard.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Volunteer</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Step 1 — Policy Re-Acknowledgment (always required)</strong>Reviews current season youth protection policy in full. Types name as electronic acknowledgment. Checks consent boxes.</div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Decision</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Has the youth protection policy changed since this volunteer's last acknowledgment?</div>
+    </div>
+
+    <div class="branch-section">
+      <div class="branch-spacer"></div>
+      <div class="branch-paths">
+        <div class="branch-path branch-yes"><div class="branch-label">Yes — policy changed</div>Volunteer must retake Youth Protection Quiz (90%+ required, unlimited retakes).</div>
+        <div class="branch-path branch-no"><div class="branch-label">No — unchanged</div>Quiz step skipped automatically.</div>
+      </div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Decision</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Does this volunteer's APS certificate expire on or before May 31 of this program year?</div>
+    </div>
+
+    <div class="branch-section">
+      <div class="branch-spacer"></div>
+      <div class="branch-paths">
+        <div class="branch-path branch-yes"><div class="branch-label">Yes — cert expiring</div>System auto-enrolls in new APS training. Training link sent by email. Volunteer completes training on APS site. Completion webhook marks step done.</div>
+        <div class="branch-path branch-no"><div class="branch-label">No — cert still valid</div>APS step skipped automatically.</div>
+      </div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line last"></div></div>
+      <div class="step-box">All required steps complete. Volunteer status remains Cleared. Renewal confirmation sent. Season renewal date recorded.</div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Renewal complete — cleared for new season</div></div>
+  </div>
+
+  <br>
+  <table class="outcome-table">
+    <tr><th colspan="2">If Renewal Is Not Completed</th></tr>
+    <tr><th>Scenario</th><th>What Happens</th></tr>
+    <tr><td>Steps incomplete, season still open</td><td>Admin notified. Volunteer may continue operating. Admin tracks outstanding renewal.</td></tr>
+    <tr><td>APS cert expires without renewal</td><td>Volunteer status auto-expires. Removed from Google Groups and Slack on next sync.</td></tr>
+    <tr><td>Reinstatement after expiry</td><td>Volunteer completes new APS training. APS webhook auto-reinstates status to Cleared.</td></tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 4: IQ Coach Team Creation -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">4. VEX IQ Coach — Team Creation through Student Registration</div>
+  <div class="diagram-subtitle">IQ coach self-creates team, pays team fee, admin confirms, IQ families register and attach to team.</div>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">Coach wants to register an IQ team</div></div>
+
+    <div class="step family">
+      <div class="step-actor">IQ Coach</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Submits team creation form at <strong>placerrobotics.org/iq-team/create</strong> — no login required. Enters school name, division, contact info, estimated team size. <em>No team number field — assigned later by admin.</em></div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Creates team record (status: Pending Payment). Generates team payment reference code. Sends Zeffy payment link and instructions to coach.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">IQ Coach</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Pays $1,200 team fee via Zeffy using the payment reference code.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Receives Zeffy payment webhook. Matches to team. Team fee status → Paid. Team status → Pending Admin Confirmation. Payment Admin notified.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>IQ Coordinator</strong> reviews team submission and payment. Confirms team. Team status → Active.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Sends coach login link and clearance instructions. Sends magic link registration invitations to each parent/guardian email provided in student roster.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">IQ Coach</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Logs in and begins volunteer clearance process. (See Diagram 2 — Volunteer Clearance.) Team is active during clearance process. Students may register while coach is pending clearance.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Marks <strong>events.vex.com registration complete</strong> on team record once IQ team is registered externally. Also assigns team number when GRSF/VEX confirms it.</div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="step family">
+      <div class="step-actor">IQ Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Applies, gets accepted, goes through financial aid gate, then reaches IQ registration form. Selects their team from the list of active confirmed IQ teams.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line last"></div></div>
+      <div class="step-box">Creates enrollment with team assigned. Registration fee = $0. Fundraising target = $0 default. Optional donation Zeffy link displayed.</div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">IQ team active, students registered, coach clearing</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 5: V5 Coach Onboarding -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">5. V5 Coach Onboarding</div>
+  <div class="diagram-subtitle">Admin creates and assigns V5 teams. Coach is notified and begins clearance. events.vex.com registration required.</div>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">Admin identifies a coach for a V5 team</div></div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Creates V5 team record in admin dashboard. Enters school, division (MS/HS), optional team name. <em>Team number left blank — assigned after GRSF confirmation.</em> Assigns coach from existing guardian records or creates new guardian.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Sends coach notification email with login link and clearance instructions. Coach added to team_member record with role = coach.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">V5 Coach</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Logs in. Sees clearance-pending status on their volunteer dashboard. Initiates volunteer clearance from family dashboard. Completes 5-step clearance process. (See Diagram 2.)</div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Status</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">While coach clearance is pending: team is active. Students may be registered and assigned. Admin dashboard shows clearance-pending flag on team.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">When V5 team is registered at events.vex.com, marks <strong>events.vex.com registration complete</strong> on team record. V5 team dashboard surfaces incomplete teams.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">When GRSF confirms team number, enters it on the team record.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line last"></div></div>
+      <div class="step-box">On clearance completion: coach added to V5 coach Google Group (v5-hs-coaches or v5-ms-coaches) and Slack workspace on next sync cycle.</div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Coach cleared, team number assigned, events.vex.com registered</div></div>
+  </div>
+
+  <br>
+  <table class="outcome-table">
+    <tr><th colspan="3">V5 vs IQ vs Combat — Key Differences</th></tr>
+    <tr><th>Item</th><th>VEX V5</th><th>VEX IQ</th></tr>
+    <tr><td>Team creation</td><td>Admin creates, assigns coach</td><td>Coach self-creates via public form</td></tr>
+    <tr><td>Team fee</td><td>None</td><td>$1,200 (coach pays)</td></tr>
+    <tr><td>events.vex.com</td><td>Required — admin marks complete</td><td>Required — admin marks complete</td></tr>
+    <tr><td>Clearance</td><td>Same 5-step process</td><td>Same 5-step process</td></tr>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 6: Combat Manager Onboarding -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">6. Combat Team Manager Onboarding</div>
+  <div class="diagram-subtitle">Admin creates Combat teams and assigns managers. No team fee. No external registration requirement.</div>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">Admin identifies a manager for a Combat team</div></div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Creates Combat team record. Enters school/org, division (MS/HS), optional team name or identifier. <strong>No team fee. No events.vex.com requirement.</strong> Assigns manager from guardian records or creates new guardian.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Sends manager notification email with login link and clearance instructions. Manager added to team_member with role = manager.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Manager</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Logs in. Initiates volunteer clearance from family dashboard. Completes same 5-step clearance process as all volunteers. (See Diagram 2.)</div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Status</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">While clearance is pending: team is active. Students may be registered. Admin dashboard shows clearance-pending flag.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Assigns internal team identifier when available. No GRSF team number or external registration required for Combat.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line last"></div></div>
+      <div class="step-box">On clearance completion: manager added to Combat coach Google Group (combat-hs-coaches or combat-ms-coaches) and Slack workspace on next sync.</div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Manager cleared — full access granted</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 7: Not Sure Applicant Triage -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">7. "Not Sure" Applicant Triage</div>
+  <div class="diagram-subtitle">For students who select "Not Sure" on the application. Triage happens through engagement events before acceptance.</div>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">Student applies and selects "Not Sure" for program</div></div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Application created with program_interest = not_sure. Routes to "Not Sure / Program Pending" sub-queue in admin dashboard. Confirmation email sent to family.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Reviews application. Reads motivation answers and background. Marks status = Program Pending. Adds triage notes about next steps for this student.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Student</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Attends one or more engagement events — info nights, try-it-out sessions, open labs, summer camps, RISE, Girl Powered. Admin optionally records attendance in the system.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Follows up with student and family. Gathers input from coaches and student directors. Updates triage notes as engagement progresses.</div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Decision</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Has the student identified a program?</div>
+    </div>
+
+    <div class="branch-section">
+      <div class="branch-spacer"></div>
+      <div class="branch-paths">
+        <div class="branch-path branch-yes"><div class="branch-label">Yes — program determined</div>Admin sets final program to VEX V5, Combat, or both programs. If both selected, system creates one enrollment per program at registration. Updates triage notes. Moves to Accepted.</div>
+        <div class="branch-path branch-no"><div class="branch-label">No — still undecided</div>Application stays in Program Pending. Continue engagement events. No deadline — admin judgment.</div>
+      </div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line last"></div></div>
+      <div class="step-box">Sends acceptance email with login link. Directs family to financial aid prompt. Normal registration flow proceeds.</div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Student accepted with confirmed program — normal registration flow begins</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 8: Google Group / Slack Sync -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">8. Google Group / Slack Sync Cycle</div>
+  <div class="diagram-subtitle">Replaces the sync_script.py spreadsheet-based sync. Supabase is the source of truth. Runs every 15 minutes and on key events.</div>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">Trigger: scheduled (every 15 min) or on-demand after registration, clearance, or role change</div></div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>For each auto-synced Google Group:</strong> Queries Supabase for current desired membership based on group rule (enrollment-driven, clearance-driven, or role-driven).</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Resolves email for each member: uses google_email if provided, otherwise falls back to login_email. <em>No external mapping spreadsheet consulted.</em></div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Fetches current Google Group membership via Google Admin SDK. Computes diff: who needs to be added, who needs to be removed.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Executes batch add/remove via Google Admin SDK. Logs every change to sync_log: group, action, email, which field resolved from, timestamp, success/failure.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Slack user group sync:</strong> Updates cleared-parents Slack user group in both main and IQ workspaces to match all volunteers with status = cleared.</div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Decision</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Any sync failures (API error, permission issue, unresolvable email)?</div>
+    </div>
+
+    <div class="branch-section">
+      <div class="branch-spacer"></div>
+      <div class="branch-paths">
+        <div class="branch-path branch-yes"><div class="branch-label">Yes — failures</div>Failures logged to sync_log. Surfaced in admin notification dashboard. Admin may investigate and trigger manual resync.</div>
+        <div class="branch-path branch-no"><div class="branch-label">No — clean</div>Sync complete. All changes logged.</div>
+      </div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Google Groups and Slack groups match current Supabase state</div></div>
+  </div>
+
+  <br>
+  <table class="outcome-table">
+    <tr><th colspan="3">Google Group Membership Rules</th></tr>
+    <tr><th>Group</th><th>Who's In It</th><th>Slack</th></tr>
+    <tr><td>295-hs-vex</td><td>V5 enrolled families, HS division</td><td>main</td></tr>
+    <tr><td>295-ms-vex</td><td>V5 enrolled families, MS division</td><td>main</td></tr>
+    <tr><td>iq-parents</td><td>All IQ enrolled families</td><td>iq</td></tr>
+    <tr><td>combat-hs / combat-ms</td><td>Combat enrolled families by division</td><td>main</td></tr>
+    <tr><td>cavitt-vex</td><td>V5 families from Cavitt Jr High</td><td>main</td></tr>
+    <tr><td>v5-hs/ms-coaches</td><td>Cleared V5 coaches by division</td><td>main</td></tr>
+    <tr><td>combat-hs/ms-coaches</td><td>Cleared Combat managers by division</td><td>main</td></tr>
+    <tr><td>iq-coaches</td><td>Cleared IQ coaches</td><td>iq</td></tr>
+    <tr><td>prsc</td><td>Steering Committee (person_role)</td><td>main</td></tr>
+    <tr><td>campstaff</td><td>Camp Staff (person_role)</td><td>main</td></tr>
+    <tr><td>part-everyone</td><td>All enrolled families + cleared volunteers</td><td>main</td></tr>
+    <tr><td>board</td><td><strong>Manual — not synced by system</strong></td><td>—</td></tr>
+  </table>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 9: Returning Family Paths -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">9. Returning Family — Six Paths</div>
+  <div class="diagram-subtitle">All returning families use the same account. Financial aid and waivers always reset. Team assignment defaults to prior season.</div>
+
+  <table class="outcome-table">
+    <tr><th colspan="4">What Always Resets Each Season</th></tr>
+    <tr><th>Item</th><th>Resets?</th><th>What Family Must Do</th><th>Notes</th></tr>
+    <tr><td>Financial aid</td><td>Yes — always</td><td>Re-apply before registration</td><td>No prior approval carries forward</td></tr>
+    <tr><td>Waivers</td><td>Yes — always</td><td>Sign new waivers at registration</td><td>No exceptions</td></tr>
+    <tr><td>Student communication consent</td><td>Yes — always</td><td>Re-certify at registration</td><td>Re-collected each season</td></tr>
+    <tr><td>Team assignment (V5/Combat)</td><td>No — defaults to prior team</td><td>Nothing — admin updates if needed</td><td>Admin changes post-registration</td></tr>
+    <tr><td>Guardian/student records</td><td>No — pre-filled</td><td>Review and update at registration</td><td>All fields editable</td></tr>
+    <tr><td>Volunteer clearance</td><td>No — carries forward</td><td>Complete annual renewal</td><td>Unless expired or suspended</td></tr>
+  </table>
+
+  <br>
+
+  <table class="outcome-table">
+    <tr><th colspan="3">Six Returning Paths</th></tr>
+    <tr><th>Path</th><th>What's Different</th><th>Family Action</th></tr>
+    <tr><td><strong>1. Same program, same team</strong></td><td>Nothing — most common case</td><td>Apply (or admin waiver) → financial aid gate → register. Team pre-filled from prior season.</td></tr>
+    <tr><td><strong>2. Same program, different team</strong></td><td>Team assignment only</td><td>Same as Path 1. Admin updates team assignment after registration. Family does nothing different.</td></tr>
+    <tr><td><strong>3. Add a program</strong><br><em>e.g. V5 → V5 + Combat</em></td><td>Program selection, fundraising target changes to both-program amount ($1,100)</td><td>Submit new application indicating both programs. Financial aid gate re-runs. Registration reflects updated program.</td></tr>
+    <tr><td><strong>4. Switch program</strong><br><em>e.g. V5 → Combat only</em></td><td>Full program change. Prior enrollment preserved in history.</td><td>Submit new application with new program. Financial aid gate re-runs. New enrollment created.</td></tr>
+    <tr><td><strong>5. Add a sibling</strong></td><td>New student record under existing family</td><td>Log in → initiate new application for sibling from family dashboard. Standard queue. Financial aid for new student handled separately.</td></tr>
+    <tr><td><strong>6. IQ → V5 transition</strong></td><td>Full program change. IQ history visible to admin during review.</td><td>Submit full V5 application. Admin may use admin_waived to fast-track. V5 fees and targets apply — IQ's $0 fee does not carry forward.</td></tr>
+  </table>
+
+  <div class="flow" style="margin-top:20px;">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">Returning family — any path</div></div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Logs in with existing email. Sees prior season history and current-season outstanding actions on family dashboard.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Submits application for new season (or admin grants waiver for known families). For program changes or sibling additions, indicates the new program or student.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Reviews application. Prior season history visible. Accepts, declines, or fast-tracks with admin waiver.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Financial aid gate — must answer fresh each season regardless of prior aid. Registration locked until resolved if aid requested.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Family</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Completes registration form. All fields pre-filled from prior season. Signs new waivers — prior season waivers never carry forward. Re-certifies student communication consent.</div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Creates new enrollment for current season. Team assignment pre-populated from prior season (V5/Combat). New waiver signatures captured. Confirmation sent.</div>
+    </div>
+
+    <div class="step admin">
+      <div class="step-actor">Admin</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line last"></div></div>
+      <div class="step-box">After registration closes: reviews team assignments, updates where needed, confirms team numbers when GRSF provides them.</div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Returning family enrolled for new season</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DIAGRAM 10: Annual Renewal with APS Gate -->
+<!-- ============================================================ -->
+<div class="diagram-page">
+  <div class="diagram-title">10. Annual Volunteer Renewal — Full Flow with APS Gate</div>
+  <div class="diagram-subtitle">Standard: renewal opens July 1, target complete August 31. APS re-enrollment blocks renewal completion if cert is expiring.</div>
+
+  <table class="outcome-table" style="margin-bottom:20px;">
+    <tr><th colspan="2">Renewal Calendar (Standard — configurable per season)</th></tr>
+    <tr><th>When</th><th>What Happens</th></tr>
+    <tr><td>~June 1 (90 days before May 31)</td><td>Early warning email to volunteers whose APS cert expires before May 31. Volunteer only — no admin alert.</td></tr>
+    <tr><td>July 1</td><td>Renewal opens. Invitation email sent to all cleared volunteers. APS link auto-sent to those who need re-enrollment.</td></tr>
+    <tr><td>August 31</td><td>Target completion date. Admin dashboard flags incomplete renewals. No hard lock.</td></tr>
+    <tr><td>APS cert expiration date</td><td>If APS not complete: status auto-expires. Groups and Slack removed.</td></tr>
+    <tr><td>Any time after expiration</td><td>Volunteer completes APS. Auto-reinstates on webhook. No admin action needed.</td></tr>
+  </table>
+
+  <div class="flow">
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-circle node-start">▶</div><div class="node-line"></div></div><div class="node-label">~June 1 — early warning sent if cert expiring</div></div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Renewal opens. Invitation email sent to all cleared volunteers. August 31 is the standard target completion date. For volunteers needing APS re-enrollment, system auto-sends APS training link.</div>
+    </div>
+
+    <div class="step family">
+      <div class="step-actor">Volunteer</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box"><strong>Step 1 — Policy Re-Acknowledgment (always required)</strong><br>Reviews current season youth protection policy. Types name as electronic acknowledgment. Checks consent boxes.</div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Decision</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Has the youth protection policy changed since last acknowledgment?</div>
+    </div>
+
+    <div class="branch-section">
+      <div class="branch-spacer"></div>
+      <div class="branch-paths">
+        <div class="branch-path branch-yes"><div class="branch-label">Yes — policy changed</div>Must retake Youth Protection Quiz (90%+, unlimited retakes).</div>
+        <div class="branch-path branch-no"><div class="branch-label">No — unchanged</div>Quiz step skipped automatically.</div>
+      </div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Decision</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Does this volunteer's APS cert expire on or before May 31?</div>
+    </div>
+
+    <div class="branch-section">
+      <div class="branch-spacer"></div>
+      <div class="branch-paths">
+        <div class="branch-path branch-yes"><div class="branch-label">Yes — cert expiring</div>APS link already sent at renewal open. Volunteer completes training on APS site. APS sends completion webhook. <strong>Renewal flow BLOCKED until webhook received.</strong></div>
+        <div class="branch-path branch-no"><div class="branch-label">No — cert still valid</div>APS step skipped. Renewal may be submitted immediately after Steps 1 and 2.</div>
+      </div>
+    </div>
+
+    <div class="step decision">
+      <div class="step-actor">Decision</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line"></div></div>
+      <div class="step-box">Did APS cert expire before training was completed?</div>
+    </div>
+
+    <div class="branch-section">
+      <div class="branch-spacer"></div>
+      <div class="branch-paths">
+        <div class="branch-path branch-yes"><div class="branch-label">Yes — cert expired</div>Status → Expired. Removed from Google Groups and Slack. Blocked from operating. Volunteer can still complete APS training — auto-reinstates on webhook.</div>
+        <div class="branch-path branch-no"><div class="branch-label">No — completed in time</div>All steps done. Renewal complete.</div>
+      </div>
+    </div>
+
+    <div class="step system">
+      <div class="step-actor">System</div>
+      <div class="step-connector"><div class="step-dot"></div><div class="step-line last"></div></div>
+      <div class="step-box">Renewal complete. Status remains Cleared. Confirmation sent. Season renewal date recorded. Admin dashboard renewal flag cleared.</div>
+    </div>
+
+    <div class="node"><div class="node-spacer"></div><div class="node-line-wrap"><div class="node-line"></div><div class="node-circle node-end">✓</div></div><div class="node-label">Volunteer renewed — cleared for new season</div></div>
+  </div>
+</div>
+
+</body>
+</html>

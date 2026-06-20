@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Environment — NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Python (ETL scripts)
+__pycache__/
+*.py[cod]
+.venv/
+venv/

@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Placer Robotics Design Tokens
+   Source: docs/ux_requirements_v1_0.md — Section 5.2
+   ============================================================ */
+
+:root {
+  /* Core Platform Colors */
+  --color-navy-deep: #0E2558;
+  --color-navy-darker: #071A3D;
+  --color-charcoal: #16181E;
+  --color-gold: #F2C352;
+  --color-gold-dark: #D9A820;
+  --color-gold-light: #F8E4A3;
+  --color-blue-gray: #7E8FB9;
+  --color-bg-light: #F5F6F8;
+  --color-surface: #FFFFFF;
+  --color-border: #DDE2E8;
+  --color-text-primary: #1F2933;
+  --color-text-muted: #5F5D60;
+
+  /* Functional Status Colors */
+  --color-success: #2E7D32;
+  --color-warning: #B7791F;
+  --color-error: #C62828;
+  --color-info: #2563EB;
+  --color-neutral: #6B7280;
+
+  /* Program Accent Colors — badges/chips/small markers ONLY */
+  --color-program-v5: #2563EB;
+  --color-program-iq: #F2C352;
+  --color-program-combat: #D95B3D;
+  --color-program-general: #7E8FB9;
+}
+
+/* ============================================================
+   Typography
+   Goldman: display headings (page titles, hero, section headers)
+   Inter: body text, form fields, labels, buttons, all UI
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Goldman:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
+
+html {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-light);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-display {
+  font-family: 'Goldman', sans-serif;
+}
+
+.text-page-title {
+  font-family: 'Goldman', sans-serif;
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--color-navy-deep);
+}
+
+.text-section-title {
+  font-family: 'Goldman', sans-serif;
+  font-size: clamp(1.25rem, 3vw, 1.5rem);
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--color-navy-deep);
+}
+
+.text-card-title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.text-body {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.text-help {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.text-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+a {
+  color: var(--color-navy-deep);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--color-gold-dark);
+}
