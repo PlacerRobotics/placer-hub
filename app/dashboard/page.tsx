@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { FamilyShell, PageHeader, ActionCard, StatusBadge } from '@/components/ui'
+import { FamilyShell, PageHeader, ActionCard, StatusBadge, WarningAlert, SuccessAlert } from '@/components/ui'
 import { FinancialAidCallout } from '@/components/FinancialAidCallout'
 
 // Bootstrap super-admin. A proper check would query admin_role_assignment;
@@ -21,7 +21,11 @@ const CHECKLIST: Array<{
   { label: 'Team', status: 'Pending', variant: 'info' },
 ]
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ notice?: string }>
+}) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -31,6 +35,7 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
+  const { notice } = await searchParams
   const email = user.email ?? 'your account'
   const isAdmin = user.email === ADMIN_EMAIL
   // Families cannot read financial_aid under RLS (rule 3), so this keys off the
@@ -40,6 +45,20 @@ export default async function DashboardPage() {
 
   return (
     <FamilyShell familyName={email} maxWidth="lg">
+      {notice === 'not_cleared' && (
+        <div style={{ marginBottom: '1rem' }}>
+          <WarningAlert title="Not cleared to register yet">
+            You need to be accepted before registering.
+          </WarningAlert>
+        </div>
+      )}
+      {notice === 'registered' && (
+        <div style={{ marginBottom: '1rem' }}>
+          <SuccessAlert title="Registration submitted">
+            We received your registration. Complete payment to secure the spot.
+          </SuccessAlert>
+        </div>
+      )}
       {isAdmin && (
         <div style={{ marginBottom: '1rem' }}>
           <Link

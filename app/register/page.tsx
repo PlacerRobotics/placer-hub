@@ -1,50 +1,104 @@
-'use client'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import RegisterWizard from './register-wizard'
 
-import {
-  FamilyShell,
-  PageHeader,
-  FormSection,
-  FormField,
-  TextInput,
-  PrimaryButton,
-} from '@/components/ui'
+const SEASON = '2026-27'
 
-export default function RegisterPage() {
+function makePaymentRef(first: string, last: string) {
+  const initials = `${first?.[0] ?? 'X'}${last?.[0] ?? 'X'}`.toUpperCase()
+  const digits = Math.floor(1000 + Math.random() * 9000)
+  return `PART-${SEASON.replace('-', '')}-${initials}-${digits}`
+}
+
+export default async function RegisterPage() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // Resolve the family via the logged-in guardian's email.
+  const { data: guardian } = await supabase
+    .from('guardian')
+    .select('id, family_id, first_name, last_name')
+    .ilike('login_email', user.email ?? '')
+    .maybeSingle()
+
+  if (!guardian) redirect('/dashboard?notice=not_cleared')
+  const familyId: string = guardian.family_id
+
+  // Gate: the family must be cleared to register this season.
+  const { data: fs } = await supabase
+    .from('family_season')
+    .select('status')
+    .eq('family_id', familyId)
+    .eq('season', SEASON)
+    .maybeSingle()
+
+  if (!fs || fs.status !== 'cleared_to_register') {
+    redirect('/dashboard?notice=not_cleared')
+  }
+
+  // Load the student being registered (first student on the family).
+  const { data: students } = await supabase
+    .from('student')
+    .select(
+      'id, first_name, last_name, preferred_name, birthdate, grade, school_id, school_raw, tshirt_size, fusion_education_email'
+    )
+    .eq('family_id', familyId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+  const student = students?.[0]
+  if (!student) redirect('/dashboard?notice=not_cleared')
+
+  const { data: appn } = await supabase
+    .from('student_application')
+    .select('program_interest')
+    .eq('student_id', student.id)
+    .eq('season', SEASON)
+    .maybeSingle()
+  const program: string = appn?.program_interest ?? 'vex_v5'
+
+  const { data: enrollment } = await supabase
+    .from('enrollment')
+    .select('payment_reference_code')
+    .eq('student_id', student.id)
+    .eq('season', SEASON)
+    .eq('program', program)
+    .maybeSingle()
+
+  const { data: schools } = await supabase
+    .from('school')
+    .select('id, name')
+    .eq('active', true)
+    .order('name', { ascending: true })
+
+  const { data: waivers } = await supabase
+    .from('waiver_template')
+    .select('id, waiver_type, version, title, body_markdown, body_hash')
+    .eq('active', true)
+    .order('waiver_type', { ascending: true })
+
+  const { data: config } = await supabase
+    .from('season_config')
+    .select('zeffy_student_url')
+    .eq('season', SEASON)
+    .maybeSingle()
+
+  const paymentRef =
+    enrollment?.payment_reference_code ?? makePaymentRef(student.first_name, student.last_name)
+
   return (
-    <FamilyShell familyName="Miller Family" maxWidth="lg">
-      <PageHeader
-        title="Complete Registration"
-        subtitle="Registering Maya Miller for the 2026–27 season"
-        breadcrumb={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Registration' }]}
-      />
-
-      <FormSection title="Student Information" description="Tell us about the student you're registering.">
-        <FormField label="Student name" htmlFor="studentName" required>
-          <TextInput id="studentName" name="studentName" defaultValue="Maya Miller" />
-        </FormField>
-        <FormField label="Grade" htmlFor="grade" required helpText="Grade for the 2026–27 school year.">
-          <TextInput id="grade" name="grade" placeholder="e.g. 7" />
-        </FormField>
-        <FormField label="School" htmlFor="school">
-          <TextInput id="school" name="school" placeholder="School name" />
-        </FormField>
-      </FormSection>
-
-      <FormSection title="Guardian Information" description="The primary contact for this student.">
-        <FormField label="Guardian name" htmlFor="guardianName" required>
-          <TextInput id="guardianName" name="guardianName" defaultValue="Kevin Miller" />
-        </FormField>
-        <FormField label="Email" htmlFor="guardianEmail" required>
-          <TextInput id="guardianEmail" name="guardianEmail" type="email" defaultValue="kevin.miller@placerrobotics.org" />
-        </FormField>
-        <FormField label="Mobile phone" htmlFor="guardianPhone" required helpText="Used for urgent practice and event updates.">
-          <TextInput id="guardianPhone" name="guardianPhone" type="tel" placeholder="(916) 555-0142" />
-        </FormField>
-      </FormSection>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-        <PrimaryButton>Continue</PrimaryButton>
-      </div>
-    </FamilyShell>
+    <RegisterWizard
+      season={SEASON}
+      studentId={student.id}
+      program={program}
+      student={student}
+      schools={schools ?? []}
+      waivers={waivers ?? []}
+      paymentReferenceCode={paymentRef}
+      guardianName={`${guardian.first_name} ${guardian.last_name}`}
+      zeffyUrl={config?.zeffy_student_url ?? null}
+    />
   )
 }
