@@ -1,6 +1,11 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { FamilyShell, PageHeader, ActionCard, StatusBadge } from '@/components/ui'
+
+// Bootstrap super-admin. A proper check would query admin_role_assignment;
+// this email match mirrors the seed's bootstrap trigger for now.
+const ADMIN_EMAIL = 'kevin.miller@placerrobotics.org'
 
 const CHECKLIST: Array<{
   label: string
@@ -25,13 +30,27 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
+  const email = user.email ?? 'your account'
+  const isAdmin = user.email === ADMIN_EMAIL
+
   return (
-    <FamilyShell familyName={user.email ?? 'Your Family'} maxWidth="lg">
-      <PageHeader title="Your Dashboard" subtitle="Welcome back. Here's where Maya's enrollment stands." />
+    <FamilyShell familyName={email} maxWidth="lg">
+      {isAdmin && (
+        <div style={{ marginBottom: '1rem' }}>
+          <Link
+            href="/admin"
+            style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}
+          >
+            Admin dashboard →
+          </Link>
+        </div>
+      )}
+
+      <PageHeader title="Your Dashboard" subtitle={`Signed in as ${email}. Here's where your enrollment stands.`} />
 
       <ActionCard
-        title="Complete registration for Maya"
-        description="You're one step away. Finish the registration form and submit payment to secure Maya's spot for the 2026–27 season."
+        title={`Complete registration for ${email}`}
+        description="You're one step away. Finish the registration form and submit payment to secure your spot for the 2026–27 season."
         ctaLabel="Continue registration"
         href="/register"
       />
