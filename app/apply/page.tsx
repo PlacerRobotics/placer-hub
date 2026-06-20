@@ -287,7 +287,7 @@ export default function ApplyPage() {
             We send notifications to every guardian on the account. Add a second guardian if you’d like them included.
           </InfoAlert>
 
-          <FinancialAidCallout />
+          <FinancialAidCallout href="https://forms.gle/nqjneY9ESyLRdZ8V9" />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
             <SecondaryButton onClick={() => setStep(2)}>Back</SecondaryButton>

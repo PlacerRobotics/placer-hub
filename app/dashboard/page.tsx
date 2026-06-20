@@ -1,25 +1,26 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { FamilyShell, PageHeader, ActionCard, StatusBadge, WarningAlert, SuccessAlert } from '@/components/ui'
+import {
+  FamilyShell,
+  PageHeader,
+  ActionCard,
+  StatusBadge,
+  WarningAlert,
+  SuccessAlert,
+} from '@/components/ui'
 import { FinancialAidCallout } from '@/components/FinancialAidCallout'
 
-// Bootstrap super-admin. A proper check would query admin_role_assignment;
-// this email match mirrors the seed's bootstrap trigger for now.
 const ADMIN_EMAIL = 'kevin.miller@placerrobotics.org'
+const SEASON = '2026-27'
 
-const CHECKLIST: Array<{
-  label: string
-  status: string
-  variant: 'success' | 'warning' | 'error' | 'info' | 'neutral'
-}> = [
-  { label: 'Application', status: 'Accepted', variant: 'success' },
-  { label: 'Financial Aid', status: 'Not requested', variant: 'neutral' },
-  { label: 'Registration', status: 'Not started', variant: 'warning' },
-  { label: 'Waivers', status: 'Not signed', variant: 'warning' },
-  { label: 'Payment', status: 'Not paid', variant: 'warning' },
-  { label: 'Team', status: 'Pending', variant: 'info' },
-]
+const AID_DISPLAY: Record<string, [string, 'success' | 'warning' | 'error' | 'info' | 'neutral']> = {
+  not_requested: ['Not requested', 'neutral'],
+  pending: ['Requested', 'info'],
+  approved: ['Approved', 'success'],
+  denied: ['Denied', 'error'],
+  withdrawn: ['Withdrawn', 'neutral'],
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -38,10 +39,40 @@ export default async function DashboardPage({
   const { notice } = await searchParams
   const email = user.email ?? 'your account'
   const isAdmin = user.email === ADMIN_EMAIL
-  // Families cannot read financial_aid under RLS (rule 3), so this keys off the
-  // (mock) checklist status for now. Show the callout when aid isn't requested.
-  const showAidCallout =
-    CHECKLIST.find((c) => c.label === 'Financial Aid')?.status === 'Not requested'
+
+  // Real financial-aid status for this family (family can read its own per RLS).
+  const { data: guardian } = await supabase
+    .from('guardian')
+    .select('family_id')
+    .ilike('login_email', user.email ?? '')
+    .maybeSingle()
+  let aidStatus = 'not_requested'
+  if (guardian) {
+    const { data: aid } = await supabase
+      .from('financial_aid')
+      .select('status')
+      .eq('family_id', guardian.family_id)
+      .eq('season', SEASON)
+      .order('requested_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (aid) aidStatus = aid.status
+  }
+  const [aidLabel, aidVariant] = AID_DISPLAY[aidStatus] ?? AID_DISPLAY.not_requested
+  const showAidCallout = aidStatus === 'not_requested'
+
+  const CHECKLIST: Array<{
+    label: string
+    status: string
+    variant: 'success' | 'warning' | 'error' | 'info' | 'neutral'
+  }> = [
+    { label: 'Application', status: 'Accepted', variant: 'success' },
+    { label: 'Financial Aid', status: aidLabel, variant: aidVariant },
+    { label: 'Registration', status: 'Not started', variant: 'warning' },
+    { label: 'Waivers', status: 'Not signed', variant: 'warning' },
+    { label: 'Payment', status: 'Not paid', variant: 'warning' },
+    { label: 'Team', status: 'Pending', variant: 'info' },
+  ]
 
   return (
     <FamilyShell familyName={email} maxWidth="lg">
@@ -59,6 +90,7 @@ export default async function DashboardPage({
           </SuccessAlert>
         </div>
       )}
+
       {isAdmin && (
         <div style={{ marginBottom: '1rem' }}>
           <Link
