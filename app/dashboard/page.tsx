@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { FamilyShell, PageHeader, ActionCard, StatusBadge } from '@/components/ui'
+import { FinancialAidCallout } from '@/components/FinancialAidCallout'
 
 // Bootstrap super-admin. A proper check would query admin_role_assignment;
 // this email match mirrors the seed's bootstrap trigger for now.
@@ -32,6 +33,10 @@ export default async function DashboardPage() {
 
   const email = user.email ?? 'your account'
   const isAdmin = user.email === ADMIN_EMAIL
+  // Families cannot read financial_aid under RLS (rule 3), so this keys off the
+  // (mock) checklist status for now. Show the callout when aid isn't requested.
+  const showAidCallout =
+    CHECKLIST.find((c) => c.label === 'Financial Aid')?.status === 'Not requested'
 
   return (
     <FamilyShell familyName={email} maxWidth="lg">
@@ -85,6 +90,12 @@ export default async function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {showAidCallout && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <FinancialAidCallout />
+        </div>
+      )}
     </FamilyShell>
   )
 }

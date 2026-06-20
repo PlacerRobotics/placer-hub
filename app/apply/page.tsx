@@ -13,6 +13,7 @@ import {
   ErrorAlert,
   ProgramBadge,
 } from '@/components/ui'
+import { FinancialAidCallout } from '@/components/FinancialAidCallout'
 
 type Program = 'vex_v5' | 'combat' | 'vex_iq' | 'not_sure'
 
@@ -285,6 +286,8 @@ export default function ApplyPage() {
           <InfoAlert title="Both guardians receive all communications">
             We send notifications to every guardian on the account. Add a second guardian if you’d like them included.
           </InfoAlert>
+
+          <FinancialAidCallout />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
             <SecondaryButton onClick={() => setStep(2)}>Back</SecondaryButton>
