@@ -40,8 +40,6 @@
    Inter: body text, form fields, labels, buttons, all UI
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Goldman:wght@400;700&family=Inter:wght@400;500;600;700&display=swap');
-
 html {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   color: var(--color-text-primary);
