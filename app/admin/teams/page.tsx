@@ -1,0 +1,74 @@
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
+import { AdminShell, PageHeader, StatusBadge, EmptyState } from '@/components/ui'
+
+const SEASON = '2026-27'
+const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', vex_iq: 'VEX IQ', combat: 'Combat' }
+const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'neutral' | 'error' | 'info'> = {
+  active: 'success', pending: 'warning', pending_payment: 'warning', pending_admin_confirmation: 'warning',
+  suspended: 'error', withdrawn: 'neutral',
+}
+const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }
+const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: '0.9375rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
+
+export default async function TeamsPage() {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('team')
+    .select('id, team_name, team_number, program, division, status, school_org')
+    .eq('season', SEASON)
+    .order('created_at', { ascending: true })
+  const teams = (data ?? []) as any[]
+
+  async function createTeam(formData: FormData) {
+    'use server'
+    const program = String(formData.get('program') ?? '')
+    const division = String(formData.get('division') ?? '')
+    const school_org = String(formData.get('school_org') ?? '').trim()
+    if (!['vex_v5', 'vex_iq', 'combat'].includes(program)) return
+    if (!['middle', 'high'].includes(division)) return
+    if (!school_org) return
+    const db = await createClient()
+    await db.from('team').insert({
+      season: SEASON,
+      program,
+      division,
+      team_name: String(formData.get('team_name') ?? '').trim() || null,
+      team_number: String(formData.get('team_number') ?? '').trim() || null,
+      school_org,
+      status: 'pending',
+    })
+    redirect('/admin/teams')
+  }
+
+  return (
+    <AdminShell activePath="/admin/teams">
+      <PageHeader title="Teams" subtitle={`VEX V5, VEX IQ and Combat teams for ${SEASON}.`} />
+
+      <form action={createTeam} style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem', maxWidth: '640px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.875rem', alignItems: 'end' }}>
+        <div><label style={labelStyle}>Program</label><select name="program" style={inputStyle}><option value="vex_v5">VEX V5</option><option value="vex_iq">VEX IQ</option><option value="combat">Combat</option></select></div>
+        <div><label style={labelStyle}>Division</label><select name="division" style={inputStyle}><option value="middle">Middle</option><option value="high">High</option></select></div>
+        <div><label style={labelStyle}>Team name</label><input name="team_name" style={inputStyle} /></div>
+        <div><label style={labelStyle}>Team number</label><input name="team_number" style={inputStyle} placeholder="95070X" /></div>
+        <div><label style={labelStyle}>School / org *</label><input name="school_org" required style={inputStyle} /></div>
+        <button type="submit" style={{ padding: '10px 18px', backgroundColor: 'var(--color-navy-deep)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '0.9375rem', cursor: 'pointer', fontFamily: 'inherit', minHeight: '40px' }}>Create team</button>
+      </form>
+
+      {teams.length === 0 ? (
+        <EmptyState title="No teams yet" description="Create a team above to get started." />
+      ) : (
+        <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
+          {teams.map((t, i) => (
+            <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: i < teams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+              <div>
+                <div style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{t.team_name || t.team_number || 'Unnamed team'}</div>
+                <div className="text-help">{PROGRAM_LABELS[t.program] ?? t.program} · {t.division} · {t.school_org}</div>
+              </div>
+              <StatusBadge label={(t.status || '').replace(/_/g, ' ')} variant={STATUS_VARIANT[t.status] ?? 'neutral'} />
+            </div>
+          ))}
+        </div>
+      )}
+    </AdminShell>
+  )
+}
