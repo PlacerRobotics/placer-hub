@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: '/admin/financial-aid', label: 'Financial Aid' },
   { href: '/admin/registrations', label: 'Registrations' },
   { href: '/admin/payments', label: 'Payments' },
+  { href: '/admin/sponsors', label: 'Sponsors' },
   { href: '/admin/teams', label: 'Teams' },
   { href: '/admin/volunteers', label: 'Volunteers' },
   { href: '/admin/sync', label: 'Sync Issues' },
