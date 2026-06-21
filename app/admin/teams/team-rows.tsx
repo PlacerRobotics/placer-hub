@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { StatusBadge } from '@/components/ui'
 
@@ -106,6 +107,7 @@ export function TeamRows({ teams }: { teams: Team[] }) {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
               <StatusBadge label={t.active ? 'active' : 'inactive'} variant={t.active ? 'success' : 'neutral'} />
+              <Link href={`/admin/teams/${t.id}`} style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Coaches →</Link>
               <button type="button" onClick={() => setEditing(editing === t.id ? null : t.id)} style={{ ...btn, backgroundColor: 'var(--color-navy-deep)', color: '#fff' }}>
                 {editing === t.id ? 'Close' : 'Edit'}
               </button>
