@@ -1,170 +1,106 @@
 import { createClient } from '@/lib/supabase/server'
-import { AdminShell, PageHeader, StatusBadge, EmptyState } from '@/components/ui'
+import { AdminShell, PageHeader } from '@/components/ui'
 import RosterDownload from './roster-download'
+import RegistrationsManager, { type RegRow, type TeamOpt } from './registrations-manager'
 
 const SEASON = '2026-27'
-
-const PROGRAM_LABELS: Record<string, string> = {
-  vex_v5: 'VEX V5',
-  combat: 'Combat',
-  both: 'VEX V5 & Combat',
-  vex_iq: 'VEX IQ',
-  not_sure: 'Not sure',
-}
-
-const FEE_VARIANT: Record<string, 'success' | 'warning' | 'neutral'> = {
-  paid: 'success',
-  unpaid: 'warning',
-  waived: 'neutral',
-}
 
 export default async function AdminRegistrationsPage() {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('enrollment')
-    .select(
-      'id, program, payment_reference_code, registration_fee_status, submitted_at, student:student_id ( first_name, last_name, grade )'
-    )
-    .eq('season', SEASON)
-    .not('submitted_at', 'is', null)
-    .order('submitted_at', { ascending: false })
-
-  const rows = (data ?? []) as any[]
-
-  // Cleared-to-register students who have NOT completed registration yet (no
-  // enrollment) — this is where imported applicants live until their family
-  // finishes the registration wizard.
-  const { data: clearedFs } = await supabase
+  // Family-season lifecycle rows for the season.
+  const { data: fseasons } = await supabase
     .from('family_season')
-    .select('family_id')
+    .select('id, family_id, status, magic_link_sent, updated_at')
     .eq('season', SEASON)
-    .eq('status', 'cleared_to_register')
-  const clearedFamilyIds = (clearedFs ?? []).map((f: any) => f.family_id)
+    .in('status', ['cleared_to_register', 'registered', 'cancelled'])
+  const fsList = (fseasons ?? []) as any[]
+  const familyIds = fsList.map((f) => f.family_id)
+  const fsByFamily: Record<string, any> = Object.fromEntries(fsList.map((f) => [f.family_id, f]))
 
-  let pending: any[] = []
-  if (clearedFamilyIds.length) {
-    const { data: studs } = await supabase
+  let students: any[] = []
+  if (familyIds.length) {
+    const { data } = await supabase
       .from('student')
-      .select('id, first_name, last_name, grade')
-      .in('family_id', clearedFamilyIds)
-    const studentIds = (studs ?? []).map((s: any) => s.id)
-    const { data: enr } = await supabase.from('enrollment').select('student_id').eq('season', SEASON)
-    const enrolledIds = new Set((enr ?? []).map((e: any) => e.student_id))
-    const { data: apps } = studentIds.length
-      ? await supabase
-          .from('student_application')
-          .select('student_id, program_interest')
-          .eq('season', SEASON)
-          .in('student_id', studentIds)
-      : { data: [] as any[] }
-    const progByStudent: Record<string, string> = Object.fromEntries(
-      (apps ?? []).map((a: any) => [a.student_id, a.program_interest])
-    )
-    pending = (studs ?? [])
-      .filter((s: any) => !enrolledIds.has(s.id))
-      .map((s: any) => ({ ...s, program: progByStudent[s.id] ?? '—' }))
+      .select('id, first_name, last_name, grade, family_id, school_raw, school:school_id ( name )')
+      .in('family_id', familyIds)
+    students = data ?? []
   }
+  const studentIds = students.map((s) => s.id)
+
+  const { data: guardians } = familyIds.length
+    ? await supabase.from('guardian').select('family_id, login_email, last_login_at, role').in('family_id', familyIds)
+    : { data: [] as any[] }
+  const gByFamily: Record<string, any> = {}
+  for (const g of guardians ?? []) {
+    if (!gByFamily[g.family_id] || g.role === 'primary') gByFamily[g.family_id] = g
+  }
+
+  const { data: enrollments } = studentIds.length
+    ? await supabase.from('enrollment').select('student_id, program, division').eq('season', SEASON).in('student_id', studentIds)
+    : { data: [] as any[] }
+  const enrByStudent: Record<string, any> = Object.fromEntries((enrollments ?? []).map((e: any) => [e.student_id, e]))
+
+  const { data: tms } = studentIds.length
+    ? await supabase.from('team_member').select('student_id, team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('student_id', studentIds)
+    : { data: [] as any[] }
+  const teamIdByStudent: Record<string, string> = Object.fromEntries((tms ?? []).map((t: any) => [t.student_id, t.team_id]))
+  const teamIds = [...new Set(Object.values(teamIdByStudent))]
+  const { data: teamRows } = teamIds.length
+    ? await supabase.from('team').select('id, team_number, team_name').in('id', teamIds)
+    : { data: [] as any[] }
+  const teamById: Record<string, any> = Object.fromEntries((teamRows ?? []).map((t: any) => [t.id, t]))
+
+  const { data: apps } = studentIds.length
+    ? await supabase.from('student_application').select('student_id, program_interest').eq('season', SEASON).in('student_id', studentIds)
+    : { data: [] as any[] }
+  const progByStudent: Record<string, string> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.program_interest]))
+
+  const { data: allTeams } = await supabase
+    .from('team')
+    .select('id, team_number, team_name, program, division')
+    .eq('season', SEASON)
+    .order('team_number', { ascending: true })
+
+  const rows: RegRow[] = students.map((s) => {
+    const fs = fsByFamily[s.family_id] ?? {}
+    const enr = enrByStudent[s.id]
+    const g = gByFamily[s.family_id]
+    const teamId = teamIdByStudent[s.id] ?? null
+    const team = teamId ? teamById[teamId] : null
+    const grade = Number(s.grade ?? 0)
+    const division = enr?.division ?? (grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS')
+    return {
+      familySeasonId: fs.id ?? '',
+      studentId: s.id,
+      name: `${s.first_name} ${s.last_name}`.trim(),
+      program: enr?.program ?? progByStudent[s.id] ?? '—',
+      division,
+      teamId,
+      teamLabel: team ? team.team_number || team.team_name || '—' : '—',
+      school: s.school?.name ?? s.school_raw ?? '—',
+      guardianEmail: g?.login_email ?? '—',
+      guardianLoggedIn: !!g?.last_login_at,
+      status: fs.status ?? '—',
+      magicLinkSent: !!fs.magic_link_sent,
+      lastUpdated: fs.updated_at ?? null,
+    }
+  })
+
+  const schools = [...new Set(rows.map((r) => r.school).filter((x) => x && x !== '—'))].sort()
+  const teamOpts: TeamOpt[] = (allTeams ?? []).map((t: any) => ({
+    id: t.id,
+    label: `${t.team_number ?? t.team_name ?? t.id} · ${t.program} · ${t.division}`,
+  }))
 
   return (
     <AdminShell activePath="/admin/registrations">
       <PageHeader
         title="Registrations"
-        subtitle={`Confirmed registrations for the ${SEASON} season.`}
+        subtitle={`Registration lifecycle for the ${SEASON} season.`}
         actions={<RosterDownload />}
       />
-
-      {error ? (
-        <p style={{ color: 'var(--color-error)' }}>Couldn’t load registrations: {error.message}</p>
-      ) : rows.length === 0 ? (
-        <EmptyState
-          title="No confirmed registrations yet"
-          description="Students appear here once families complete the registration wizard. You can still download an (empty) roster."
-        />
-      ) : (
-        <div
-          style={{
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '10px',
-            overflow: 'hidden',
-          }}
-        >
-          {rows.map((r, i) => {
-            const stu = r.student ?? {}
-            return (
-              <div
-                key={r.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '1rem',
-                  padding: '0.875rem 1.25rem',
-                  borderBottom: i < rows.length - 1 ? '1px solid var(--color-border)' : 'none',
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.9375rem', fontWeight: 500 }}>
-                    {stu.first_name} {stu.last_name}
-                  </div>
-                  <div className="text-help">
-                    Grade {stu.grade ?? '—'} · {PROGRAM_LABELS[r.program] ?? r.program} ·{' '}
-                    {r.payment_reference_code}
-                  </div>
-                </div>
-                <StatusBadge
-                  label={r.registration_fee_status}
-                  variant={FEE_VARIANT[r.registration_fee_status] ?? 'neutral'}
-                />
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {pending.length > 0 && (
-        <div style={{ marginTop: '2rem' }}>
-          <h2 className="text-section-title" style={{ marginBottom: '0.375rem' }}>
-            Cleared — awaiting registration <span className="text-help">({pending.length})</span>
-          </h2>
-          <p className="text-help" style={{ marginBottom: '0.875rem' }}>
-            Imported / cleared students who haven’t completed the registration wizard yet.
-          </p>
-          <div
-            style={{
-              backgroundColor: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-              borderRadius: '10px',
-              overflow: 'hidden',
-            }}
-          >
-            {pending.map((s, i) => (
-              <div
-                key={s.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '1rem',
-                  padding: '0.875rem 1.25rem',
-                  borderBottom: i < pending.length - 1 ? '1px solid var(--color-border)' : 'none',
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: '0.9375rem', fontWeight: 500 }}>
-                    {s.first_name} {s.last_name}
-                  </div>
-                  <div className="text-help">
-                    Grade {s.grade ?? '—'} · {PROGRAM_LABELS[s.program] ?? s.program}
-                  </div>
-                </div>
-                <StatusBadge label="cleared" variant="info" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <RegistrationsManager rows={rows} teams={teamOpts} schools={schools} />
     </AdminShell>
   )
 }
