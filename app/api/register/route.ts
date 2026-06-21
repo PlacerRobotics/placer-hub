@@ -106,30 +106,42 @@ export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
   const paymentRef: string = body.paymentReferenceCode
 
-  // 7. Create/update the enrollment.
-  const { data: enr, error: enrErr } = await db
-    .from('enrollment')
-    .upsert(
-      {
-        family_id: familyId,
-        student_id: studentId,
-        season: SEASON,
-        program,
-        division,
-        payment_reference_code: paymentRef,
-        registration_fee_amount: fee,
-        registration_fee_status: feeStatus,
-        fundraising_target: fundraisingTarget,
-        waiver_status: 'complete',
-        submitted_at: new Date().toISOString(),
-        submission_ip: ip,
-      },
-      { onConflict: 'student_id,season,program' }
-    )
-    .select('id')
-    .single()
-  if (enrErr) return NextResponse.json({ error: enrErr.message }, { status: 500 })
-  const enrollmentId = enr.id
+  // 7. Create/update enrollment(s). A 'both' application enrolls the student in
+  // BOTH vex_v5 and combat — enrollment is one row per program (unique on
+  // student_id, season, program). The registration fee and fundraising target are
+  // applied ONCE (to the primary/V5 enrollment); the second program carries $0 so
+  // the family is not charged twice for a single registration/payment. Each
+  // enrollment needs its own unique payment_reference_code, so the second derives
+  // one from the first. Waivers attach to the primary enrollment.
+  const enrollPrograms = program === 'both' ? ['vex_v5', 'combat'] : [program]
+  let enrollmentId = ''
+  for (let i = 0; i < enrollPrograms.length; i++) {
+    const p = enrollPrograms[i]
+    const primary = i === 0
+    const { data: enr, error: enrErr } = await db
+      .from('enrollment')
+      .upsert(
+        {
+          family_id: familyId,
+          student_id: studentId,
+          season: SEASON,
+          program: p,
+          division,
+          payment_reference_code: primary ? paymentRef : `${paymentRef}-${p}`,
+          registration_fee_amount: primary ? fee : 0,
+          registration_fee_status: feeStatus,
+          fundraising_target: primary ? fundraisingTarget : 0,
+          waiver_status: 'complete',
+          submitted_at: new Date().toISOString(),
+          submission_ip: ip,
+        },
+        { onConflict: 'student_id,season,program' }
+      )
+      .select('id')
+      .single()
+    if (enrErr) return NextResponse.json({ error: enrErr.message }, { status: 500 })
+    if (primary) enrollmentId = enr.id
+  }
 
   // 8. Emergency contacts — replace any existing for this student.
   await db.from('emergency_contact').delete().eq('student_id', studentId)
