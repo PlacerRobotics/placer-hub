@@ -81,7 +81,8 @@ export async function POST(request: NextRequest) {
         updated++
         results.push({ row: rowNo, team: label, action: 'update', status: 'updated' })
       } else {
-        const { error } = await db.from('team').insert(fields)
+        // Imported teams are existing/returning teams — create them live.
+        const { error } = await db.from('team').insert({ ...fields, status: 'active' })
         if (error) throw new Error(error.message)
         created++
         results.push({ row: rowNo, team: label, action: 'create', status: 'created' })
