@@ -161,6 +161,7 @@ export default function ApplyPage() {
   const [g2Last, setG2Last] = useState('')
   const [g2Email, setG2Email] = useState('')
   const [g2Phone, setG2Phone] = useState('')
+  const [singleGuardian, setSingleGuardian] = useState(false)
   const [volunteerInterests, setVolunteerInterests] = useState<string[]>([])
   const [occupation, setOccupation] = useState('')
   const [volunteerNotes, setVolunteerNotes] = useState('')
@@ -202,7 +203,11 @@ export default function ApplyPage() {
     referral.trim()
   const step2Valid = program !== ''
   const step3Valid = background.trim() && goals.trim() && extracurriculars.trim() && summer !== ''
-  const step4Valid = g1First.trim() && g1Last.trim() && g1Email.trim() && g1Phone.trim()
+  // "Single guardian?" (PRD §4): shown when Guardian 2 is empty. If G2 is left
+  // blank, the family must confirm single-guardian before continuing.
+  const g2Started = !!(g2First.trim() || g2Last.trim() || g2Email.trim() || g2Phone.trim())
+  const step4Valid =
+    g1First.trim() && g1Last.trim() && g1Email.trim() && g1Phone.trim() && (g2Started || singleGuardian)
   const step5Valid = certified
 
   async function handleSubmit() {
@@ -496,6 +501,12 @@ export default function ApplyPage() {
             <FormField label="Mobile phone" htmlFor="g2Phone">
               <TextInput id="g2Phone" type="tel" value={g2Phone} onChange={(e) => setG2Phone(e.target.value)} />
             </FormField>
+            {!g2Started && (
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem', fontSize: '0.9375rem', cursor: 'pointer' }}>
+                <input type="checkbox" checked={singleGuardian} onChange={(e) => setSingleGuardian(e.target.checked)} style={{ width: 16, height: 16, marginTop: 3 }} />
+                <span>This is a single-guardian household — there is no second parent/guardian to add.{req}</span>
+              </label>
+            )}
           </div>
 
           <div style={{ ...cardBase, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
