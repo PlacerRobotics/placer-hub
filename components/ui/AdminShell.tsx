@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/admin/settings', label: 'Settings' },
   { href: '/admin/import', label: 'Import' },
   { href: '/admin/import-applicants', label: 'Import Applicants' },
+  { href: '/admin/import-teams', label: 'Import Teams' },
 ]
 
 export function AdminShell({ children, activePath = '/admin' }: AdminShellProps) {
