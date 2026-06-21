@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
   const s = body.student ?? {}
   const grade = Number(s.grade)
-  const division = grade <= 8 ? 'middle' : 'high'
+  const division = grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS'
   const program: string = body.program ?? 'vex_v5'
 
   // 5. Update the student record with the registration details.

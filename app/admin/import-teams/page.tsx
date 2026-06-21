@@ -37,8 +37,9 @@ function progOf(v: string) {
 }
 function divOf(v: string) {
   const u = (v || '').trim().toLowerCase()
-  if (['middle', 'ms', 'm', 'middle school'].includes(u)) return 'middle'
-  if (['high', 'hs', 'h', 'high school'].includes(u)) return 'high'
+  if (['es', 'elementary', 'elementary school'].includes(u)) return 'ES'
+  if (['ms', 'middle', 'm', 'middle school'].includes(u)) return 'MS'
+  if (['hs', 'high', 'h', 'high school'].includes(u)) return 'HS'
   return '—'
 }
 
