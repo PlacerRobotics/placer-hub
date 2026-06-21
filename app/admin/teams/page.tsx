@@ -43,7 +43,7 @@ export default async function TeamsPage() {
 
       <form action={createTeam} style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem', maxWidth: '640px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.875rem', alignItems: 'end' }}>
         <div><label style={labelStyle}>Program</label><select name="program" style={inputStyle}><option value="vex_v5">VEX V5</option><option value="vex_iq">VEX IQ</option><option value="combat">Combat</option></select></div>
-        <div><label style={labelStyle}>Division</label><select name="division" style={inputStyle}><option value="ES">Elementary</option><option value="MS">Middle</option><option value="HS">High</option></select></div>
+        <div><label style={labelStyle}>Division</label><select name="division" defaultValue="HS" style={inputStyle}><option value="ES">Elementary</option><option value="MS">Middle</option><option value="HS">High</option></select></div>
         <div><label style={labelStyle}>Team name</label><input name="team_name" style={inputStyle} /></div>
         <div><label style={labelStyle}>Team number</label><input name="team_number" style={inputStyle} placeholder="95070X" /></div>
         <div><label style={labelStyle}>School / org *</label><input name="school_org" required style={inputStyle} /></div>
