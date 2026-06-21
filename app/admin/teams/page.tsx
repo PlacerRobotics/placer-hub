@@ -1,13 +1,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { AdminShell, PageHeader, StatusBadge, EmptyState } from '@/components/ui'
+import { AdminShell, PageHeader, EmptyState } from '@/components/ui'
+import { TeamRows } from './team-rows'
 
 const SEASON = '2026-27'
-const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', vex_iq: 'VEX IQ', combat: 'Combat' }
-const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'neutral' | 'error' | 'info'> = {
-  active: 'success', pending: 'warning', pending_payment: 'warning', pending_admin_confirmation: 'warning',
-  suspended: 'error', withdrawn: 'neutral',
-}
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '0.25rem' }
 const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: '0.9375rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
 
@@ -15,7 +11,7 @@ export default async function TeamsPage() {
   const supabase = await createClient()
   const { data } = await supabase
     .from('team')
-    .select('id, team_name, team_number, program, division, status, school_org')
+    .select('id, team_name, team_number, program, division, season, school_org, active, notes')
     .eq('season', SEASON)
     .order('created_at', { ascending: true })
   const teams = (data ?? []) as any[]
@@ -36,7 +32,7 @@ export default async function TeamsPage() {
       team_name: String(formData.get('team_name') ?? '').trim() || null,
       team_number: String(formData.get('team_number') ?? '').trim() || null,
       school_org,
-      status: 'pending',
+      active: true,
     })
     redirect('/admin/teams')
   }
@@ -57,17 +53,7 @@ export default async function TeamsPage() {
       {teams.length === 0 ? (
         <EmptyState title="No teams yet" description="Create a team above to get started." />
       ) : (
-        <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
-          {teams.map((t, i) => (
-            <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: i < teams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-              <div>
-                <div style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{t.team_name || t.team_number || 'Unnamed team'}</div>
-                <div className="text-help">{PROGRAM_LABELS[t.program] ?? t.program} · {t.division} · {t.school_org}</div>
-              </div>
-              <StatusBadge label={(t.status || '').replace(/_/g, ' ')} variant={STATUS_VARIANT[t.status] ?? 'neutral'} />
-            </div>
-          ))}
-        </div>
+        <TeamRows teams={teams} />
       )}
     </AdminShell>
   )
