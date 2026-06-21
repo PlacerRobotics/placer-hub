@@ -5,9 +5,17 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 const SEASON = '2026-27'
 
-const TSHIRT: Record<string, string> = { xs: 'xs', s: 's', m: 'm', l: 'l', xl: 'xl', xxl: 'xxl' }
-function parseTshirt(v: string) {
-  return TSHIRT[(v ?? '').trim().toLowerCase()] ?? null
+// Accepts both abbreviations and full words (the export uses "Small"/"Medium"/"Large").
+const TSHIRT: Record<string, string> = {
+  xs: 'xs', xsmall: 'xs', 'x-small': 'xs', 'extra small': 'xs',
+  s: 's', small: 's',
+  m: 'm', med: 'm', medium: 'm',
+  l: 'l', large: 'l',
+  xl: 'xl', xlarge: 'xl', 'x-large': 'xl', 'extra large': 'xl',
+  xxl: 'xxl', '2xl': 'xxl', 'xx-large': 'xxl', 'extra extra large': 'xxl',
+}
+function parseTshirt(v: unknown) {
+  return TSHIRT[String(v ?? '').trim().toLowerCase()] ?? null
 }
 function parseGrade(v: string) {
   const d = String(v ?? '').replace(/[^\d]/g, '')
