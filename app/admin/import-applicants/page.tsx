@@ -39,10 +39,11 @@ function actionOf(status: string) {
 }
 function programOf(r: Row) {
   const u = ((r['Final Program'] || '').trim() || (r['Which programs are you interested in?'] || '').trim()).toUpperCase()
-  if (u.includes('V5')) return 'VEX V5'
-  if (u.includes('IQ')) return 'VEX IQ'
-  if (u.includes('COMBAT')) return 'Combat'
-  return '—'
+  const out: string[] = []
+  if (u.includes('V5')) out.push('VEX V5')
+  if (u.includes('IQ')) out.push('VEX IQ')
+  if (u.includes('COMBAT')) out.push('Combat')
+  return out.length ? out.join(', ') : '—'
 }
 function guardianEmailOf(r: Row) {
   const pg = (r['Parent/Guardian Email'] || '').trim()

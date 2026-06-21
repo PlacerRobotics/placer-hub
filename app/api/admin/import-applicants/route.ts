@@ -23,12 +23,17 @@ function parseDate(v: string) {
   if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`
   return null
 }
-function parseProgram(finalP: string, interested: string) {
+const PROGRAM_LABEL: Record<string, string> = { vex_v5: 'VEX V5', vex_iq: 'VEX IQ', combat: 'Combat' }
+// Detects ALL programs named in "Final Program" (fallback "Which programs…").
+// Students may be approved for two programs at once; the first is the application's
+// program_interest, any others are noted (a student_application holds one program).
+function detectPrograms(finalP: string, interested: string): string[] {
   const u = ((finalP || '').trim() || (interested || '').trim()).toUpperCase()
-  if (u.includes('V5')) return 'vex_v5'
-  if (u.includes('IQ')) return 'vex_iq'
-  if (u.includes('COMBAT')) return 'combat'
-  return 'not_sure'
+  const out: string[] = []
+  if (u.includes('V5')) out.push('vex_v5')
+  if (u.includes('IQ')) out.push('vex_iq')
+  if (u.includes('COMBAT')) out.push('combat')
+  return out
 }
 function reviewAction(status: string) {
   const s = (status ?? '').trim().toLowerCase()
@@ -128,9 +133,15 @@ export async function POST(request: NextRequest) {
       const { data: existingApp } = await db.from('student_application').select('id').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
       if (existingApp) { skipped++; results.push({ row: rowNo, student: studentName, action, status: 'already exists' }); continue }
 
-      const program = parseProgram(g(r, 'Final Program'), g(r, 'Which programs are you interested in?'))
+      const progs = detectPrograms(g(r, 'Final Program'), g(r, 'Which programs are you interested in?'))
+      const program = progs[0] ?? 'not_sure'
+      const extraPrograms = progs.slice(1)
       const team = g(r, '26-27 Team')
-      const noteParts = [team ? `Team: ${team}` : null, g(r, 'Review Comments') || null].filter(Boolean)
+      const noteParts = [
+        extraPrograms.length ? `Also approved: ${extraPrograms.map((p) => PROGRAM_LABEL[p]).join(', ')}` : null,
+        team ? `Team: ${team}` : null,
+        g(r, 'Review Comments') || null,
+      ].filter(Boolean)
 
       await db.from('student_application').insert({
         family_id: familyId, student_id: studentId, season: SEASON,
