@@ -73,16 +73,24 @@ export async function POST(req: NextRequest) {
     let count = 0
     const skipped: string[] = []
     for (const studentId of ids) {
-      const { data: enr } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
-      if (!enr) { skipped.push(studentId); continue }
-      const { data: existing } = await db.from('team_member').select('id, team_id').eq('enrollment_id', enr.id).eq('season', SEASON).eq('team_role', 'student').maybeSingle()
-      if (existing) await db.from('team_member').update({ team_id: teamId }).eq('id', existing.id)
-      else await db.from('team_member').insert({ team_id: teamId, enrollment_id: enr.id, student_id: studentId, season: SEASON, team_role: 'student', program: enr.program })
+      // A 'both' student has two enrollment rows (vex_v5 + combat); assign across all.
+      const { data: enrs } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON)
+      const enrList = (enrs ?? []) as any[]
+      if (!enrList.length) { skipped.push(studentId); continue }
+      for (const enr of enrList) {
+        const { data: existing } = await db.from('team_member').select('id, team_id').eq('enrollment_id', enr.id).eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).maybeSingle()
+        if (existing) {
+          if (existing.team_id === teamId) continue
+          await db.from('team_member').update({ team_id: teamId }).eq('id', existing.id)
+        } else {
+          await db.from('team_member').insert({ team_id: teamId, enrollment_id: enr.id, student_id: studentId, season: SEASON, team_role: 'student', program: enr.program })
+        }
+      }
       const { data: stu } = await db.from('student').select('family_id').eq('id', studentId).maybeSingle()
       const { data: fs } = stu?.family_id
         ? await db.from('family_season').select('id').eq('family_id', stu.family_id).eq('season', SEASON).maybeSingle()
         : { data: null as any }
-      if (fs?.id) await logRegAudit(db, { familySeasonId: fs.id, field: 'team', oldValue: existing?.team_id ?? null, newValue: teamId, changedBy: admin.id, notes: `bulk · student ${studentId}` })
+      if (fs?.id) await logRegAudit(db, { familySeasonId: fs.id, field: 'team', oldValue: null, newValue: teamId, changedBy: admin.id, notes: `bulk · student ${studentId}` })
       count++
     }
     return NextResponse.json({ ok: true, assigned: count, skipped })

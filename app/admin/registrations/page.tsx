@@ -39,7 +39,15 @@ export default async function AdminRegistrationsPage() {
   const { data: enrollments } = studentIds.length
     ? await supabase.from('enrollment').select('student_id, program, division').eq('season', SEASON).in('student_id', studentIds)
     : { data: [] as any[] }
-  const enrByStudent: Record<string, any> = Object.fromEntries((enrollments ?? []).map((e: any) => [e.student_id, e]))
+  // A student with program 'both' has TWO enrollment rows (vex_v5 + combat), so
+  // group by student rather than assuming one row each.
+  const enrByStudent: Record<string, { programs: string[]; division: string | null }> = {}
+  for (const e of (enrollments ?? []) as any[]) {
+    const cur = enrByStudent[e.student_id] ?? { programs: [], division: null }
+    if (e.program && !cur.programs.includes(e.program)) cur.programs.push(e.program)
+    if (!cur.division && e.division) cur.division = e.division
+    enrByStudent[e.student_id] = cur
+  }
 
   const { data: tms } = studentIds.length
     ? await supabase.from('team_member').select('student_id, team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('student_id', studentIds)
@@ -70,11 +78,15 @@ export default async function AdminRegistrationsPage() {
     const team = teamId ? teamById[teamId] : null
     const grade = Number(s.grade ?? 0)
     const division = enr?.division ?? (grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS')
+    // Two enrollment programs (vex_v5 + combat) collapse to the 'both' label.
+    const program = enr
+      ? enr.programs.length > 1 ? 'both' : (enr.programs[0] ?? '—')
+      : progByStudent[s.id] ?? '—'
     return {
       familySeasonId: fs.id ?? '',
       studentId: s.id,
       name: `${s.first_name} ${s.last_name}`.trim(),
-      program: enr?.program ?? progByStudent[s.id] ?? '—',
+      program,
       division,
       teamId,
       teamLabel: team ? team.team_number || team.team_name || '—' : '—',

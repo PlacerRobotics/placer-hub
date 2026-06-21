@@ -20,46 +20,51 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!studentId || !teamId) return NextResponse.json({ error: 'student_id and team_id are required.' }, { status: 400 })
 
   const db = createAdminClient()
-  const { data: enr } = await db
+  // A 'both' student has two enrollment rows (vex_v5 + combat); assign across all.
+  const { data: enrs } = await db
     .from('enrollment')
     .select('id, program')
     .eq('student_id', studentId)
     .eq('season', SEASON)
-    .maybeSingle()
-  if (!enr) {
+  const enrList = (enrs ?? []) as any[]
+  if (!enrList.length) {
     return NextResponse.json({ error: 'Student has no enrollment yet — they must be registered before team assignment.' }, { status: 400 })
   }
 
-  const { data: existing } = await db
-    .from('team_member')
-    .select('id, team_id')
-    .eq('enrollment_id', enr.id)
-    .eq('season', SEASON)
-    .eq('team_role', 'student')
-    .maybeSingle()
+  for (const enr of enrList) {
+    const { data: existing } = await db
+      .from('team_member')
+      .select('id, team_id')
+      .eq('enrollment_id', enr.id)
+      .eq('season', SEASON)
+      .eq('team_role', 'student')
+      .is('revoked_at', null)
+      .maybeSingle()
 
-  if (existing) {
-    const { error } = await db.from('team_member').update({ team_id: teamId }).eq('id', existing.id)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  } else {
-    const { error } = await db.from('team_member').insert({
-      team_id: teamId,
-      enrollment_id: enr.id,
-      student_id: studentId,
-      season: SEASON,
-      team_role: 'student',
-      program: enr.program,
+    if (existing) {
+      if (existing.team_id === teamId) continue
+      const { error } = await db.from('team_member').update({ team_id: teamId }).eq('id', existing.id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    } else {
+      const { error } = await db.from('team_member').insert({
+        team_id: teamId,
+        enrollment_id: enr.id,
+        student_id: studentId,
+        season: SEASON,
+        team_role: 'student',
+        program: enr.program,
+      })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    await logRegAudit(db, {
+      familySeasonId: id,
+      field: 'team',
+      oldValue: existing?.team_id ?? null,
+      newValue: teamId,
+      changedBy: admin.id,
+      notes: `student ${studentId}`,
     })
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
-
-  await logRegAudit(db, {
-    familySeasonId: id,
-    field: 'team',
-    oldValue: existing?.team_id ?? null,
-    newValue: teamId,
-    changedBy: admin.id,
-    notes: `student ${studentId}`,
-  })
   return NextResponse.json({ ok: true })
 }

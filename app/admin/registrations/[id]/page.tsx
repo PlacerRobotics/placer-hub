@@ -44,18 +44,24 @@ export default async function RegistrationDetailPage({
     .eq('role', 'primary')
     .maybeSingle()
 
-  const { data: enr } = student
-    ? await supabase.from('enrollment').select('id, program, division').eq('student_id', student.id).eq('season', SEASON).maybeSingle()
-    : { data: null as any }
+  // A 'both' student has two enrollment rows (vex_v5 + combat); fetch all.
+  const { data: enrs } = student
+    ? await supabase.from('enrollment').select('id, program, division').eq('student_id', student.id).eq('season', SEASON)
+    : { data: [] as any[] }
+  const enrList = (enrs ?? []) as any[]
+  const programVal = enrList.length > 1 ? 'both' : (enrList[0]?.program ?? '')
+  const divisionVal = enrList[0]?.division ?? null
 
   let teamId: string | null = null
   let teamLabel = '—'
   if (student) {
-    const { data: tm } = await supabase.from('team_member').select('team_id').eq('student_id', student.id).eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).maybeSingle()
-    if (tm) {
-      teamId = tm.team_id
-      const { data: t } = await supabase.from('team').select('team_number, team_name').eq('id', tm.team_id).maybeSingle()
-      teamLabel = t?.team_number || t?.team_name || '—'
+    const { data: tms } = await supabase.from('team_member').select('team_id').eq('student_id', student.id).eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null)
+    const teamIds = [...new Set(((tms ?? []) as any[]).map((t) => t.team_id).filter(Boolean))]
+    if (teamIds.length) {
+      teamId = teamIds[0]
+      const { data: ts } = await supabase.from('team').select('id, team_number, team_name').in('id', teamIds)
+      const labels = ((ts ?? []) as any[]).map((t) => t.team_number || t.team_name).filter(Boolean)
+      teamLabel = labels.join(', ') || '—'
     }
   }
 
@@ -76,8 +82,8 @@ export default async function RegistrationDetailPage({
     { label: 'Name', value: name },
     { label: 'Grade', value: student?.grade ?? '—' },
     { label: 'School', value: student?.school?.name ?? student?.school_raw ?? '—' },
-    { label: 'Program', value: PROGRAM_LABELS[enr?.program] ?? enr?.program ?? '—' },
-    { label: 'Division', value: enr?.division ?? '—' },
+    { label: 'Program', value: PROGRAM_LABELS[programVal] ?? programVal ?? '—' },
+    { label: 'Division', value: divisionVal ?? '—' },
     { label: 'Team', value: teamLabel },
     { label: 'Status', value: <StatusBadge label={STATUS_LABELS[fs.status] ?? fs.status} variant={STATUS_VARIANT[fs.status] ?? 'neutral'} /> },
   ]
@@ -109,7 +115,7 @@ export default async function RegistrationDetailPage({
             teams={teamOpts}
             current={{
               tshirt_size: student.tshirt_size ?? '',
-              program: enr?.program ?? '',
+              program: programVal,
               team_id: teamId ?? '',
               emergency_name: ec ? `${ec.first_name} ${ec.last_name}` : '',
               emergency_phone: ec?.phone ?? '',

@@ -56,7 +56,23 @@ export async function GET() {
     return new Response(`Failed to build roster: ${error.message}`, { status: 500 })
   }
 
-  const rows = (enrollments ?? []) as any[]
+  const allRows = (enrollments ?? []) as any[]
+  const allFamilyIds = [...new Set(allRows.map((e) => e.family_id).filter(Boolean))]
+
+  // Exclude students whose family registration for this season is cancelled —
+  // a cancelled family must not appear on the official roster.
+  const cancelledFamilies = new Set<string>()
+  if (allFamilyIds.length) {
+    const { data: fseasons } = await db
+      .from('family_season')
+      .select('family_id, status')
+      .eq('season', SEASON)
+      .eq('status', 'cancelled')
+      .in('family_id', allFamilyIds)
+    for (const fs of (fseasons ?? []) as any[]) cancelledFamilies.add(fs.family_id)
+  }
+
+  const rows = allRows.filter((e) => !cancelledFamilies.has(e.family_id))
   const familyIds = [...new Set(rows.map((e) => e.family_id).filter(Boolean))]
   const enrollmentIds = rows.map((e) => e.id)
 

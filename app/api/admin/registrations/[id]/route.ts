@@ -32,23 +32,44 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await log('tshirt_size', stu?.tshirt_size, v || null)
   }
 
-  // program (enrollment)
+  // program (enrollment) — a 'both' student has two enrollment rows; update all.
   if (body.program !== undefined) {
-    const { data: enr } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
-    if (enr) {
-      await db.from('enrollment').update({ program: body.program }).eq('id', enr.id)
+    const { data: enrs } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON)
+    for (const enr of (enrs ?? []) as any[]) {
+      if (enr.program === body.program) continue
+      const { error } = await db.from('enrollment').update({ program: body.program }).eq('id', enr.id)
+      if (error) return NextResponse.json({ error: `Program update failed: ${error.message}` }, { status: 400 })
       await log('program', enr.program, body.program)
     }
   }
 
-  // team (team_member via the student's enrollment)
+  // team (team_member, one active row per enrollment). Empty team_id = unassign.
   if (body.team_id !== undefined) {
-    const { data: enr } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
-    if (enr) {
-      const { data: existing } = await db.from('team_member').select('id, team_id').eq('enrollment_id', enr.id).eq('season', SEASON).eq('team_role', 'student').maybeSingle()
-      if (existing) await db.from('team_member').update({ team_id: body.team_id }).eq('id', existing.id)
-      else await db.from('team_member').insert({ team_id: body.team_id, enrollment_id: enr.id, student_id: studentId, season: SEASON, team_role: 'student', program: enr.program })
-      await log('team', existing?.team_id, body.team_id)
+    const newTeamId = String(body.team_id || '')
+    const { data: enrs } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON)
+    for (const enr of (enrs ?? []) as any[]) {
+      const { data: existing } = await db.from('team_member')
+        .select('id, team_id')
+        .eq('enrollment_id', enr.id).eq('season', SEASON).eq('team_role', 'student')
+        .is('revoked_at', null)
+        .maybeSingle()
+      if (!newTeamId) {
+        // Unassign: revoke the active membership (team_member.team_id is NOT NULL).
+        if (existing) {
+          const { error } = await db.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('id', existing.id)
+          if (error) return NextResponse.json({ error: `Team unassign failed: ${error.message}` }, { status: 500 })
+          await log('team', existing.team_id, null)
+        }
+      } else if (existing) {
+        if (existing.team_id === newTeamId) continue
+        const { error } = await db.from('team_member').update({ team_id: newTeamId }).eq('id', existing.id)
+        if (error) return NextResponse.json({ error: `Team update failed: ${error.message}` }, { status: 500 })
+        await log('team', existing.team_id, newTeamId)
+      } else {
+        const { error } = await db.from('team_member').insert({ team_id: newTeamId, enrollment_id: enr.id, student_id: studentId, season: SEASON, team_role: 'student', program: enr.program })
+        if (error) return NextResponse.json({ error: `Team assign failed: ${error.message}` }, { status: 500 })
+        await log('team', null, newTeamId)
+      }
     }
   }
 
