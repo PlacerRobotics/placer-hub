@@ -174,7 +174,8 @@ export async function POST(request: NextRequest) {
         {
           family_id: familyId,
           season: SEASON,
-          status: action === 'invite' ? 'cleared_to_register' : 'pending',
+          // 'pending' is not a valid family_season_status; held rows map to 'applied'.
+          status: action === 'invite' ? 'cleared_to_register' : 'applied',
           magic_link_sent: false,
           current_season_notes: String(r.notes ?? '').trim() || null,
         },
