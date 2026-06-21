@@ -10,7 +10,9 @@ export default async function AdminApplicationsPage() {
     .select(
       'id, program_interest, status, submitted_at, student:student_id ( first_name, last_name, school_raw, school:school_id ( name ) )'
     )
-    .in('status', ['submitted', 'needs_follow_up', 'program_pending'])
+    // All current-season applicants except terminal states (declined/withdrawn).
+    // Includes 'accepted'/'admin_waived' so imported applicants are visible.
+    .in('status', ['submitted', 'needs_follow_up', 'program_pending', 'accepted', 'admin_waived'])
     .order('submitted_at', { ascending: true })
 
   const items: QueueItem[] = (data ?? []).map((a: any) => ({
@@ -19,6 +21,7 @@ export default async function AdminApplicationsPage() {
     program: a.program_interest,
     school: a.student?.school?.name ?? a.student?.school_raw ?? '—',
     submitted: a.submitted_at,
+    status: a.status,
   }))
 
   return (

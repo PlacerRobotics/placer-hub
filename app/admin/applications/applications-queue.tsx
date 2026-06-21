@@ -17,6 +17,22 @@ export type QueueItem = {
   program: string
   school: string
   submitted: string | null
+  status: string
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  submitted: 'Submitted',
+  needs_follow_up: 'Needs follow-up',
+  program_pending: 'Program pending',
+  accepted: 'Accepted',
+  admin_waived: 'Admin waived',
+}
+const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = {
+  submitted: 'info',
+  needs_follow_up: 'warning',
+  program_pending: 'warning',
+  accepted: 'success',
+  admin_waived: 'neutral',
 }
 
 export default function ApplicationsQueue({ items }: { items: QueueItem[] }) {
@@ -25,22 +41,22 @@ export default function ApplicationsQueue({ items }: { items: QueueItem[] }) {
   if (items.length === 0) {
     return (
       <EmptyState
-        title="No applications to review"
-        description="Submitted applications will appear here as families apply."
+        title="No applications yet"
+        description="Applications appear here as families apply or are imported."
       />
     )
   }
 
   return (
     <AdminQueueTable
-      title="Submitted applications"
+      title="Applications"
       count={items.length}
       items={items.map((a) => ({
         id: a.id,
         primary: a.name,
         secondary: `${PROGRAM_LABELS[a.program] ?? a.program} · ${a.school}`,
-        status: 'Submitted',
-        statusVariant: 'info' as const,
+        status: STATUS_LABEL[a.status] ?? a.status,
+        statusVariant: STATUS_VARIANT[a.status] ?? 'neutral',
         waitingTime: a.submitted ? new Date(a.submitted).toLocaleDateString() : undefined,
         onClick: () => router.push(`/admin/applications/${a.id}`),
       }))}
