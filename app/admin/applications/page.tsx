@@ -10,7 +10,7 @@ export default async function AdminApplicationsPage() {
     .select(
       'id, program_interest, status, submitted_at, student:student_id ( first_name, last_name, school_raw, school:school_id ( name ) )'
     )
-    .eq('status', 'submitted')
+    .in('status', ['submitted', 'needs_follow_up', 'program_pending'])
     .order('submitted_at', { ascending: true })
 
   const items: QueueItem[] = (data ?? []).map((a: any) => ({
