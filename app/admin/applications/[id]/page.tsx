@@ -7,6 +7,7 @@ const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = {
   vex_v5: 'VEX V5 Robotics',
   combat: 'Combat Robotics',
+  both: 'VEX V5 & Combat',
   vex_iq: 'VEX IQ Robotics',
   not_sure: 'Not sure',
 }

@@ -23,10 +23,8 @@ function parseDate(v: string) {
   if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`
   return null
 }
-const PROGRAM_LABEL: Record<string, string> = { vex_v5: 'VEX V5', vex_iq: 'VEX IQ', combat: 'Combat' }
 // Detects ALL programs named in "Final Program" (fallback "Which programs…").
-// Students may be approved for two programs at once; the first is the application's
-// program_interest, any others are noted (a student_application holds one program).
+// A student interested in V5 AND Combat is recorded as a single 'both' application.
 function detectPrograms(finalP: string, interested: string): string[] {
   const u = ((finalP || '').trim() || (interested || '').trim()).toUpperCase()
   const out: string[] = []
@@ -134,14 +132,9 @@ export async function POST(request: NextRequest) {
       if (existingApp) { skipped++; results.push({ row: rowNo, student: studentName, action, status: 'already exists' }); continue }
 
       const progs = detectPrograms(g(r, 'Final Program'), g(r, 'Which programs are you interested in?'))
-      const program = progs[0] ?? 'not_sure'
-      const extraPrograms = progs.slice(1)
+      const program = progs.includes('vex_v5') && progs.includes('combat') ? 'both' : (progs[0] ?? 'not_sure')
       const team = g(r, '26-27 Team')
-      const noteParts = [
-        extraPrograms.length ? `Also approved: ${extraPrograms.map((p) => PROGRAM_LABEL[p]).join(', ')}` : null,
-        team ? `Team: ${team}` : null,
-        g(r, 'Review Comments') || null,
-      ].filter(Boolean)
+      const noteParts = [team ? `Team: ${team}` : null, g(r, 'Review Comments') || null].filter(Boolean)
 
       await db.from('student_application').insert({
         family_id: familyId, student_id: studentId, season: SEASON,

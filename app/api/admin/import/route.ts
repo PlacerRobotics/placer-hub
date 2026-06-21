@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
       }
 
       const program = String(r.program_26_27 ?? '').trim().toLowerCase()
-      const validProgram = ['vex_v5', 'combat', 'vex_iq'].includes(program) ? program : 'not_sure'
+      const validProgram = ['vex_v5', 'combat', 'vex_iq', 'both'].includes(program) ? program : 'not_sure'
       const noteParts = [r.team_26_27 ? `Team: ${String(r.team_26_27).trim()}` : null, String(r.notes ?? '').trim() || null].filter(Boolean)
 
       // student_application (program intent, admin_import source)

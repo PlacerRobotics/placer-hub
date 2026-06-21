@@ -11,7 +11,7 @@ type Guardian1 = Guardian & {
   volunteer_notes?: string | null
 }
 type Payload = {
-  program: 'vex_v5' | 'combat' | 'not_sure'
+  program: 'vex_v5' | 'combat' | 'both' | 'not_sure'
   student: {
     first_name: string
     last_name: string
@@ -41,7 +41,7 @@ type Payload = {
   data_certified: boolean
 }
 
-const PROGRAMS = new Set(['vex_v5', 'combat', 'not_sure'])
+const PROGRAMS = new Set(['vex_v5', 'combat', 'both', 'not_sure'])
 const SUMMER = new Set(['yes', 'maybe', 'no'])
 
 function num(v: string | null | undefined): number | null {

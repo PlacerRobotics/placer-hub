@@ -6,6 +6,7 @@ import { AdminQueueTable, EmptyState } from '@/components/ui'
 const PROGRAM_LABELS: Record<string, string> = {
   vex_v5: 'VEX V5',
   combat: 'Combat',
+  both: 'VEX V5 & Combat',
   vex_iq: 'VEX IQ',
   not_sure: 'Not sure',
 }

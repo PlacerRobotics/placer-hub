@@ -18,11 +18,12 @@ import { FinancialAidCallout } from '@/components/FinancialAidCallout'
 
 // PRD §5 canonical field set. Apply offers V5 / Combat / Not Sure (single choice
 // stored in program_interest); VEX IQ (grades 3–6) applies via the IQ path.
-type Program = 'vex_v5' | 'combat' | 'not_sure'
+type Program = 'vex_v5' | 'combat' | 'both' | 'not_sure'
 
 const PROGRAMS: { value: Program; name: string; grades: string }[] = [
   { value: 'vex_v5', name: 'VEX V5 Robotics', grades: 'Grades 7–12 (6th grade by exception)' },
   { value: 'combat', name: 'Combat Robotics', grades: 'Grades 7–12' },
+  { value: 'both', name: 'VEX V5 & Combat', grades: 'Interested in both programs' },
   { value: 'not_sure', name: 'Not sure yet', grades: 'We’ll help you choose' },
 ]
 
@@ -407,7 +408,7 @@ export default function ApplyPage() {
                     <span className="text-card-title">{p.name}</span>
                     <span className="text-help" style={{ display: 'block' }}>{p.grades}</span>
                   </span>
-                  {p.value !== 'not_sure' && <ProgramBadge program={p.value} />}
+                  {(p.value === 'vex_v5' || p.value === 'combat') && <ProgramBadge program={p.value} />}
                 </button>
               )
             })}
