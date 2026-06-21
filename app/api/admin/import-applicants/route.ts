@@ -138,9 +138,11 @@ export async function POST(request: NextRequest) {
         source: 'platform', triage_notes: noteParts.join(' · ') || null,
       })
 
+      // 'pending' is NOT a valid family_season_status; held/un-reviewed applicants
+      // map to 'applied' (they applied via Google Form, awaiting admin review).
       await db.from('family_season').upsert({
         family_id: familyId, season: SEASON,
-        status: action === 'invite' ? 'cleared_to_register' : 'pending',
+        status: action === 'invite' ? 'cleared_to_register' : 'applied',
         magic_link_sent: false, current_season_notes: g(r, 'Review Comments') || null,
       }, { onConflict: 'family_id,season' })
 
