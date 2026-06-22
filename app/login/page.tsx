@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -12,12 +13,40 @@ import {
   ErrorAlert,
 } from '@/components/ui'
 
-type Status = 'idle' | 'sending' | 'sent' | 'error'
+type Status = 'idle' | 'sending' | 'sent' | 'error' | 'completing'
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+
+  // Implicit-flow magic links (admin-sent invites) deliver the session as tokens
+  // in the URL hash, which the server callback can't read — so they land here.
+  // Consume them client-side, establish the session, and continue to the app.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const hash = window.location.hash
+    if (!hash.includes('access_token')) return
+    const p = new URLSearchParams(hash.slice(1))
+    const access_token = p.get('access_token')
+    const refresh_token = p.get('refresh_token')
+    if (!access_token || !refresh_token) return
+
+    setStatus('completing')
+    createClient()
+      .auth.setSession({ access_token, refresh_token })
+      .then(({ error }) => {
+        if (error) {
+          setStatus('error')
+          setErrorMessage(error.message)
+          return
+        }
+        // Strip the tokens from the URL, then continue into the app.
+        window.history.replaceState(null, '', window.location.pathname)
+        router.replace('/dashboard')
+      })
+  }, [router])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -49,7 +78,13 @@ export default function LoginPage() {
         We&apos;ll email you a secure sign-in link. No password needed.
       </p>
 
-      {status === 'sent' ? (
+      {status === 'completing' ? (
+        <div style={{ marginTop: '1.75rem' }}>
+          <InfoAlert title="Finishing sign-in…">
+            Verifying your link and signing you in — one moment.
+          </InfoAlert>
+        </div>
+      ) : status === 'sent' ? (
         <div style={{ marginTop: '1.75rem' }}>
           <SuccessAlert title="Check your email">
             We sent a sign-in link to {email}. Click it to finish signing in — it expires
