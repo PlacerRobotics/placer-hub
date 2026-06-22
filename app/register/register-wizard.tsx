@@ -19,6 +19,23 @@ import {
 const OTHER_SCHOOL = '__other__'
 const STEPS = ['Student', 'Emergency Contact', 'Waivers', 'Review']
 
+// Enum value -> display label. New youth/adult options plus legacy values that
+// may already be on imported student records.
+const TSHIRT_OPTIONS: [string, string][] = [
+  ['ym', 'Youth Medium'],
+  ['yl', 'Youth Large'],
+  ['l', 'Adult Large'],
+  ['xl', 'Adult XL'],
+  ['xxl', 'Adult 2XL'],
+  ['xxxl', 'Adult 3XL'],
+]
+const TSHIRT_LABELS: Record<string, string> = {
+  ...Object.fromEntries(TSHIRT_OPTIONS),
+  xs: 'XS',
+  s: 'S',
+  m: 'M',
+}
+
 type Program = 'vex_v5' | 'vex_iq' | 'combat' | 'not_sure'
 
 type Props = {
@@ -276,7 +293,7 @@ export default function RegisterWizard({
               <label htmlFor="tshirt" style={labelStyle}>T-shirt size<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
               <select id="tshirt" value={tshirt} onChange={(e) => setTshirt(e.target.value)} style={selectStyle}>
                 <option value="">Select size…</option>
-                {[['xs', 'XS'], ['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL'], ['xxl', 'XXL']].map(([v, lbl]) => (
+                {TSHIRT_OPTIONS.map(([v, lbl]) => (
                   <option key={v} value={v}>{lbl}</option>
                 ))}
               </select>
@@ -408,7 +425,7 @@ export default function RegisterWizard({
               <Row label="Date of birth" value={dob || '—'} />
               <Row label="Grade" value={grade || '—'} />
               <Row label="School" value={schoolName} />
-              <Row label="T-shirt size" value={(tshirt || '—').toUpperCase()} />
+              <Row label="T-shirt size" value={TSHIRT_LABELS[tshirt] ?? (tshirt || '—')} />
               <Row label="Emergency contact" value={`${ec1First} ${ec1Last} · ${ec1Rel} · ${ec1Phone}`} />
               <Row label="Signed by" value={signature} />
             </div>

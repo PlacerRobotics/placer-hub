@@ -85,6 +85,20 @@ export default async function RegisterPage() {
     .eq('season', SEASON)
     .maybeSingle()
 
+  // If an imported student has a free-text school_raw but no school_id, match it
+  // to a canonical school so the dropdown pre-selects the real school instead of
+  // falling back to "Other (not listed)".
+  const schoolList = schools ?? []
+  let resolvedStudent = student
+  if (!student.school_id && student.school_raw) {
+    const raw = student.school_raw.trim().toLowerCase()
+    const match = schoolList.find((sch) => {
+      const n = sch.name.toLowerCase()
+      return n === raw || n.startsWith(raw) || raw.startsWith(n)
+    })
+    if (match) resolvedStudent = { ...student, school_id: match.id, school_raw: null }
+  }
+
   const paymentRef =
     enrollment?.payment_reference_code ?? makePaymentRef(student.first_name, student.last_name)
 
@@ -93,8 +107,8 @@ export default async function RegisterPage() {
       season={SEASON}
       studentId={student.id}
       program={program}
-      student={student}
-      schools={schools ?? []}
+      student={resolvedStudent}
+      schools={schoolList}
       waivers={waivers ?? []}
       paymentReferenceCode={paymentRef}
       guardianName={`${guardian.first_name} ${guardian.last_name}`}
