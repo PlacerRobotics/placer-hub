@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     .eq('family_id', familyId)
     .eq('season', SEASON)
     .maybeSingle()
-  if (!fs || fs.status !== 'cleared_to_register') {
+  if (!fs || (fs.status !== 'cleared_to_register' && fs.status !== 'registered')) {
     return NextResponse.json({ error: 'Your family is not cleared to register.' }, { status: 403 })
   }
 
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
   const program: string = body.program ?? 'vex_v5'
 
   // 5. Update the student record with the registration details.
-  await db
+  const { error: stuErr } = await db
     .from('student')
     .update({
       first_name: s.first_name,
@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       status: 'active',
     })
     .eq('id', studentId)
+  if (stuErr) return NextResponse.json({ error: `Could not save student details: ${stuErr.message}` }, { status: 500 })
 
   // 6. Compute fees from season_config.
   const { data: config } = await db.from('season_config').select('*').eq('season', SEASON).maybeSingle()
@@ -169,7 +170,10 @@ export async function POST(request: NextRequest) {
       priority: 2,
     })
   }
-  if (contacts.length) await db.from('emergency_contact').insert(contacts)
+  if (contacts.length) {
+    const { error: ecErr } = await db.from('emergency_contact').insert(contacts)
+    if (ecErr) return NextResponse.json({ error: `Could not save emergency contacts: ${ecErr.message}` }, { status: 500 })
+  }
 
   // 9. Waiver signatures — one per active waiver (append-only).
   const { data: waivers } = await db
@@ -195,10 +199,21 @@ export async function POST(request: NextRequest) {
       ip_address: ip,
       user_agent: request.headers.get('user-agent') ?? null,
     }))
-    await db.from('waiver_signature').insert(sigs)
+    const { error: sigErr } = await db.from('waiver_signature').insert(sigs)
+    if (sigErr) return NextResponse.json({ error: `Could not record waivers: ${sigErr.message}` }, { status: 500 })
   }
 
-  // 10. Confirmation email — stubbed for now.
+  // 10. Mark the family registered for this season so the dashboard and admin
+  // reflect completion. The gate above also accepts 'registered', so additional
+  // students / edits can re-enter the wizard.
+  const { error: fsErr } = await db
+    .from('family_season')
+    .update({ status: 'registered', updated_at: new Date().toISOString() })
+    .eq('family_id', familyId)
+    .eq('season', SEASON)
+  if (fsErr) return NextResponse.json({ error: `Could not finalize registration: ${fsErr.message}` }, { status: 500 })
+
+  // 11. Confirmation email — stubbed for now.
   console.log(
     `[register] Confirmation email (stub) → ${user.email}: registration received for student ${studentId}, reference ${paymentRef}`
   )

@@ -35,7 +35,7 @@ export default async function RegisterPage() {
     .eq('season', SEASON)
     .maybeSingle()
 
-  if (!fs || fs.status !== 'cleared_to_register') {
+  if (!fs || (fs.status !== 'cleared_to_register' && fs.status !== 'registered')) {
     redirect('/dashboard?notice=not_cleared')
   }
 

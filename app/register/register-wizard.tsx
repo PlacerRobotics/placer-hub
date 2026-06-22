@@ -281,7 +281,7 @@ export default function RegisterWizard({
                 ))}
               </select>
             </div>
-            <FormField label="Fusion Education email" htmlFor="fusion" helpText="Your @student.fuesd.org email if you have one.">
+            <FormField label="Fusion Education email" htmlFor="fusion" helpText="Use your student Fusion account email if you have one.">
               <TextInput id="fusion" type="email" value={fusion} onChange={(e) => setFusion(e.target.value)} />
             </FormField>
           </FormSection>
@@ -429,20 +429,56 @@ export default function RegisterWizard({
               marginBottom: '1.5rem',
             }}
           >
-            <p style={{ fontSize: '0.9375rem', color: 'var(--color-text-muted)', lineHeight: 1.6, margin: '0 0 0.75rem' }}>
-              Your spot is secured once payment is received. Include your payment reference code with any payment.
+            <p style={{ fontSize: '0.9375rem', color: 'var(--color-text-muted)', lineHeight: 1.6, margin: '0 0 1rem' }}>
+              Your spot is secured once payment is received. Include your payment reference code{' '}
+              <strong style={{ color: 'var(--color-text-primary)' }}>{paymentReferenceCode}</strong> with your payment.
             </p>
-            <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.9375rem', color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
-              <li>
-                Pay online via Zeffy:{' '}
-                {zeffyUrl ? (
-                  <a href={zeffyUrl} target="_blank" rel="noopener noreferrer">{zeffyUrl}</a>
-                ) : (
-                  <span>(link provided after submission)</span>
-                )}
-              </li>
-              <li>Or mail a check to Placer Robotics with your reference code in the memo.</li>
-            </ul>
+
+            {/* Online payment — the preferred, primary path */}
+            <p style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: '0 0 0.625rem' }}>
+              Pay online (recommended)
+            </p>
+            {zeffyUrl ? (
+              <a
+                href={zeffyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  padding: '12px 24px',
+                  backgroundColor: 'var(--color-gold)',
+                  color: 'var(--color-navy-darker)',
+                  fontWeight: 700,
+                  fontSize: '0.9375rem',
+                  borderRadius: '6px',
+                  textDecoration: 'none',
+                }}
+              >
+                Pay online via Zeffy →
+              </a>
+            ) : (
+              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
+                The secure online payment link will be emailed to you after you submit.
+              </p>
+            )}
+
+            {/* Check — secondary, collapsed behind a disclosure */}
+            <details style={{ marginTop: '1.25rem' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+                or pay by check instead
+              </summary>
+              <div style={{ marginTop: '0.625rem', fontSize: '0.875rem', color: 'var(--color-text-muted)', lineHeight: 1.7 }}>
+                <p style={{ margin: '0 0 0.375rem' }}>
+                  Make checks payable to: <strong style={{ color: 'var(--color-text-primary)' }}>Placer Advanced Robotics and Technology</strong>
+                </p>
+                <p style={{ margin: '0 0 0.375rem' }}>
+                  Mail to: <strong style={{ color: 'var(--color-text-primary)' }}>9182 Cedar Ridge Drive, Granite Bay, CA 95746</strong>
+                </p>
+                <p style={{ margin: 0 }}>
+                  Write your payment reference code <strong style={{ color: 'var(--color-text-primary)' }}>{paymentReferenceCode}</strong> in the memo.
+                </p>
+              </div>
+            </details>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
