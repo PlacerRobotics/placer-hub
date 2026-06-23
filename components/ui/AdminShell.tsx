@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/sponsors', label: 'Sponsors' },
   { href: '/admin/teams', label: 'Teams' },
+  { href: '/admin/families', label: 'Families' },
   { href: '/admin/volunteers', label: 'Volunteers' },
   { href: '/admin/sync', label: 'Sync Issues' },
   { href: '/admin/settings', label: 'Settings' },
