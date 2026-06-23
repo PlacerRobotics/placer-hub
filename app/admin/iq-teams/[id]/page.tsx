@@ -171,12 +171,15 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
           Coach: {coachName || '—'} · {coach?.login_email || '—'} · {coach?.phone || 'no phone'} · ref {team.team_payment_reference_code || '—'}
         </div>
         {canAct ? (
+          <>
           <form action={updateTeam} style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div><label style={lbl}>Team name</label><input name="team_name" defaultValue={team.team_name ?? ''} placeholder="(unnamed)" style={{ ...input, width: 200 }} /></div>
             <div><label style={lbl}>Team number</label><input name="team_number" defaultValue={team.team_number ?? ''} list="iq-numbers" placeholder="pick or type" style={{ ...input, width: 140 }} /><datalist id="iq-numbers">{existingNumbers.map((n) => <option key={n} value={n} />)}</datalist></div>
             <label style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><input type="checkbox" name="events" defaultChecked={!!team.events_vex_com_registered} /> events.vex.com registered</label>
             <button style={btn}>Save</button>
           </form>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0.625rem 0 0' }}>Renaming the team here does <strong>not</strong> change it on events.vex.com — update the team name there too.</p>
+          </>
         ) : <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>Team #: {team.team_number || 'TBD'} · events.vex.com: {team.events_vex_com_registered ? 'yes' : 'no'}</div>}
         {team.notes && <pre style={{ marginTop: '0.875rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{team.notes}</pre>}
       </div>
