@@ -75,6 +75,19 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     }).eq('id', id)
     redirect(`/admin/iq-teams/${id}`)
   }
+  async function updateKit(formData: FormData) {
+    'use server'
+    const a = await getAdminProfile(); if (!a) return
+    const adb = createAdminClient()
+    if (!(await hasAnyRole(adb, a.id, ROLES))) return
+    await adb.from('team').update({
+      kit_number: String(formData.get('kit_number') ?? '').trim() || null,
+      kit_checkout_date: String(formData.get('kit_checkout_date') ?? '').trim() || null,
+      kit_return_date: String(formData.get('kit_return_date') ?? '').trim() || null,
+      kit_return_verified: formData.get('kit_return_verified') === 'on',
+    }).eq('id', id)
+    redirect(`/admin/iq-teams/${id}`)
+  }
   async function recordPayment(formData: FormData) {
     'use server'
     const a = await getAdminProfile(); if (!a) return
@@ -166,6 +179,27 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
           </form>
         ) : <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>Team #: {team.team_number || 'TBD'} · events.vex.com: {team.events_vex_com_registered ? 'yes' : 'no'}</div>}
         {team.notes && <pre style={{ marginTop: '0.875rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{team.notes}</pre>}
+      </div>
+
+      {/* Season kit */}
+      <div style={card}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', margin: '0 0 0.75rem' }}>
+          <h3 style={{ ...h3, margin: 0 }}>Season kit</h3>
+          {team.kit_return_verified && <StatusBadge label="Returned & verified" variant="success" />}
+        </div>
+        {canAct ? (
+          <form action={updateKit} style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div><label style={lbl}>Kit number</label><input name="kit_number" defaultValue={team.kit_number ?? ''} placeholder="e.g. IQ-0042" style={{ ...input, width: 160 }} /></div>
+            <div><label style={lbl}>Checked out</label><input name="kit_checkout_date" type="date" defaultValue={team.kit_checkout_date ?? ''} style={input} /></div>
+            <div><label style={lbl}>Returned</label><input name="kit_return_date" type="date" defaultValue={team.kit_return_date ?? ''} style={input} /></div>
+            <label style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><input type="checkbox" name="kit_return_verified" defaultChecked={!!team.kit_return_verified} /> Returned &amp; verified (close out)</label>
+            <button style={btn}>Save kit</button>
+          </form>
+        ) : (
+          <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+            Kit #: {team.kit_number || 'not issued'} · Out: {team.kit_checkout_date ? new Date(team.kit_checkout_date).toLocaleDateString() : '—'} · Back: {team.kit_return_date ? new Date(team.kit_return_date).toLocaleDateString() : '—'} · {team.kit_return_verified ? 'verified' : 'not verified'}
+          </div>
+        )}
       </div>
 
       {/* Roster */}
