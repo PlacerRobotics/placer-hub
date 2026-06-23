@@ -103,7 +103,10 @@ export default async function IqTeamsPage() {
                     <div style={muted}>{(rosterMap[t.id]?.length ?? 0)} students · created {new Date(t.created_at).toLocaleDateString()}</div>
                     <div style={muted}>Payment ref: <strong>{t.team_payment_reference_code || '—'}</strong></div>
                   </div>
-                  <IqMarkPaidButton teamId={t.id} canAct={canApprove} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
+                    <IqMarkPaidButton teamId={t.id} canAct={canApprove} />
+                    <IqApproveButton teamId={t.id} canApprove={canApprove} feePaid={false} />
+                  </div>
                 </div>
               </div>
             ))}
@@ -118,7 +121,7 @@ export default async function IqTeamsPage() {
                     <div style={{ fontWeight: 600 }}>{t.team_name || (coachMap[t.id]?.name ? `${coachMap[t.id].name}’s team` : 'IQ team')}</div>
                     <div style={muted}>Coach: {coachMap[t.id]?.name || '—'} · <span style={{ color: 'var(--color-success)' }}>Fee paid</span></div>
                   </div>
-                  <IqApproveButton teamId={t.id} canApprove={canApprove} />
+                  <IqApproveButton teamId={t.id} canApprove={canApprove} feePaid={t.team_fee_status === 'paid'} />
                 </div>
                 <div style={{ marginTop: '0.625rem', borderTop: '1px solid var(--color-border)', paddingTop: '0.5rem' }}>
                   {(rosterMap[t.id] ?? []).map((s, i) => (
@@ -139,7 +142,8 @@ export default async function IqTeamsPage() {
                 <div key={t.id} style={card}>
                   <div style={{ fontWeight: 600 }}>{t.team_name || (coachMap[t.id]?.name ? `${coachMap[t.id].name}’s team` : 'IQ team')}</div>
                   <div style={muted}>Coach: {coachMap[t.id]?.name || '—'} · clearance: <StatusBadge label={cs ? cs.replace(/_/g, ' ') : 'none'} variant={cs === 'cleared' ? 'success' : cs ? 'warning' : 'neutral'} /></div>
-                  <div style={muted}>{(rosterMap[t.id]?.length ?? 0)} students · {SEASON}</div>
+                  <div style={muted}>{(rosterMap[t.id]?.length ?? 0)} students · {SEASON} · fee {t.team_fee_status === 'paid' ? 'paid' : 'unpaid'}</div>
+                  {t.team_fee_status !== 'paid' && <div style={{ marginTop: '0.5rem' }}><IqMarkPaidButton teamId={t.id} canAct={canApprove} /></div>}
                   <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '0.625rem' }}>
                     <form action={setTeamNumber} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                       <input type="hidden" name="teamId" value={t.id} />

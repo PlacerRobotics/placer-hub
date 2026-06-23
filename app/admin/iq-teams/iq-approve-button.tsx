@@ -4,14 +4,17 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PrimaryButton } from '@/components/ui'
 
-export default function IqApproveButton({ teamId, canApprove }: { teamId: string; canApprove: boolean }) {
+export default function IqApproveButton({ teamId, canApprove, feePaid = true }: { teamId: string; canApprove: boolean; feePaid?: boolean }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
   async function approve() {
     if (busy) return
-    if (!confirm('Approve this team and send magic-link invites to all parents?')) return
+    const prompt = feePaid
+      ? 'Approve this team and send magic-link invites to all parents?'
+      : '⚠️ This team’s fee has NOT been marked paid/cleared yet.\n\nApprove anyway and send parent invites now? You can still record the payment afterward.'
+    if (!confirm(prompt)) return
     setBusy(true); setMsg('')
     const res = await fetch(`/api/admin/iq-teams/${teamId}/approve`, { method: 'POST' })
     const d = await res.json().catch(() => ({}))
