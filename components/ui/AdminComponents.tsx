@@ -1,5 +1,7 @@
+'use client'
+
 /**
- * Admin components
+ * Admin components (marked 'use client' — AdminQueueTable attaches hover handlers).
  * AdminQueueTable — queue-based table with sort, filter, status
  * AdminDetailPanel — record detail with actions and audit
  * PermissionNotice — role-restricted message

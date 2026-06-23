@@ -1,5 +1,8 @@
+'use client'
+
 /**
- * Button components
+ * Button components (marked 'use client' — they attach onMouseEnter/onMouseLeave
+ * hover handlers, which crash when rendered from a Server Component).
  * PrimaryButton — gold on public pages, navy on admin
  * SecondaryButton — outlined
  * DangerButton — red, destructive actions only
