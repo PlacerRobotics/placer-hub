@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
       // family
       let familyId: string
-      const { data: fam0 } = await db.from('family').select('id').eq('primary_email', gEmail).maybeSingle()
+      const { data: fam0 } = await db.from('family').select('id').ilike('primary_email', gEmail).maybeSingle()
       if (fam0) familyId = fam0.id
       else {
         const { data: fam, error } = await db.from('family').insert({ primary_email: gEmail, display_name: gLast ? `${gLast} Family` : null }).select('id').single()

@@ -43,15 +43,22 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
   }
   const sids = (apps ?? []).map((a: any) => a.student_id).filter(Boolean)
   const signedSet = new Set<string>()
+  const registeredSet = new Set<string>()
   if (sids.length) {
     const { data: sigs } = await db.from('waiver_signature').select('student_id').eq('season', SEASON).in('student_id', sids)
     for (const s of (sigs ?? []) as any[]) signedSet.add(s.student_id)
+    // Registration form submitted = an enrollment row with a submitted_at this season.
+    const { data: enrs } = await db.from('enrollment').select('student_id, submitted_at').eq('season', SEASON).in('student_id', sids)
+    for (const e of (enrs ?? []) as any[]) if (e.submitted_at) registeredSet.add(e.student_id)
   }
   const roster = (apps ?? []).map((a: any) => {
     const s = Array.isArray(a.student) ? a.student[0] : a.student
-    return { studentId: a.student_id, name: s ? `${s.first_name} ${s.last_name}`.trim() : '—', grade: s?.grade, school: s?.school_raw, parentEmail: emailByFam[a.family_id] ?? '', signed: signedSet.has(a.student_id), dropRequested: String(a.triage_notes ?? '').includes('drop_requested') }
+    const signed = signedSet.has(a.student_id)
+    const registered = registeredSet.has(a.student_id)
+    return { studentId: a.student_id, name: s ? `${s.first_name} ${s.last_name}`.trim() : '—', grade: s?.grade, school: s?.school_raw, parentEmail: emailByFam[a.family_id] ?? '', signed, registered, regComplete: signed && registered, dropRequested: String(a.triage_notes ?? '').includes('drop_requested') }
   })
   const signedCount = roster.filter((r) => r.signed).length
+  const completeCount = roster.filter((r) => r.regComplete).length
 
   const { data: numRows } = await db.from('team').select('team_number').eq('program', 'vex_iq').eq('division', 'ES').not('team_number', 'is', null)
   const existingNumbers = [...new Set((numRows ?? []).map((r: any) => r.team_number).filter(Boolean))].sort()
@@ -207,10 +214,10 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
 
       {/* Roster */}
       <div style={card}>
-        <h3 style={h3}>Roster ({roster.length}) · {signedCount}/{roster.length} waivers signed</h3>
+        <h3 style={h3}>Roster ({roster.length}) · {completeCount}/{roster.length} fully registered · {signedCount} waivers signed</h3>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead><tr><th style={cell}>Student</th><th style={cell}>Grade</th><th style={cell}>School</th><th style={cell}>Parent email</th><th style={cell}>Waivers</th><th style={cell}>Actions</th></tr></thead>
-          <tbody>{roster.map((r, i) => <tr key={i}><td style={cell}>{r.name}{r.dropRequested && <span style={{ color: '#C9971B', fontWeight: 700, fontSize: '0.6875rem' }}> ⚠ DROP REQUESTED</span>}</td><td style={cell}>{r.grade || '—'}</td><td style={cell}>{r.school || '—'}</td><td style={cell}>{r.parentEmail || '—'}</td><td style={{ ...cell, color: r.signed ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>{r.signed ? '✓ signed' : 'not yet'}</td><td style={cell}>{canAct && (r.dropRequested ? (
+          <thead><tr><th style={cell}>Student</th><th style={cell}>Grade</th><th style={cell}>School</th><th style={cell}>Parent email</th><th style={cell}>Reg complete</th><th style={cell}>Waivers</th><th style={cell}>Actions</th></tr></thead>
+          <tbody>{roster.map((r, i) => <tr key={i}><td style={cell}>{r.name}{r.dropRequested && <span style={{ color: '#C9971B', fontWeight: 700, fontSize: '0.6875rem' }}> ⚠ DROP REQUESTED</span>}</td><td style={cell}>{r.grade || '—'}</td><td style={cell}>{r.school || '—'}</td><td style={cell}>{r.parentEmail || '—'}</td><td style={{ ...cell, fontWeight: 700 }}>{r.regComplete ? <span style={{ color: 'var(--color-success)' }}>✓ Complete</span> : r.registered ? <span style={{ color: '#C9971B' }}>Waiver pending</span> : r.signed ? <span style={{ color: '#C9971B' }}>Form pending</span> : <span style={{ color: 'var(--color-text-muted)' }}>Not started</span>}</td><td style={{ ...cell, color: r.signed ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>{r.signed ? '✓ signed' : 'not yet'}</td><td style={cell}>{canAct && (r.dropRequested ? (
               <span style={{ display: 'flex', gap: '0.625rem', whiteSpace: 'nowrap' }}>
                 <form action={dropStudent}><input type="hidden" name="studentId" value={r.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>Confirm drop</button></form>
                 <form action={cancelDropRequest}><input type="hidden" name="studentId" value={r.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>Cancel request</button></form>

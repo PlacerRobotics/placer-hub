@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
 
       // 1. family (by guardian1 email)
       let familyId: string
-      const { data: existingFam } = await db.from('family').select('id').eq('primary_email', g1email).maybeSingle()
+      const { data: existingFam } = await db.from('family').select('id').ilike('primary_email', g1email).maybeSingle()
       if (existingFam) {
         familyId = existingFam.id
       } else {
