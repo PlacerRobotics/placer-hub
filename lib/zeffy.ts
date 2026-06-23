@@ -19,6 +19,7 @@ export type ZeffyPayment = {
   status?: string
   amount?: number
   totalAmount?: number
+  created?: number
   createdAt?: string
   created_at?: string
   buyer?: { email?: string; first_name?: string; last_name?: string }

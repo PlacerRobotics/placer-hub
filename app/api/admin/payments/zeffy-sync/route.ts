@@ -18,6 +18,14 @@ function safeIso(v: any): string {
   const d = new Date(v)
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString()
 }
+// Zeffy `created` is a Unix epoch in seconds.
+function epochToIso(created: any): string | null {
+  const n = Number(created)
+  if (!n) return null
+  const ms = n < 1e12 ? n * 1000 : n
+  const d = new Date(ms)
+  return isNaN(d.getTime()) ? null : d.toISOString()
+}
 
 // POST { apply?: boolean } — pulls the registration campaign's Zeffy payments and
 // matches each ticket to an enrollment by guardian email + student name + program.
@@ -53,6 +61,9 @@ export async function POST(req: NextRequest) {
   for (const p of payments) {
     if (p.status && p.status !== 'succeeded') continue
     const buyerEmail = (p.buyer?.email ?? '').trim()
+    // The "Placer Robotics Sign-In Email" is a buyer-level custom question and is
+    // the intended match key; fall back to the Zeffy account email.
+    const signInEmail = zeffyAnswer(p.buyer_questions, 'sign-in email') || zeffyAnswer(p.buyer_questions, 'guardian email')
 
     for (const item of p.items ?? []) {
       const itemId = String(item.id ?? '').trim()
@@ -63,7 +74,7 @@ export async function POST(req: NextRequest) {
       }`.trim()
       const programRaw = zeffyAnswer(item.questions, 'program')
       const program = parseProgram(programRaw)
-      const guardianEmail = (zeffyAnswer(item.questions, 'guardian email') || buyerEmail).trim().toLowerCase()
+      const guardianEmail = (signInEmail || buyerEmail).trim().toLowerCase()
 
       const { data: existing } = await db
         .from('payment_transaction')
@@ -114,7 +125,8 @@ export async function POST(req: NextRequest) {
       results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'matched', enrollmentId: enrollment.id })
 
       if (apply) {
-        const amount = Number(item.amount ?? item.price ?? p.amount ?? p.totalAmount ?? 0) || 0
+        // Zeffy amounts are in cents.
+        const cents = Number(item.amount ?? p.amount ?? 0) || 0
         const { data: pay, error } = await db
           .from('payment_transaction')
           .insert({
@@ -122,11 +134,11 @@ export async function POST(req: NextRequest) {
             season: SEASON,
             source: 'zeffy',
             source_payment_id: itemId,
-            amount,
+            amount: cents / 100,
             payment_type: 'registration_fee',
             donor_name: `${p.buyer?.first_name ?? ''} ${p.buyer?.last_name ?? ''}`.trim() || null,
             donor_email: buyerEmail || null,
-            received_at: safeIso(p.createdAt ?? p.created_at),
+            received_at: epochToIso(p.created) ?? safeIso(p.createdAt ?? p.created_at),
             matched_status: 'unmatched',
             raw_payload: p,
           })
