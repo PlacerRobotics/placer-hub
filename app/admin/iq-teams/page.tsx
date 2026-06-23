@@ -57,7 +57,8 @@ export default async function IqTeamsPage() {
     const signedN = (teamStudents[t.id] ?? []).filter((sid) => signed.has(sid)).length
     return {
       id: t.id,
-      label: (t.team_name || (coachMap[t.id] ? `${coachMap[t.id]}’s team` : 'IQ team')) + (t.team_number ? ` · ${t.team_number}` : ''),
+      label: t.team_name || (coachMap[t.id] ? `${coachMap[t.id]}’s team` : 'IQ team'),
+      teamNumber: t.team_number ?? '',
       coach: coachMap[t.id] || '—',
       students: total,
       waivers: `${signedN}/${total}`,
@@ -65,6 +66,7 @@ export default async function IqTeamsPage() {
       fee: t.team_fee_status ?? 'unpaid',
       events: !!t.events_vex_com_registered,
       created: new Date(t.created_at).toLocaleDateString(),
+      createdRaw: String(t.created_at),
     }
   })
 
