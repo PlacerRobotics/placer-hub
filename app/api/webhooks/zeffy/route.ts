@@ -24,6 +24,9 @@ export async function POST(request: NextRequest) {
 
   // Capture the raw body defensively — parse JSON, fall back to raw text.
   const rawText = await request.text()
+  // Log the raw payload so it's visible in Vercel logs even if the DB insert
+  // fails — this is how we confirm Zeffy is delivering and see the real shape.
+  console.log('[zeffy] webhook received:', rawText || '(empty body)')
   let body: any
   try {
     body = rawText ? JSON.parse(rawText) : {}
@@ -33,6 +36,13 @@ export async function POST(request: NextRequest) {
 
   const db = createAdminClient()
   const now = new Date().toISOString()
+  // Coerce a date safely — Zeffy may send a format Postgres can't cast to
+  // timestamptz, which would otherwise fail the whole insert.
+  const safeDate = (v: any): string => {
+    if (!v) return now
+    const d = new Date(v)
+    return isNaN(d.getTime()) ? now : d.toISOString()
+  }
   const sourcePaymentId = String(body.id ?? body.transactionId ?? body.paymentId ?? '') || null
   const amount = Number(body.amount ?? body.total ?? body.amountTotal ?? 0) || 0
 
@@ -59,16 +69,32 @@ export async function POST(request: NextRequest) {
       payment_type: 'unknown',
       donor_name: body.payerName ?? body.donorName ?? body.firstName ?? null,
       donor_email: body.payerEmail ?? body.donorEmail ?? body.email ?? null,
-      received_at: body.createdAt ?? body.date ?? now,
+      received_at: safeDate(body.createdAt ?? body.date),
       matched_status: 'unmatched',
       raw_payload: body,
     })
     .select('id')
     .single()
   if (error) {
-    // 200 so Zeffy doesn't retry-storm a deterministic failure; logged for us.
-    console.error('[zeffy] failed to record payload:', error.message)
-    return NextResponse.json({ ok: false, error: error.message }, { status: 200 })
+    // Primary insert failed — fall back to an ultra-minimal row so the payload
+    // is still captured for inspection. 200 either way so Zeffy doesn't
+    // retry-storm; everything is logged.
+    console.error('[zeffy] primary insert failed, trying minimal:', error.message)
+    const { error: e2 } = await db.from('payment_transaction').insert({
+      season: SEASON,
+      source: 'zeffy',
+      source_payment_id: sourcePaymentId,
+      amount: 0,
+      payment_type: 'unknown',
+      matched_status: 'unmatched',
+      received_at: now,
+      raw_payload: body,
+    })
+    if (e2) {
+      console.error('[zeffy] minimal insert also failed:', e2.message)
+      return NextResponse.json({ ok: false, error: e2.message }, { status: 200 })
+    }
+    return NextResponse.json({ ok: true, captured: true, minimal: true })
   }
 
   // 2) Best-effort auto-match — never throws; the payload is already captured.
