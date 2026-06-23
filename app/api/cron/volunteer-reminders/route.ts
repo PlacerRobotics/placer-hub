@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { sendEmail, apsReminderHtml, volunteerRenewalReminderHtml } from '@/lib/email'
+import { syncApsForAll } from '@/lib/aps'
 
 const SEASON = '2026-27'
 const PRIOR_SEASON = '2025-26'
@@ -27,6 +28,12 @@ export async function GET(req: NextRequest) {
   const now = new Date()
   let apsSent = 0
   let renewalSent = 0
+
+  // Refresh APS certificate data first so reminders run off fresh dates.
+  let apsSync: { updated: number; skipped: number; errors: number } | null = null
+  if (process.env.APS_API_KEY) {
+    apsSync = (await syncApsForAll(db, process.env.APS_API_KEY, process.env.APS_SURVEY_CODE || undefined)).summary
+  }
 
   // --- APS expiry reminders (90/30/14 days) ---
   const { data: clearances } = await db
@@ -72,5 +79,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, apsSent, renewalSent })
+  return NextResponse.json({ ok: true, apsSync, apsSent, renewalSent })
 }

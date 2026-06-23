@@ -41,3 +41,33 @@ export function expiryFromComplete(completeDate: string, years = APS_VALIDITY_YE
   d.setFullYear(d.getFullYear() + years)
   return d.toISOString().slice(0, 10)
 }
+
+// Pull APS training for every volunteer with an aps_user_id and update
+// youth_protection_cert + the aps_youth_protection step. Shared by the manual
+// "Sync from APS" button and the daily cron. `db` is a service-role client.
+export async function syncApsForAll(db: any, apiKey: string, surveyCode?: string) {
+  const { data: vols } = await db
+    .from('volunteer_profile')
+    .select('id, aps_user_id, guardian:guardian_id ( first_name, last_name )')
+    .not('aps_user_id', 'is', null)
+
+  const summary = { updated: 0, skipped: 0, errors: 0 }
+  const results: { name: string; status: string }[] = []
+  for (const v of vols ?? []) {
+    const g: any = Array.isArray(v.guardian) ? v.guardian[0] : v.guardian
+    const name = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : v.aps_user_id
+    try {
+      const t = pickTraining(await fetchApsTrainings(apiKey, v.aps_user_id), surveyCode)
+      if (!t?.complete_date) { summary.skipped++; results.push({ name, status: 'no completed training' }); continue }
+      const expiry = expiryFromComplete(t.complete_date)
+      const issued = new Date(t.complete_date).toISOString().slice(0, 10)
+      const exists = (await db.from('youth_protection_cert').select('id').eq('volunteer_id', v.id).eq('expiration_date', expiry).maybeSingle()).data
+      if (!exists) await db.from('youth_protection_cert').insert({ volunteer_id: v.id, expiration_date: expiry, issued_date: issued, cert_url: t.certificate_url ?? null, aps_cert_id: t.id != null ? String(t.id) : null })
+      await db.from('volunteer_step').upsert({ volunteer_id: v.id, step: 'aps_youth_protection', status: 'complete', completed_at: new Date().toISOString() }, { onConflict: 'volunteer_id,step' })
+      summary.updated++; results.push({ name, status: `expires ${expiry}` })
+    } catch (e: any) {
+      summary.errors++; results.push({ name, status: `error: ${e?.message ?? 'failed'}` })
+    }
+  }
+  return { summary, results }
+}
