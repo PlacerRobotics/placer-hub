@@ -374,10 +374,13 @@ export default function RegisterWizard({
                 marginBottom: '1.25rem',
               }}
             >
-              <h3 className="text-card-title" style={{ marginBottom: '0.75rem' }}>{w.title}</h3>
+              <h3 className="text-card-title" style={{ marginBottom: '0.5rem' }}>{w.title}</h3>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.625rem' }}>
+                Scroll within the box below to read the full agreement.
+              </p>
               <div
                 style={{
-                  maxHeight: '220px',
+                  maxHeight: '300px',
                   overflowY: 'auto',
                   border: '1px solid var(--color-border)',
                   borderRadius: '6px',
@@ -403,8 +406,34 @@ export default function RegisterWizard({
             </div>
           ))}
 
-          <FormSection title="Electronic signature" description="Type your full legal name to sign all waivers above.">
-            <FormField label="Guardian full name" htmlFor="signature" required>
+          <FormSection
+            title="Signature"
+            description="By typing your full legal name below, you electronically sign all of the agreements above. If the participant is under 18, you are signing as their parent or legal guardian, on the participant's behalf."
+          >
+            <div
+              style={{
+                backgroundColor: 'var(--color-bg-light)',
+                border: '1px solid var(--color-border)',
+                borderRadius: '8px',
+                padding: '0.875rem 1rem',
+                marginBottom: '1rem',
+                fontSize: '0.9375rem',
+                color: 'var(--color-text-muted)',
+                lineHeight: 1.6,
+              }}
+            >
+              <div>
+                <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>Participant (student):</span>{' '}
+                {`${first || student.first_name} ${last || student.last_name}`.trim()}
+              </div>
+              <div style={{ marginTop: '0.25rem' }}>
+                <span style={{ color: 'var(--color-text-primary)', fontWeight: 600 }}>Signing as:</span> parent / legal guardian
+              </div>
+              <div style={{ marginTop: '0.25rem' }}>
+                Today&apos;s date is recorded automatically with your signature.
+              </div>
+            </div>
+            <FormField label="Printed name of person signing (parent / legal guardian)" htmlFor="signature" required>
               <TextInput id="signature" value={signature} onChange={(e) => setSignature(e.target.value)} placeholder={guardianName} />
             </FormField>
           </FormSection>
@@ -427,7 +456,8 @@ export default function RegisterWizard({
               <Row label="School" value={schoolName} />
               <Row label="T-shirt size" value={TSHIRT_LABELS[tshirt] ?? (tshirt || '—')} />
               <Row label="Emergency contact" value={`${ec1First} ${ec1Last} · ${ec1Rel} · ${ec1Phone}`} />
-              <Row label="Signed by" value={signature} />
+              <Row label="Signed by" value={signature ? `${signature} — parent / legal guardian` : '—'} />
+              <Row label="On behalf of" value={`${first} ${last}`.trim() || '—'} />
             </div>
             <div style={{ marginTop: '0.75rem' }}>
               <div className="text-label" style={{ color: 'var(--color-text-muted)', marginBottom: '0.375rem' }}>Program</div>
