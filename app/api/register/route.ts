@@ -152,6 +152,19 @@ export async function POST(request: NextRequest) {
     if (primary) enrollmentId = enr.id
   }
 
+  // 7b. Auto-link IQ members to their coach's team (the IQ team application set
+  // "iq_team:<id>" in the application's triage_notes). Best-effort; admin can
+  // reassign later via the team tools.
+  try {
+    const { data: appn } = await db.from('student_application').select('triage_notes').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
+    const m = (appn?.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i)
+    if (m && enrollmentId) {
+      const teamId = m[1]
+      const { data: existingTm } = await db.from('team_member').select('id').eq('enrollment_id', enrollmentId).eq('team_id', teamId).eq('team_role', 'student').is('revoked_at', null).maybeSingle()
+      if (!existingTm) await db.from('team_member').insert({ team_id: teamId, enrollment_id: enrollmentId, student_id: studentId, season: SEASON, team_role: 'student', program: 'vex_iq' })
+    }
+  } catch (e) { console.error('[register] IQ team auto-link failed:', e) }
+
   // 8. Emergency contacts — replace any existing for this student.
   await db.from('emergency_contact').delete().eq('student_id', studentId)
   const contacts: Record<string, unknown>[] = []

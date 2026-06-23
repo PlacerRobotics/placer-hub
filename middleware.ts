@@ -12,8 +12,9 @@ const PUBLIC_ROUTES = [
   '/login',
   '/auth/callback',
   '/auth/confirm',
-  // Note: /iq-team/create requires auth (coach must have family account first)
-  // Per v1.13 correction — IQ team creation is authenticated
+  // /iq/team is public so a new coach can hit the in-page sign-in step; the page
+  // itself shows a sign-in card until authed, and the submit route checks the session.
+  '/iq',
 ]
 
 function isPublicRoute(pathname: string): boolean {
