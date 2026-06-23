@@ -1,23 +1,28 @@
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { AdminShell, PageHeader, EmptyState, StatusBadge } from '@/components/ui'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getAdminProfile } from '@/lib/auth/admin'
+import { hasAnyRole } from '@/lib/auth/roles'
+import { AdminShell, PageHeader, EmptyState } from '@/components/ui'
+import IqTeamsTable, { type IqRow } from './iq-teams-table'
 
 const SEASON = '2026-27'
+const ROLES = ['iq_coordinator', 'super_admin', 'payment_admin', 'registration_admin']
 const ORDER: Record<string, number> = { pending_payment: 0, pending_admin_confirmation: 1, active: 2 }
-const STATUS: Record<string, [string, 'success' | 'warning' | 'info' | 'error' | 'neutral']> = {
+const STATUS: Record<string, [string, IqRow['statusVariant']]> = {
   pending_payment: ['Pending payment', 'warning'],
   pending_admin_confirmation: ['Pending approval', 'info'],
   active: ['Active', 'success'],
   suspended: ['Suspended', 'error'],
 }
-const cell: React.CSSProperties = { padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left', whiteSpace: 'nowrap' }
-const th: React.CSSProperties = { ...cell, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '0.6875rem', color: 'var(--color-text-muted)' }
 
 export default async function IqTeamsPage() {
   const supabase = await createClient()
+  const admin = await getAdminProfile()
+  const canAct = admin ? await hasAnyRole(createAdminClient(), admin.id, ROLES) : false
+
   const { data: teamData } = await supabase
     .from('team')
-    .select('id, team_name, team_number, status, team_fee_status, created_at')
+    .select('id, team_name, team_number, status, team_fee_status, events_vex_com_registered, created_at')
     .eq('season', SEASON).eq('program', 'vex_iq')
   const teams = (teamData ?? []) as any[]
   const teamIds = teams.map((t) => t.id)
@@ -44,8 +49,24 @@ export default async function IqTeamsPage() {
     }
   }
   teams.sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || String(a.created_at).localeCompare(String(b.created_at)))
-
   const counts = (s: string) => teams.filter((t) => t.status === s).length
+
+  const rows: IqRow[] = teams.map((t) => {
+    const [sl, sv] = STATUS[t.status] ?? ['—', 'neutral']
+    const total = countMap[t.id] ?? 0
+    const signedN = (teamStudents[t.id] ?? []).filter((sid) => signed.has(sid)).length
+    return {
+      id: t.id,
+      label: (t.team_name || (coachMap[t.id] ? `${coachMap[t.id]}’s team` : 'IQ team')) + (t.team_number ? ` · ${t.team_number}` : ''),
+      coach: coachMap[t.id] || '—',
+      students: total,
+      waivers: `${signedN}/${total}`,
+      statusLabel: sl, statusVariant: sv,
+      fee: t.team_fee_status ?? 'unpaid',
+      events: !!t.events_vex_com_registered,
+      created: new Date(t.created_at).toLocaleDateString(),
+    }
+  })
 
   return (
     <AdminShell>
@@ -53,29 +74,7 @@ export default async function IqTeamsPage() {
       {teams.length === 0 ? (
         <EmptyState title="No IQ teams yet" description="Teams appear here when a coach creates one at /iq/team." />
       ) : (
-        <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 10 }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--color-surface)' }}>
-            <thead><tr><th style={th}>Team</th><th style={th}>Coach</th><th style={th}>Students</th><th style={th}>Waivers</th><th style={th}>Status</th><th style={th}>Fee</th><th style={th}>Created</th><th style={th}></th></tr></thead>
-            <tbody>
-              {teams.map((t) => {
-                const label = t.team_name || (coachMap[t.id] ? `${coachMap[t.id]}’s team` : 'IQ team')
-                const [sl, sv] = STATUS[t.status] ?? ['—', 'neutral']
-                return (
-                  <tr key={t.id}>
-                    <td style={cell}><Link href={`/admin/iq-teams/${t.id}`} style={{ fontWeight: 600, color: 'var(--color-navy-deep)' }}>{label}</Link>{t.team_number ? <span style={{ color: 'var(--color-text-muted)' }}> · {t.team_number}</span> : ''}</td>
-                    <td style={cell}>{coachMap[t.id] || '—'}</td>
-                    <td style={cell}>{countMap[t.id] ?? 0}</td>
-                    <td style={cell}>{(teamStudents[t.id] ?? []).filter((sid) => signed.has(sid)).length}/{countMap[t.id] ?? 0}</td>
-                    <td style={cell}><StatusBadge label={sl} variant={sv} /></td>
-                    <td style={cell}><StatusBadge label={t.team_fee_status ?? 'unpaid'} variant={t.team_fee_status === 'paid' ? 'success' : 'warning'} /></td>
-                    <td style={cell}>{new Date(t.created_at).toLocaleDateString()}</td>
-                    <td style={cell}><Link href={`/admin/iq-teams/${t.id}`} style={{ fontWeight: 600, color: 'var(--color-navy-deep)' }}>Manage →</Link></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <IqTeamsTable rows={rows} canAct={canAct} />
       )}
     </AdminShell>
   )

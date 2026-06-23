@@ -7,7 +7,7 @@ import { AdminShell, PageHeader, StatusBadge } from '@/components/ui'
 import IqApproveButton from '../iq-approve-button'
 
 const SEASON = '2026-27'
-const ROLES = ['iq_coordinator', 'super_admin', 'payment_admin']
+const ROLES = ['iq_coordinator', 'super_admin', 'payment_admin', 'registration_admin']
 
 const STATUS: Record<string, [string, 'success' | 'warning' | 'info' | 'error' | 'neutral']> = {
   pending_payment: ['Pending payment', 'warning'],
@@ -52,6 +52,9 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     return { studentId: a.student_id, name: s ? `${s.first_name} ${s.last_name}`.trim() : '—', grade: s?.grade, school: s?.school_raw, parentEmail: emailByFam[a.family_id] ?? '', signed: signedSet.has(a.student_id) }
   })
   const signedCount = roster.filter((r) => r.signed).length
+
+  const { data: numRows } = await db.from('team').select('team_number').eq('program', 'vex_iq').eq('division', 'ES').not('team_number', 'is', null)
+  const existingNumbers = [...new Set((numRows ?? []).map((r: any) => r.team_number).filter(Boolean))].sort()
 
   const { data: payments } = await db.from('payment_transaction').select('id, source, source_payment_id, amount, received_at, deposited_at, matched_status, notes').eq('team_id', id).order('received_at', { ascending: false })
   const totalPaid = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
@@ -146,7 +149,7 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
         {canAct ? (
           <form action={updateTeam} style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div><label style={lbl}>Team name</label><input name="team_name" defaultValue={team.team_name ?? ''} placeholder="(unnamed)" style={{ ...input, width: 200 }} /></div>
-            <div><label style={lbl}>Team number</label><input name="team_number" defaultValue={team.team_number ?? ''} placeholder="e.g. 295E" style={{ ...input, width: 120 }} /></div>
+            <div><label style={lbl}>Team number</label><input name="team_number" defaultValue={team.team_number ?? ''} list="iq-numbers" placeholder="pick or type" style={{ ...input, width: 140 }} /><datalist id="iq-numbers">{existingNumbers.map((n) => <option key={n} value={n} />)}</datalist></div>
             <label style={{ fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><input type="checkbox" name="events" defaultChecked={!!team.events_vex_com_registered} /> events.vex.com registered</label>
             <button style={btn}>Save</button>
           </form>
