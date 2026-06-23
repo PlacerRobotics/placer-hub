@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/admin/admins', label: 'Admins' },
   { href: '/admin/import', label: 'Import' },
   { href: '/admin/import-applicants', label: 'Import Applicants' },
+  { href: '/admin/import-volunteers', label: 'Import Volunteers' },
   { href: '/admin/import-teams', label: 'Import Teams' },
 ]
 
