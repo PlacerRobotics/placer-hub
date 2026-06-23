@@ -17,6 +17,27 @@ import {
 } from '@/components/ui'
 
 const OTHER_SCHOOL = '__other__'
+
+function ageFromDob(dob: string): number | null {
+  if (!dob) return null
+  const d = new Date(dob)
+  if (Number.isNaN(d.getTime())) return null
+  const now = new Date()
+  let a = now.getFullYear() - d.getFullYear()
+  const m = now.getMonth() - d.getMonth()
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--
+  return a
+}
+
+function isSchoolDomain(email: string): boolean {
+  const e = email.trim().toLowerCase()
+  const at = e.indexOf('@')
+  if (at < 0) return false
+  const domain = e.slice(at + 1)
+  return domain.includes('k12.ca.us') || domain.includes('edu') || e.includes('@school') || e.includes('@student') || /k12|unified|usd|cusd|nusd|pusd/.test(domain)
+}
+
+const consentLabel: React.CSSProperties = { display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.875rem', cursor: 'pointer', marginTop: '0.5rem' }
 const STEPS = ['Student', 'Emergency Contact', 'Waivers', 'Review']
 
 // Enum value -> display label. New youth/adult options plus legacy values that
@@ -145,6 +166,11 @@ export default function RegisterWizard({
   const [schoolOther, setSchoolOther] = useState(student.school_raw ?? '')
   const [tshirt, setTshirt] = useState(student.tshirt_size ?? '')
   const [fusion, setFusion] = useState(student.fusion_education_email ?? '')
+  const [studentEmail, setStudentEmail] = useState('')
+  const [emailCertified, setEmailCertified] = useState(false)
+  const [schoolEmailConfirmed, setSchoolEmailConfirmed] = useState(false)
+  const [slackConsent, setSlackConsent] = useState(false)
+  const [coppaConsent, setCoppaConsent] = useState(false)
 
   // Step 2
   const [ec1First, setEc1First] = useState('')
@@ -184,7 +210,15 @@ export default function RegisterWizard({
     }
   }, [visibleSchools, schoolId])
 
-  const step1Valid = first.trim() && last.trim() && dob && grade && tshirt && (schoolId !== OTHER_SCHOOL || schoolOther.trim()) && schoolId
+  const studentAge = ageFromDob(dob)
+  const isUnder13 = studentAge != null && studentAge < 13
+  const needsCoppa = Number(grade) === 6 || Number(grade) === 7 || isUnder13
+  const emailProvided = studentEmail.trim().length > 0
+  const schoolDomainMatch = emailProvided && isSchoolDomain(studentEmail)
+  const step1Valid =
+    first.trim() && last.trim() && dob && grade && tshirt && (schoolId !== OTHER_SCHOOL || schoolOther.trim()) && schoolId &&
+    (!needsCoppa || coppaConsent) &&
+    (!emailProvided || (emailCertified && (!schoolDomainMatch || schoolEmailConfirmed)))
   const step2Valid = ec1First.trim() && ec1Last.trim() && ec1Rel.trim() && ec1Phone.trim()
   const allWaiversAgreed = waivers.length > 0 ? waivers.every((w) => agreed[w.id]) : true
   const step3Valid = allWaiversAgreed && electronicConsent && studentSig.trim() && signature.trim()
@@ -200,6 +234,9 @@ export default function RegisterWizard({
       signatureName: signature.trim(),
       studentSignatureName: studentSig.trim(),
       electronicConsent,
+      coppaConsent,
+      emailCertified: emailProvided && emailCertified,
+      slackConsent: isUnder13 ? false : slackConsent,
       student: {
         first_name: first.trim(),
         last_name: last.trim(),
@@ -210,6 +247,7 @@ export default function RegisterWizard({
         school_raw: schoolId === OTHER_SCHOOL ? schoolOther.trim() : null,
         tshirt_size: tshirt || null,
         fusion_education_email: fusion.trim() || null,
+        communication_email: studentEmail.trim() || null,
       },
       emergency: {
         first_name: ec1First.trim(),
@@ -303,6 +341,37 @@ export default function RegisterWizard({
             <FormField label="Fusion Education email" htmlFor="fusion" helpText="Use your student Fusion account email if you have one.">
               <TextInput id="fusion" type="email" value={fusion} onChange={(e) => setFusion(e.target.value)} />
             </FormField>
+
+            <FormField label="Student email (optional)" htmlFor="studentEmail" helpText="A personal email your student checks regularly.">
+              <TextInput id="studentEmail" type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} />
+            </FormField>
+            {schoolDomainMatch && (
+              <div>
+                <WarningAlert>School email addresses are often blocked or monitored — we recommend a personal email your student checks regularly.</WarningAlert>
+                <label style={consentLabel}>
+                  <input type="checkbox" checked={schoolEmailConfirmed} onChange={(e) => setSchoolEmailConfirmed(e.target.checked)} />
+                  <span>I understand and want to use this school email address anyway.</span>
+                </label>
+              </div>
+            )}
+            {emailProvided && (
+              <label style={consentLabel}>
+                <input type="checkbox" checked={emailCertified} onChange={(e) => setEmailCertified(e.target.checked)} />
+                <span>I certify that I have access to this email and consent to Placer Robotics using it to communicate with my student.</span>
+              </label>
+            )}
+            {!isUnder13 && (
+              <label style={consentLabel}>
+                <input type="checkbox" checked={slackConsent} onChange={(e) => setSlackConsent(e.target.checked)} />
+                <span>I consent to my student&apos;s email being used to invite them to the Placer Robotics Slack workspace. I understand Slack requires users to be 13 or older.</span>
+              </label>
+            )}
+            {needsCoppa && (
+              <label style={consentLabel}>
+                <input type="checkbox" checked={coppaConsent} onChange={(e) => setCoppaConsent(e.target.checked)} />
+                <span>I am the parent or legal guardian of this student and consent to the collection of their personal information as described in our Privacy Policy. Students under 13 may not use Slack.</span>
+              </label>
+            )}
           </FormSection>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <PrimaryButton disabled={!step1Valid} onClick={() => setStep(2)}>Continue</PrimaryButton>

@@ -72,6 +72,27 @@ export async function POST(request: NextRequest) {
   const division = grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS'
   const program: string = body.program ?? 'vex_v5'
 
+  // Consent / COPPA enforcement (server-side). Parental consent is required for
+  // grade 6/7 or under-13 students; Slack consent is blocked entirely under 13.
+  const studentAge = (() => {
+    const dob = s.birthdate
+    if (!dob) return null
+    const d = new Date(dob)
+    if (Number.isNaN(d.getTime())) return null
+    const n = new Date()
+    let a = n.getFullYear() - d.getFullYear()
+    const m = n.getMonth() - d.getMonth()
+    if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--
+    return a
+  })()
+  const under13 = studentAge != null && studentAge < 13
+  const needsCoppa = grade === 6 || grade === 7 || under13
+  if (needsCoppa && body.coppaConsent !== true) {
+    return NextResponse.json({ error: 'Parental (COPPA) consent is required for students in grade 6 or 7, or under age 13.' }, { status: 400 })
+  }
+  const emailCertified = body.emailCertified === true
+  const slackConsent = under13 ? false : body.slackConsent === true
+
   // 5. Update the student record with the registration details.
   const { error: stuErr } = await db
     .from('student')
@@ -85,6 +106,8 @@ export async function POST(request: NextRequest) {
       school_raw: s.school_raw || null,
       tshirt_size: s.tshirt_size || null,
       fusion_education_email: s.fusion_education_email || null,
+      communication_email: s.communication_email || null,
+      under_13_confirmed: under13,
       status: 'active',
     })
     .eq('id', studentId)
@@ -145,6 +168,10 @@ export async function POST(request: NextRequest) {
           registration_fee_status: feeStatus,
           fundraising_target: primary ? fundraisingTarget : 0,
           waiver_status: 'complete',
+          parent_email_access_certified: emailCertified,
+          student_communication_consent: emailCertified,
+          student_slack_consent: slackConsent,
+          coppa_consent_checked: body.coppaConsent === true,
           submitted_at: new Date().toISOString(),
           submission_ip: ip,
         },
