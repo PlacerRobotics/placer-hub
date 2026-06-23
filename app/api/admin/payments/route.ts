@@ -28,7 +28,11 @@ export async function POST(request: NextRequest) {
   const db = createAdminClient()
   const ref = String(body.referenceCode ?? '').trim()
   const enrollment = ref ? await findEnrollmentByRef(db, ref) : null
-  const matched = !!enrollment
+  // Not an enrollment ref? Try an IQ team-fee ref (e.g. IQT-XXXX) → attach to the team.
+  const team = (!enrollment && ref)
+    ? (await db.from('team').select('id, status, program').eq('team_payment_reference_code', ref).maybeSingle()).data
+    : null
+  const matched = !!enrollment || !!team
   const now = new Date().toISOString()
   const checkNumber = source === 'check' ? String(body.checkNumber ?? '').trim() : ''
 
@@ -36,13 +40,15 @@ export async function POST(request: NextRequest) {
     .from('payment_transaction')
     .insert({
       family_id: enrollment?.family_id ?? body.familyId ?? null,
+      team_id: team?.id ?? null,
       season: SEASON,
       source,
       source_payment_id: checkNumber || null,
       amount,
-      payment_type: paymentType,
+      payment_type: team ? 'iq_team_fee' : paymentType,
       payment_reference_code: ref || null,
       received_at: paymentDate,
+      deposited_at: body.depositDate ? new Date(body.depositDate).toISOString() : null,
       matched_status: matched ? 'manually_matched' : 'unmatched',
       enrollment_id: enrollment?.id ?? null,
       matched_by: matched ? admin.id : null,
@@ -65,6 +71,10 @@ export async function POST(request: NextRequest) {
       .update({ registration_fee_status: 'paid', registration_fee_paid_at: now })
       .eq('id', enrollment.id)
   }
+  if (team) {
+    const newStatus = team.status === 'pending_payment' ? 'pending_admin_confirmation' : team.status
+    await db.from('team').update({ team_fee_status: 'paid', status: newStatus }).eq('id', team.id)
+  }
 
-  return NextResponse.json({ ok: true, matched, paymentId: pay.id })
+  return NextResponse.json({ ok: true, matched, matchedTeam: !!team, paymentId: pay.id })
 }

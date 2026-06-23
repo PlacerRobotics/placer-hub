@@ -10,9 +10,11 @@ export default async function AdminApplicationsPage() {
     .select(
       'id, program_interest, status, submitted_at, student:student_id ( first_name, last_name, school_raw, school:school_id ( name ) )'
     )
-    // All current-season applicants except terminal states (declined/withdrawn).
-    // Includes 'accepted'/'admin_waived' so imported applicants are visible.
-    .in('status', ['submitted', 'needs_follow_up', 'program_pending', 'accepted', 'admin_waived'])
+    // V5/Combat applicants only — IQ students are created via the IQ coach flow and
+    // are NOT a decision queue (they come in already 'accepted'). Includes decided
+    // states so the Accepted/Declined/All views work; the queue defaults to pending.
+    .neq('program_interest', 'vex_iq')
+    .in('status', ['submitted', 'needs_follow_up', 'program_pending', 'accepted', 'admin_waived', 'declined'])
     .order('submitted_at', { ascending: true })
 
   const items: QueueItem[] = (data ?? []).map((a: any) => ({
@@ -26,7 +28,7 @@ export default async function AdminApplicationsPage() {
 
   return (
     <AdminShell activePath="/admin/applications">
-      <PageHeader title="Applications" subtitle="New applicants awaiting a decision." />
+      <PageHeader title="Applications" subtitle="VEX V5 / Combat applicants. IQ students are managed under IQ Teams." />
       {error ? (
         <p style={{ color: 'var(--color-error)' }}>Couldn’t load applications: {error.message}</p>
       ) : (
