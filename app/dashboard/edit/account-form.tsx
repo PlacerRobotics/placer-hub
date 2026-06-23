@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormSection, FormField, TextInput, PrimaryButton } from '@/components/ui'
 
@@ -40,12 +39,6 @@ export default function AccountForm({ data }: { data: AccountData }) {
         <FormField label="Login email"><div style={{ fontSize: '0.9375rem' }}>{data.guardian1.email}</div></FormField>
       </FormSection>
       <Guardian2Section g2={data.guardian2} onSaved={() => router.refresh()} />
-
-      <FormSection title="Add a student" description="Registering another child? Start a new application.">
-        <Link href="/apply" style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>
-          Apply for another student →
-        </Link>
-      </FormSection>
     </>
   )
 }
