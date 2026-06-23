@@ -62,13 +62,8 @@ function normalizeRow(raw: Row): Row {
   o.approved = (yes(v('Approved!')) || yes(v('Ready to Approve'))) ? 'yes' : ''
   o.is_returning = v('Are you a returning volunteer')
   o.has_door_access = v('Do you currently have robotics center door access via card or app?')
-
-  const role = v('Are you a V5 Coach?')
-  o.primary_role = no(role) ? '' : role
-  const progs: string[] = []
-  if (v('IQ Team')) progs.push('VEX IQ')
-  if (v('V5 Team') || o.primary_role) progs.push('VEX V5')
-  o.programs = progs.join(', ')
+  // Programs / role / team-coaching are intentionally NOT imported here — those are
+  // owned by registration + Teams management. This import is identity + clearance only.
   return o
 }
 const cell: React.CSSProperties = { padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left', whiteSpace: 'nowrap' }
@@ -130,14 +125,12 @@ export default function ImportVolunteersPage() {
           <p style={{ fontSize: '0.9375rem', fontWeight: 600, marginBottom: '0.875rem' }}>{rows.length} volunteer row(s) ready</p>
           <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: '10px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--color-surface)' }}>
-              <thead><tr><th style={th}>Name</th><th style={th}>Email</th><th style={th}>Programs</th><th style={th}>Role</th><th style={th}>DOJ</th><th style={th}>APS Expiry</th><th style={th}>RC Quiz</th><th style={th}>YP Quiz</th><th style={th}>Approved</th></tr></thead>
+              <thead><tr><th style={th}>Name</th><th style={th}>Email</th><th style={th}>DOJ</th><th style={th}>APS Expiry</th><th style={th}>RC Quiz</th><th style={th}>YP Quiz</th><th style={th}>Approved</th></tr></thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i}>
                     <td style={cell}>{r.first_name} {r.last_name}</td>
                     <td style={cell}>{r.email}</td>
-                    <td style={cell}>{r.programs || '—'}</td>
-                    <td style={cell}>{r.primary_role || '—'}</td>
                     <td style={cell}>{yes(r.doj_cleared) ? '✓' : '—'}</td>
                     <td style={cell}>{r.aps_cert_expiry || '—'}</td>
                     <td style={cell}>{yes(r.rc_quiz_passed) ? `✓ ${r.rc_quiz_score || ''}` : '—'}</td>

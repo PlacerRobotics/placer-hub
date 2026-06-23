@@ -70,8 +70,6 @@ export async function POST(req: NextRequest) {
 
       // 4. Per-season clearance (notes capture the fields with no dedicated column).
       const noteBits = [
-        r.programs ? `Programs: ${r.programs}` : '',
-        r.primary_role ? `Role: ${r.primary_role}` : '',
         yes(r.is_returning) ? 'Returning volunteer' : '',
         r.aps_score ? `APS score: ${r.aps_score}` : '',
         (r.street_address || r.city) ? `Address: ${[r.street_address, r.city, r.state, r.zip].filter(Boolean).join(', ')}` : '',
