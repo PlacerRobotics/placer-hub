@@ -128,6 +128,32 @@ that line on its own first.
 - Admin: `/admin/registrations`, `/admin/families` (+ `[id]` detail, change-email /
   resend / view-as-family), `/admin/admins` (roles), `/admin/payments` (Zeffy sync).
 
+## Email capture — re-add to registration (requested)
+
+Most per-person email columns already exist in `20260620000001_initial_schema.sql`; the
+rebuilt public forms stopped collecting several. **Add the inputs to the `/register`
+wizard** (NOT `/apply`, which stays minimal) and to admin family/student edit. Reconcile
+against the schema first.
+
+**Two-email model per person** (no schema change — all columns already exist, so this
+stays PRD §16-compliant; do NOT add new email columns):
+- `login_email` (guardian) = registration = Slack identity. Capture `slack_email`
+  separately **only if it differs** — prefill it from `login_email`. PRD §19: warn on
+  first set that changing Slack email later needs admin action (Slack can't rename/merge).
+- `communication_email` (guardian AND student) = the **Google Workspace email**: used for
+  Google Drive / Workspace access rights **and** as the address communications are sent
+  to. **Relabel the field in the UI** accordingly, e.g. "Google Workspace email — used for
+  Drive access and all communications." This is the second email families asked for; it is
+  the existing `communication_email`, not a new field.
+- `student.fusion_education_email` — already captured on `/register`; keep it.
+- `student.slack_email` — not captured today; add it alongside the student fields.
+
+Forms to touch: `/register` wizard (primary), admin family/student edit, and import
+mapping in `/admin/import` + `/admin/import-applicants`. `/apply` stays minimal.
+PRD §20: registration must **warn (not block)** when a student email looks like a school
+domain ("School email addresses are often blocked — use a personal email…").
+Do **NOT** re-add `volunteerlocal_email` (PRD §18/26 removed it deliberately — no API).
+
 ## Known open items
 
 - `guardian.last_login_at` is still **not written** on login — the login-status dots
