@@ -25,7 +25,6 @@ const COLS: Col[] = [
   { key: 'statusLabel', label: 'Status', get: (r) => r.statusLabel, sortable: true },
   { key: 'fee', label: 'Fee', get: (r) => r.fee, sortable: true },
   { key: 'events', label: 'events.vex', get: (r) => (r.events ? 1 : 0), sortable: true },
-  { key: 'createdRaw', label: 'Created', get: (r) => r.createdRaw, sortable: true },
 ]
 
 export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: boolean }) {
@@ -87,7 +86,6 @@ export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: 
                 <td style={cell}><StatusBadge label={r.statusLabel} variant={r.statusVariant} /></td>
                 <td style={cell}><StatusBadge label={r.fee} variant={r.fee === 'paid' ? 'success' : 'warning'} /></td>
                 <td style={cell}>{r.events ? '✓' : '—'}</td>
-                <td style={cell}>{r.created}</td>
                 <td style={cell}><Link href={`/admin/iq-teams/${r.id}`} style={linkStyle}>Manage →</Link></td>
               </tr>
             ))}
