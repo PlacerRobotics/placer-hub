@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentVolunteer, ensureClearance, VOLUNTEER_SEASON } from '@/lib/volunteer'
+import { gradeQuiz } from '@/lib/quiz'
 
 const TYPE_MAP: Record<string, string> = { rc: 'lab_use', yp: 'youth_protection' }
 
@@ -25,18 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ typ
   const qs = questions ?? []
   if (!qs.length) return NextResponse.json({ error: 'Quiz has no questions.' }, { status: 400 })
 
-  let correct = 0
-  const wrong: { id: string; correctIndex: number }[] = []
-  for (const q of qs) {
-    const ca = Array.isArray(q.correct_answers) ? q.correct_answers : []
-    const correctIndex = Number(ca[0])
-    if (answers[q.id] === correctIndex) correct++
-    else wrong.push({ id: q.id, correctIndex })
-  }
-  const total = qs.length
-  const fraction = correct / total
-  const percent = Math.round(fraction * 100)
-  const passed = fraction >= Number(quiz.pass_threshold)
+  const { correct, total, percent, passed, wrong, fraction } = gradeQuiz(qs as any, answers, Number(quiz.pass_threshold))
 
   // Record the attempt (season-scoped).
   await db.from('quiz_attempt').insert({

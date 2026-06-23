@@ -3,9 +3,7 @@ import type { NextRequest } from 'next/server'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { findEnrollmentByRef, SEASON } from '@/lib/payments'
-
-const VALID_TYPES = ['registration_fee', 'fundraising', 'iq_team_fee', 'sponsorship']
-const VALID_SOURCES = ['check', 'cash', 'benevity', 'corporate_platform', 'other']
+import { MANUAL_PAYMENT_TYPES as VALID_TYPES, MANUAL_PAYMENT_SOURCES as VALID_SOURCES } from '@/lib/payment-enums'
 
 export async function POST(request: NextRequest) {
   const admin = await getAdminProfile()

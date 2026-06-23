@@ -10,6 +10,7 @@ import {
   SuccessAlert,
 } from '@/components/ui'
 import { FinancialAidCallout } from '@/components/FinancialAidCallout'
+import { supporterLevel } from '@/lib/supporter'
 
 const ADMIN_EMAIL = 'kevin.miller@placerrobotics.org'
 const SEASON = '2026-27'
@@ -41,13 +42,6 @@ const IQ_STATUS: Record<string, [string, Variant]> = {
   pending_admin_confirmation: ['Under Review', 'info'],
   active: ['Active', 'success'],
   suspended: ['Suspended', 'error'],
-}
-
-function supporterLevel(amount: number): string | null {
-  if (amount >= 1040) return 'Champion'
-  if (amount >= 790) return 'Standard'
-  if (amount >= 590) return 'Minimum'
-  return null
 }
 
 export default async function DashboardPage({

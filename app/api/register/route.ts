@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, registrationConfirmationHtml } from '@/lib/email'
+import { ageFromDob, isUnder13, needsCoppa as computeNeedsCoppa } from '@/lib/compliance'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = {
@@ -74,19 +75,9 @@ export async function POST(request: NextRequest) {
 
   // Consent / COPPA enforcement (server-side). Parental consent is required for
   // grade 6/7 or under-13 students; Slack consent is blocked entirely under 13.
-  const studentAge = (() => {
-    const dob = s.birthdate
-    if (!dob) return null
-    const d = new Date(dob)
-    if (Number.isNaN(d.getTime())) return null
-    const n = new Date()
-    let a = n.getFullYear() - d.getFullYear()
-    const m = n.getMonth() - d.getMonth()
-    if (m < 0 || (m === 0 && n.getDate() < d.getDate())) a--
-    return a
-  })()
-  const under13 = studentAge != null && studentAge < 13
-  const needsCoppa = grade === 6 || grade === 7 || under13
+  const studentAge = ageFromDob(s.birthdate ?? '')
+  const under13 = isUnder13(studentAge)
+  const needsCoppa = computeNeedsCoppa(grade, studentAge)
   if (needsCoppa && body.coppaConsent !== true) {
     return NextResponse.json({ error: 'Parental (COPPA) consent is required for students in grade 6 or 7, or under age 13.' }, { status: 400 })
   }

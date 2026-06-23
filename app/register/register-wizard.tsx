@@ -15,27 +15,9 @@ import {
   WarningAlert,
   ErrorAlert,
 } from '@/components/ui'
+import { ageFromDob, isSchoolDomain } from '@/lib/compliance'
 
 const OTHER_SCHOOL = '__other__'
-
-function ageFromDob(dob: string): number | null {
-  if (!dob) return null
-  const d = new Date(dob)
-  if (Number.isNaN(d.getTime())) return null
-  const now = new Date()
-  let a = now.getFullYear() - d.getFullYear()
-  const m = now.getMonth() - d.getMonth()
-  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a--
-  return a
-}
-
-function isSchoolDomain(email: string): boolean {
-  const e = email.trim().toLowerCase()
-  const at = e.indexOf('@')
-  if (at < 0) return false
-  const domain = e.slice(at + 1)
-  return domain.includes('k12.ca.us') || domain.includes('edu') || e.includes('@school') || e.includes('@student') || /k12|unified|usd|cusd|nusd|pusd/.test(domain)
-}
 
 const consentLabel: React.CSSProperties = { display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.875rem', cursor: 'pointer', marginTop: '0.5rem' }
 const STEPS = ['Student', 'Emergency Contact', 'Waivers', 'Review']
