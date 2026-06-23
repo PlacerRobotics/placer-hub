@@ -2,8 +2,16 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendEmail, registrationConfirmationHtml } from '@/lib/email'
 
 const SEASON = '2026-27'
+const PROGRAM_LABELS: Record<string, string> = {
+  vex_v5: 'VEX V5',
+  combat: 'Combat',
+  vex_iq: 'VEX IQ',
+  not_sure: 'Not sure',
+  both: 'VEX V5 & Combat',
+}
 
 /**
  * Registration submission.
@@ -215,10 +223,45 @@ export async function POST(request: NextRequest) {
     .eq('season', SEASON)
   if (fsErr) return NextResponse.json({ error: `Could not finalize registration: ${fsErr.message}` }, { status: 500 })
 
-  // 11. Confirmation email — stubbed for now.
-  console.log(
-    `[register] Confirmation email (stub) → ${user.email}: registration received for student ${studentId}, reference ${paymentRef}`
-  )
+  // 11. Confirmation email to both guardians + the student. Best-effort — never
+  // fail the registration if email isn't configured or the send errors.
+  try {
+    const { data: gs } = await db.from('guardian').select('login_email, communication_email').eq('family_id', familyId)
+    const { data: stu } = await db
+      .from('student')
+      .select('first_name, last_name, communication_email')
+      .eq('id', studentId)
+      .maybeSingle()
+    const recipients = [
+      ...((gs ?? []) as any[]).flatMap((g) => [g.login_email, g.communication_email]),
+      stu?.communication_email,
+    ].filter(Boolean) as string[]
+    const studentName = stu ? `${stu.first_name} ${stu.last_name}`.trim() : 'your student'
+    const subject = `Registration received — ${studentName} (Placer Robotics ${SEASON})`
+    const html = registrationConfirmationHtml({
+      studentName,
+      programLabel: PROGRAM_LABELS[program] ?? program,
+      paymentRef,
+      zeffyUrl: config?.zeffy_student_url ?? null,
+      season: SEASON,
+    })
+    const sent = await sendEmail({ to: recipients, subject, html })
+    const status = sent.ok ? 'sent' : sent.error === 'no_api_key' ? 'skipped' : 'failed'
+    for (const r of [...new Set(recipients.map((e) => e.toLowerCase()))]) {
+      await db.from('notification_log').insert({
+        family_id: familyId,
+        recipient_email: r,
+        notification_type: 'registration_confirmation',
+        subject,
+        provider: 'resend',
+        status,
+        error_message: sent.ok ? null : sent.error ?? null,
+        sent_at: sent.ok ? new Date().toISOString() : null,
+      })
+    }
+  } catch (e) {
+    console.error('[register] confirmation email failed:', e)
+  }
 
   return NextResponse.json({ ok: true, paymentReferenceCode: paymentRef })
 }

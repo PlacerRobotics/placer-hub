@@ -24,17 +24,15 @@ const STEPS = ['Student', 'Emergency Contact', 'Waivers', 'Review']
 const TSHIRT_OPTIONS: [string, string][] = [
   ['ym', 'Youth Medium'],
   ['yl', 'Youth Large'],
+  ['xs', 'Adult XS'],
+  ['s', 'Adult Small'],
+  ['m', 'Adult Medium'],
   ['l', 'Adult Large'],
   ['xl', 'Adult XL'],
   ['xxl', 'Adult 2XL'],
   ['xxxl', 'Adult 3XL'],
 ]
-const TSHIRT_LABELS: Record<string, string> = {
-  ...Object.fromEntries(TSHIRT_OPTIONS),
-  xs: 'XS',
-  s: 'S',
-  m: 'M',
-}
+const TSHIRT_LABELS: Record<string, string> = Object.fromEntries(TSHIRT_OPTIONS)
 
 type Program = 'vex_v5' | 'vex_iq' | 'combat' | 'not_sure'
 
