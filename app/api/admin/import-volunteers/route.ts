@@ -80,7 +80,6 @@ export async function POST(req: NextRequest) {
       const clearancePayload: Record<string, unknown> = {
         volunteer_id: vp.id, season, status,
         application_submitted_at: new Date().toISOString(),
-        application_source: 'import',
         rc_quiz_passed: rcPassed, rc_quiz_score: intOrNull(r.rc_quiz_score), rc_quiz_passed_date: dateOrNull(r.rc_quiz_passed_date),
         yp_quiz_passed: ypPassed, yp_quiz_score: intOrNull(r.yp_quiz_score), yp_quiz_passed_date: dateOrNull(r.yp_quiz_passed_date),
         key_access_requested: hasDoor ? doorType : 'none',
