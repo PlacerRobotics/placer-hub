@@ -22,9 +22,13 @@ export async function POST(req: NextRequest) {
   if (a.revoked_at) return NextResponse.json({ ok: true, alreadyRevoked: true })
 
   if (a.role === 'super_admin') {
-    if (a.admin_profile_id === admin.id) return NextResponse.json({ error: "You can't revoke your own super-admin role." }, { status: 400 })
-    const { data: supers } = await db.from('admin_role_assignment').select('id').eq('role', 'super_admin').is('revoked_at', null)
-    if ((supers ?? []).length <= 1) return NextResponse.json({ error: "Can't revoke the last super admin." }, { status: 400 })
+    const { data: supers } = await db.from('admin_role_assignment').select('admin_profile_id').eq('role', 'super_admin').is('revoked_at', null)
+    const all = supers ?? []
+    if (all.length <= 1) return NextResponse.json({ error: "Can't revoke the last super admin." }, { status: 400 })
+    // Block self-lockout only if this is your LAST super-admin row (duplicates are fine to trim).
+    if (a.admin_profile_id === admin.id && all.filter((s: any) => s.admin_profile_id === admin.id).length <= 1) {
+      return NextResponse.json({ error: "Can't revoke your own last super-admin role." }, { status: 400 })
+    }
   }
 
   const { error } = await db.from('admin_role_assignment').update({ revoked_at: new Date().toISOString() }).eq('id', assignmentId)
