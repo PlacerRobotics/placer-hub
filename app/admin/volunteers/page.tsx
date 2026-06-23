@@ -1,38 +1,64 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { AdminShell, PageHeader } from '@/components/ui'
-import VolunteersQueue, { type VolunteerItem } from './volunteers-queue'
+import VolunteersDashboard, { type VolRow } from './volunteers-dashboard'
 import ApsSyncButton from './aps-sync-button'
+import { VOLUNTEER_SEASON as SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
 
 export default async function AdminVolunteersPage() {
-  const supabase = await createClient()
+  const db = createAdminClient()
+  const today = new Date().toISOString().slice(0, 10)
 
-  const { data, error } = await supabase
+  const { data: profiles, error } = await db
     .from('volunteer_profile')
-    .select(
-      'id, status, created_at, guardian:guardian_id ( first_name, last_name, login_email ), steps:volunteer_step ( status )'
-    )
+    .select('id, status, guardian:guardian_id ( first_name, last_name, login_email )')
     .order('created_at', { ascending: false })
+  const ids = (profiles ?? []).map((p: any) => p.id)
 
-  const items: VolunteerItem[] = (data ?? []).map((v: any) => {
-    const steps = v.steps ?? []
-    const done = steps.filter((s: any) => s.status === 'complete').length
+  const { data: clears } = ids.length
+    ? await db.from('volunteer_clearance').select('volunteer_id, status, rc_quiz_passed, yp_quiz_passed, waiver_signed_date').eq('season', SEASON).in('volunteer_id', ids)
+    : { data: [] as any[] }
+  const { data: certs } = ids.length
+    ? await db.from('youth_protection_cert').select('volunteer_id, expiration_date').in('volunteer_id', ids).order('expiration_date', { ascending: false })
+    : { data: [] as any[] }
+  const { data: steps } = ids.length
+    ? await db.from('volunteer_step').select('volunteer_id, status').eq('step', 'background_check').in('volunteer_id', ids)
+    : { data: [] as any[] }
+
+  const clearByVol: Record<string, any> = {}
+  for (const c of clears ?? []) clearByVol[c.volunteer_id] = c
+  const certByVol: Record<string, string> = {}
+  for (const c of certs ?? []) if (!certByVol[c.volunteer_id]) certByVol[c.volunteer_id] = c.expiration_date // latest (desc)
+  const dojByVol: Record<string, boolean> = {}
+  for (const s of steps ?? []) if (s.status === 'complete') dojByVol[s.volunteer_id] = true
+
+  const rows: VolRow[] = (profiles ?? []).map((p: any) => {
+    const g = Array.isArray(p.guardian) ? p.guardian[0] : p.guardian
+    const c = clearByVol[p.id]
+    const exp = certByVol[p.id] ?? null
+    let aps: VolRow['aps'] = 'none'
+    if (exp) aps = exp >= APS_VALID_THROUGH ? 'valid' : exp >= today ? 'expiring' : 'expired'
     return {
-      id: v.id,
-      name: v.guardian ? `${v.guardian.first_name} ${v.guardian.last_name}` : 'Unknown volunteer',
-      email: v.guardian?.login_email ?? '—',
-      status: v.status,
-      progress: `${done}/${steps.length} steps`,
+      id: p.id,
+      name: g ? `${g.first_name} ${g.last_name}`.trim() : 'Unknown volunteer',
+      email: g?.login_email ?? '—',
+      status: c?.status ?? p.status ?? 'pending',
+      doj: !!dojByVol[p.id],
+      aps,
+      apsExpiry: exp,
+      rc: !!c?.rc_quiz_passed,
+      yp: !!c?.yp_quiz_passed,
+      waiver: !!c?.waiver_signed_date,
     }
   })
 
   return (
     <AdminShell activePath="/admin/volunteers">
-      <PageHeader title="Volunteers" subtitle="Volunteer clearance profiles." />
-      <ApsSyncButton />
+      <PageHeader title="Volunteers" subtitle={`Registered Volunteer clearance — ${rows.length} people · ${SEASON} season`} />
+      <div style={{ marginBottom: '1.25rem' }}><ApsSyncButton /></div>
       {error ? (
         <p style={{ color: 'var(--color-error)' }}>Couldn’t load volunteers: {error.message}</p>
       ) : (
-        <VolunteersQueue items={items} />
+        <VolunteersDashboard rows={rows} />
       )}
     </AdminShell>
   )
