@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import {
   FamilyShell,
   PageHeader,
@@ -76,6 +77,7 @@ export default async function DashboardPage({
   let iqTeams: any[] = []
   const iqMemberCount: Record<string, number> = {}
   let zeffyIqUrl: string | null = null
+  let iqStudents: { studentId: string; name: string; dropRequested: boolean }[] = []
 
   if (guardian) {
     const familyId = guardian.family_id
@@ -123,7 +125,7 @@ export default async function DashboardPage({
         .in('student_id', studentIds)
       const { data: apps } = await supabase
         .from('student_application')
-        .select('student_id, program_interest')
+        .select('student_id, program_interest, triage_notes')
         .eq('season', SEASON)
         .in('student_id', studentIds)
       const { data: sigs } = await supabase
@@ -159,6 +161,11 @@ export default async function DashboardPage({
       const enrByStudent: Record<string, any[]> = {}
       for (const e of enrollments ?? []) (enrByStudent[e.student_id] ??= []).push(e)
       const progByStudent: Record<string, string> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.program_interest]))
+      const tnByStudent: Record<string, string> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.triage_notes ?? '']))
+      iqStudents = students.map((s: any) => {
+        const tn = String(tnByStudent[s.id] ?? '')
+        return /iq_team:[0-9a-f-]{36}/i.test(tn) ? { studentId: s.id, name: `${s.first_name} ${s.last_name}`.trim(), dropRequested: tn.includes('drop_requested') } : null
+      }).filter(Boolean) as any
       const signed = new Set((sigs ?? []).map((s: any) => s.student_id))
       const teamByStudent: Record<string, any> = {}
       for (const t of tms ?? []) if (!teamByStudent[t.student_id]) teamByStudent[t.student_id] = teamById[t.team_id]
@@ -237,6 +244,24 @@ export default async function DashboardPage({
     }
     const { data: cfg } = await supabase.from('season_config').select('zeffy_iq_team_url').eq('season', SEASON).maybeSingle()
     zeffyIqUrl = cfg?.zeffy_iq_team_url ?? null
+  }
+
+  async function requestDrop(formData: FormData) {
+    'use server'
+    const sb = await createClient()
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user?.email) return
+    const adb = createAdminClient()
+    const { data: g } = await adb.from('guardian').select('family_id').ilike('login_email', user.email).maybeSingle()
+    if (!g) return
+    const studentId = String(formData.get('studentId') ?? '')
+    const { data: stu } = await adb.from('student').select('family_id').eq('id', studentId).maybeSingle()
+    if (!stu || stu.family_id !== g.family_id) return // ownership check
+    const { data: app } = await adb.from('student_application').select('id, triage_notes').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
+    if (app && !String(app.triage_notes ?? '').includes('drop_requested')) {
+      await adb.from('student_application').update({ triage_notes: `${app.triage_notes ?? ''} drop_requested`.trim() }).eq('id', app.id)
+    }
+    redirect('/dashboard')
   }
 
   const [aidLabel, aidVariant] = AID_DISPLAY[aidStatus] ?? AID_DISPLAY.not_requested
@@ -370,6 +395,22 @@ export default async function DashboardPage({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {iqStudents.length > 0 && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>Your IQ team {iqStudents.length === 1 ? 'student' : 'students'}</h2>
+          <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
+            {iqStudents.map((s, i) => (
+              <div key={s.studentId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: i < iqStudents.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{s.name}</span>
+                {s.dropRequested
+                  ? <span style={{ fontSize: '0.8125rem', color: '#C9971B', fontWeight: 600 }}>Drop requested — pending coordinator confirmation</span>
+                  : <form action={requestDrop}><input type="hidden" name="studentId" value={s.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer' }}>Request to drop</button></form>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

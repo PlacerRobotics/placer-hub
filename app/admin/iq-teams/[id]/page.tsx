@@ -34,7 +34,7 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
   const { data: coachTm } = await db.from('team_member').select('guardian:guardian_id ( first_name, last_name, login_email, phone )').eq('team_id', id).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()
   const coach: any = coachTm ? (Array.isArray((coachTm as any).guardian) ? (coachTm as any).guardian[0] : (coachTm as any).guardian) : null
 
-  const { data: apps } = await db.from('student_application').select('family_id, student_id, student:student_id ( first_name, last_name, grade, school_raw )').eq('season', SEASON).ilike('triage_notes', `%iq_team:${id}%`)
+  const { data: apps } = await db.from('student_application').select('family_id, student_id, triage_notes, student:student_id ( first_name, last_name, grade, school_raw )').eq('season', SEASON).ilike('triage_notes', `%iq_team:${id}%`)
   const famIds = [...new Set((apps ?? []).map((a: any) => a.family_id))]
   const emailByFam: Record<string, string> = {}
   if (famIds.length) {
@@ -49,7 +49,7 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
   }
   const roster = (apps ?? []).map((a: any) => {
     const s = Array.isArray(a.student) ? a.student[0] : a.student
-    return { studentId: a.student_id, name: s ? `${s.first_name} ${s.last_name}`.trim() : '—', grade: s?.grade, school: s?.school_raw, parentEmail: emailByFam[a.family_id] ?? '', signed: signedSet.has(a.student_id) }
+    return { studentId: a.student_id, name: s ? `${s.first_name} ${s.last_name}`.trim() : '—', grade: s?.grade, school: s?.school_raw, parentEmail: emailByFam[a.family_id] ?? '', signed: signedSet.has(a.student_id), dropRequested: String(a.triage_notes ?? '').includes('drop_requested') }
   })
   const signedCount = roster.filter((r) => r.signed).length
 
@@ -162,7 +162,7 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
         <h3 style={h3}>Roster ({roster.length}) · {signedCount}/{roster.length} waivers signed</h3>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr><th style={cell}>Student</th><th style={cell}>Grade</th><th style={cell}>School</th><th style={cell}>Parent email</th><th style={cell}>Waivers</th><th style={cell}></th></tr></thead>
-          <tbody>{roster.map((r, i) => <tr key={i}><td style={cell}>{r.name}</td><td style={cell}>{r.grade || '—'}</td><td style={cell}>{r.school || '—'}</td><td style={cell}>{r.parentEmail || '—'}</td><td style={{ ...cell, color: r.signed ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>{r.signed ? '✓ signed' : 'not yet'}</td><td style={cell}>{canAct && <form action={dropStudent}><input type="hidden" name="studentId" value={r.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>Drop</button></form>}</td></tr>)}</tbody>
+          <tbody>{roster.map((r, i) => <tr key={i}><td style={cell}>{r.name}{r.dropRequested && <span style={{ color: '#C9971B', fontWeight: 700, fontSize: '0.6875rem' }}> ⚠ DROP REQUESTED</span>}</td><td style={cell}>{r.grade || '—'}</td><td style={cell}>{r.school || '—'}</td><td style={cell}>{r.parentEmail || '—'}</td><td style={{ ...cell, color: r.signed ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>{r.signed ? '✓ signed' : 'not yet'}</td><td style={cell}>{canAct && <form action={dropStudent}><input type="hidden" name="studentId" value={r.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>{r.dropRequested ? 'Confirm drop' : 'Drop'}</button></form>}</td></tr>)}</tbody>
         </table>
       </div>
 
