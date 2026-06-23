@@ -11,9 +11,10 @@ const SEASON = '2026-27'
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
 type StudentCard = { name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string }
-type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; isIq: boolean; studentId: string; dropRequested: boolean }
+type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; division: string; isIq: boolean; studentId: string; dropRequested: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
+const DIVISION_LABELS: Record<string, string> = { ES: 'Elementary', MS: 'Middle school', HS: 'High school' }
 const TSHIRT_LABELS: Record<string, string> = { ym: 'Youth Medium', yl: 'Youth Large', xs: 'Adult XS', s: 'Adult Small', m: 'Adult Medium', l: 'Adult Large', xl: 'Adult XL', xxl: 'Adult 2XL', xxxl: 'Adult 3XL' }
 const AID_DISPLAY: Record<string, [string, Variant]> = { not_requested: ['Not requested', 'neutral'], pending: ['Requested', 'info'], approved: ['Approved', 'success'], denied: ['Denied', 'error'], withdrawn: ['Withdrawn', 'neutral'] }
 const IQ_STATUS: Record<string, [string, Variant]> = { pending_payment: ['Awaiting payment', 'warning'], pending_admin_confirmation: ['Under review', 'info'], active: ['Active', 'success'], suspended: ['Suspended', 'error'], pending: ['Pending', 'warning'] }
@@ -73,7 +74,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       const { data: pays } = await supabase.from('payment_transaction').select('enrollment_id, amount, received_at, raw_payload').eq('family_id', familyId).eq('season', SEASON).eq('payment_type', 'registration_fee')
 
       const teamIds = [...new Set((tms ?? []).map((t: any) => t.team_id).filter(Boolean))]
-      const { data: teams } = teamIds.length ? await supabase.from('team').select('id, team_number, team_name, program').in('id', teamIds) : { data: [] as any[] }
+      const { data: teams } = teamIds.length ? await supabase.from('team').select('id, team_number, team_name, program, division').in('id', teamIds) : { data: [] as any[] }
       const teamById: Record<string, any> = Object.fromEntries((teams ?? []).map((t: any) => [t.id, t]))
 
       const enrByStudent: Record<string, any[]> = {}
@@ -94,15 +95,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       }).filter(Boolean) as { studentId: string; name: string; dropRequested: boolean; teamId: string }[]
       const iqTeamById: Record<string, any> = {}
       if (iqKids.length) {
-        const { data: iqT } = await supabase.from('team').select('id, team_name, team_number').in('id', [...new Set(iqKids.map((k) => k.teamId))])
+        const { data: iqT } = await supabase.from('team').select('id, team_name, team_number, division').in('id', [...new Set(iqKids.map((k) => k.teamId))])
         for (const t of iqT ?? []) iqTeamById[t.id] = t
       }
       const iqLabelByStudent: Record<string, string> = {}
       const iqTeamIdByStudent: Record<string, string> = {}
+      const iqDivisionByStudent: Record<string, string> = {}
       for (const k of iqKids) {
         const t = iqTeamById[k.teamId]
         iqLabelByStudent[k.studentId] = t ? (t.team_number || t.team_name || 'IQ team') : 'IQ team'
         iqTeamIdByStudent[k.studentId] = k.teamId
+        iqDivisionByStudent[k.studentId] = t?.division ?? 'ES'
       }
 
       for (const s of students) {
@@ -152,8 +155,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           detail: `Emergency contact ${ec ? 'added' : 'missing'} · T-shirt ${s.tshirt_size ? (TSHIRT_LABELS[s.tshirt_size] ?? s.tshirt_size) : 'not set'}`,
         })
 
-        if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
-        else if (hasTeam) kidTeams.push({ name, teamLabel: team.team_number || team.team_name || 'Assigned', teamId: team.id, program: PROGRAM_LABELS[team.program] ?? team.program, isIq: false, studentId: s.id, dropRequested: false })
+        if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
+        else if (hasTeam) kidTeams.push({ name, teamLabel: team.team_number || team.team_name || 'Assigned', teamId: team.id, program: PROGRAM_LABELS[team.program] ?? team.program, division: team.division, isIq: false, studentId: s.id, dropRequested: false })
       }
 
     }
@@ -163,14 +166,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const { data: activeW } = await supabase.from('waiver_template').select('id').eq('active', true).limit(1)
     hasActiveWaivers = (activeW ?? []).length > 0
 
-    // Teams this guardian coaches (any program).
-    const { data: coachTms } = await supabase.from('team_member').select('team:team_id ( id, team_name, team_number, program, status )').eq('guardian_id', guardian.id).eq('season', SEASON).eq('team_role', 'coach').is('revoked_at', null)
+    // Teams this guardian coaches (any program). Coach team_member rows have
+    // student_id NULL, which the RLS select policy hides from non-admins — so read
+    // these with the service-role client, scoped to this guardian.
+    const adb = createAdminClient()
+    const { data: coachTms } = await adb.from('team_member').select('team:team_id ( id, team_name, team_number, program, division, status )').eq('guardian_id', guardian.id).eq('season', SEASON).eq('team_role', 'coach').is('revoked_at', null)
     coachTeams = (coachTms ?? []).map((c: any) => (Array.isArray(c.team) ? c.team[0] : c.team)).filter(Boolean)
     if (coachTeams.length) {
       const ids = coachTeams.map((t: any) => t.id)
-      const { data: rosters } = await supabase.from('team_member').select('team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('team_id', ids)
+      const { data: rosters } = await adb.from('team_member').select('team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('team_id', ids)
       for (const r of rosters ?? []) teamCount[r.team_id] = (teamCount[r.team_id] ?? 0) + 1
-      const { data: iqApps } = await supabase.from('student_application').select('triage_notes').eq('season', SEASON).ilike('triage_notes', '%iq_team:%')
+      const { data: iqApps } = await adb.from('student_application').select('triage_notes').eq('season', SEASON).ilike('triage_notes', '%iq_team:%')
       for (const a of iqApps ?? []) { const m = String(a.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i); if (m && ids.includes(m[1])) teamCount[m[1]] = (teamCount[m[1]] ?? 0) + 1 }
     }
     const { data: cfg } = await supabase.from('season_config').select('zeffy_iq_team_url').eq('season', SEASON).maybeSingle()
@@ -212,16 +218,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   // Team-centric "My teams": one row per team, grouping my kids onto their team and
   // merging with any team I coach (a team can be both).
-  type TeamRow = { id: string; label: string; programLabel: string; isIq: boolean; coached: boolean; status?: string; count: number; kids: { studentId: string; name: string; dropRequested: boolean }[] }
+  type TeamRow = { id: string; label: string; programLabel: string; divisionLabel: string; isIq: boolean; coached: boolean; status?: string; count: number; kids: { studentId: string; name: string; dropRequested: boolean }[] }
   const teamRowMap: Record<string, TeamRow> = {}
   for (const t of coachTeams) {
-    teamRowMap[t.id] = { id: t.id, label: t.team_number || t.team_name || 'Team', programLabel: PROGRAM_LABELS[t.program] ?? t.program, isIq: t.program === 'vex_iq', coached: true, status: t.status, count: teamCount[t.id] ?? 0, kids: [] }
+    teamRowMap[t.id] = { id: t.id, label: t.team_number || t.team_name || 'Team', programLabel: PROGRAM_LABELS[t.program] ?? t.program, divisionLabel: DIVISION_LABELS[t.division] ?? t.division, isIq: t.program === 'vex_iq', coached: true, status: t.status, count: teamCount[t.id] ?? 0, kids: [] }
   }
   for (const k of kidTeams) {
-    const row = (teamRowMap[k.teamId] ??= { id: k.teamId, label: k.teamLabel, programLabel: k.program, isIq: k.isIq, coached: false, count: 0, kids: [] })
+    const row = (teamRowMap[k.teamId] ??= { id: k.teamId, label: k.teamLabel, programLabel: k.program, divisionLabel: DIVISION_LABELS[k.division] ?? k.division, isIq: k.isIq, coached: false, count: 0, kids: [] })
     row.kids.push({ studentId: k.studentId, name: k.name, dropRequested: k.dropRequested })
   }
-  const myTeams = Object.values(teamRowMap)
+  const coachedTeams = Object.values(teamRowMap).filter((t) => t.coached)
+  const kidOnlyTeams = Object.values(teamRowMap).filter((t) => !t.coached)
 
   const nextSteps: { title: string; desc: string; cta: string; href: string }[] = []
   if (firstUnregisteredName) nextSteps.push({ title: `Complete registration for ${firstUnregisteredName}`, desc: 'Finish the form and submit payment to secure the 2026–27 spot.', cta: 'Continue registration', href: '/register' })
@@ -230,6 +237,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const panel: React.CSSProperties = { backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }
   const rowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem' }
   const smallLink: React.CSSProperties = { fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }
+  const subhead: React.CSSProperties = { fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', fontWeight: 700, margin: '0 0 0.5rem' }
   const sectionTitle: React.CSSProperties = { margin: '0 0 0.75rem' }
   const section: React.CSSProperties = { marginTop: '2rem' }
 
@@ -308,47 +316,61 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {guardian && (
         <section style={section}>
           <h2 className="text-section-title" style={sectionTitle}>My teams</h2>
-          {myTeams.length > 0 ? (
-            <div style={panel}>
-              {myTeams.map((tm, i) => {
-                const [lbl, variant] = IQ_STATUS[tm.status ?? ''] ?? [String(tm.status ?? '').replace(/_/g, ' '), 'neutral' as Variant]
-                return (
-                  <div key={tm.id} style={{ padding: '0.875rem 1.25rem', borderBottom: i < myTeams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
-                      <div>
-                        {tm.coached && tm.isIq
-                          ? <Link href={`/iq/team/${tm.id}`} style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>{tm.label}</Link>
-                          : <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{tm.label}</span>}
-                        <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-                          {tm.programLabel}{tm.coached ? ` · Coach · ${tm.count} ${tm.count === 1 ? 'student' : 'students'}` : (tm.kids.length ? ` · ${tm.kids.length} of your ${tm.kids.length === 1 ? 'student' : 'students'}` : '')}
+          {coachedTeams.length === 0 && kidOnlyTeams.length === 0 ? (
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: '0 0 0.75rem' }}>No team assignments yet.</p>
+          ) : (
+            <>
+              {coachedTeams.length > 0 && (
+                <div style={{ marginBottom: kidOnlyTeams.length > 0 ? '1.25rem' : 0 }}>
+                  <div style={subhead}>Teams I coach</div>
+                  <div style={panel}>
+                    {coachedTeams.map((tm, i) => {
+                      const [lbl, variant] = IQ_STATUS[tm.status ?? ''] ?? [String(tm.status ?? '').replace(/_/g, ' '), 'neutral' as Variant]
+                      return (
+                        <div key={tm.id} style={{ ...rowFlex, borderBottom: i < coachedTeams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                          <div>
+                            {tm.isIq
+                              ? <Link href={`/iq/team/${tm.id}`} style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>{tm.label}</Link>
+                              : <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{tm.label}</span>}
+                            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{tm.programLabel} · {tm.divisionLabel} · {tm.count} {tm.count === 1 ? 'student' : 'students'}</div>
+                          </div>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            {tm.status ? <StatusBadge label={lbl} variant={variant} /> : null}
+                            {tm.isIq && tm.status === 'pending_payment' && zeffyIqUrl && <Link href={zeffyIqUrl} target="_blank" style={smallLink}>Pay $1,200 →</Link>}
+                            {tm.isIq && <Link href={`/iq/team/${tm.id}`} style={smallLink}>Manage →</Link>}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {kidOnlyTeams.length > 0 && (
+                <div>
+                  <div style={subhead}>My children’s teams</div>
+                  <div style={panel}>
+                    {kidOnlyTeams.map((tm, i) => (
+                      <div key={tm.id} style={{ padding: '0.875rem 1.25rem', borderBottom: i < kidOnlyTeams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                        <div>
+                          <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{tm.label}</span>
+                          <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{tm.programLabel} · {tm.divisionLabel} · {tm.kids.length} of your {tm.kids.length === 1 ? 'student' : 'students'}</div>
+                        </div>
+                        <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)' }}>
+                          {tm.kids.map((k) => (
+                            <div key={k.studentId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.2rem 0', fontSize: '0.8125rem' }}>
+                              <span style={{ color: 'var(--color-text-muted)' }}>{k.name}</span>
+                              {tm.isIq && (k.dropRequested
+                                ? <span style={{ color: '#C9971B', fontWeight: 600 }}>Drop requested</span>
+                                : <form action={requestDrop}><input type="hidden" name="studentId" value={k.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Request to drop</button></form>)}
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      {tm.coached && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          {tm.status ? <StatusBadge label={lbl} variant={variant} /> : null}
-                          {tm.isIq && tm.status === 'pending_payment' && zeffyIqUrl && <Link href={zeffyIqUrl} target="_blank" style={smallLink}>Pay $1,200 →</Link>}
-                          {tm.isIq && <Link href={`/iq/team/${tm.id}`} style={smallLink}>Manage →</Link>}
-                        </span>
-                      )}
-                    </div>
-                    {tm.kids.length > 0 && (
-                      <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)' }}>
-                        {tm.kids.map((k) => (
-                          <div key={k.studentId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.2rem 0', fontSize: '0.8125rem' }}>
-                            <span style={{ color: 'var(--color-text-muted)' }}>{k.name}</span>
-                            {tm.isIq && !tm.coached && (k.dropRequested
-                              ? <span style={{ color: '#C9971B', fontWeight: 600 }}>Drop requested</span>
-                              : <form action={requestDrop}><input type="hidden" name="studentId" value={k.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Request to drop</button></form>)}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    ))}
                   </div>
-                )
-              })}
-            </div>
-          ) : (
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: '0 0 0.75rem' }}>No team assignments yet.</p>
+                </div>
+              )}
+            </>
           )}
           {coachTeams.length === 0 && (
             <div style={{ ...panel, marginTop: '0.75rem' }}>
