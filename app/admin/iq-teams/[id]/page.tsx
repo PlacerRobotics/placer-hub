@@ -34,17 +34,24 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
   const { data: coachTm } = await db.from('team_member').select('guardian:guardian_id ( first_name, last_name, login_email, phone )').eq('team_id', id).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()
   const coach: any = coachTm ? (Array.isArray((coachTm as any).guardian) ? (coachTm as any).guardian[0] : (coachTm as any).guardian) : null
 
-  const { data: apps } = await db.from('student_application').select('family_id, student:student_id ( first_name, last_name, grade, school_raw )').eq('season', SEASON).ilike('triage_notes', `%iq_team:${id}%`)
+  const { data: apps } = await db.from('student_application').select('family_id, student_id, student:student_id ( first_name, last_name, grade, school_raw )').eq('season', SEASON).ilike('triage_notes', `%iq_team:${id}%`)
   const famIds = [...new Set((apps ?? []).map((a: any) => a.family_id))]
   const emailByFam: Record<string, string> = {}
   if (famIds.length) {
     const { data: gs } = await db.from('guardian').select('family_id, login_email').in('family_id', famIds)
     for (const g of (gs ?? []) as any[]) if (!emailByFam[g.family_id]) emailByFam[g.family_id] = g.login_email ?? ''
   }
+  const sids = (apps ?? []).map((a: any) => a.student_id).filter(Boolean)
+  const signedSet = new Set<string>()
+  if (sids.length) {
+    const { data: sigs } = await db.from('waiver_signature').select('student_id').eq('season', SEASON).in('student_id', sids)
+    for (const s of (sigs ?? []) as any[]) signedSet.add(s.student_id)
+  }
   const roster = (apps ?? []).map((a: any) => {
     const s = Array.isArray(a.student) ? a.student[0] : a.student
-    return { name: s ? `${s.first_name} ${s.last_name}`.trim() : '—', grade: s?.grade, school: s?.school_raw, parentEmail: emailByFam[a.family_id] ?? '' }
+    return { name: s ? `${s.first_name} ${s.last_name}`.trim() : '—', grade: s?.grade, school: s?.school_raw, parentEmail: emailByFam[a.family_id] ?? '', signed: signedSet.has(a.student_id) }
   })
+  const signedCount = roster.filter((r) => r.signed).length
 
   const { data: payments } = await db.from('payment_transaction').select('id, source, source_payment_id, amount, received_at, deposited_at, matched_status, notes').eq('team_id', id).order('received_at', { ascending: false })
   const totalPaid = (payments ?? []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0)
@@ -98,6 +105,17 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     await adb.from('payment_transaction').update({ deposited_at: new Date().toISOString() }).eq('id', String(formData.get('paymentId') ?? ''))
     redirect(`/admin/iq-teams/${id}`)
   }
+  async function voidPayment(formData: FormData) {
+    'use server'
+    const a = await getAdminProfile(); if (!a) return
+    const adb = createAdminClient()
+    if (!(await hasAnyRole(adb, a.id, ROLES))) return
+    await adb.from('payment_transaction').delete().eq('id', String(formData.get('paymentId') ?? '')).eq('team_id', id)
+    // If no payments remain, the fee is no longer paid (status is left as-is).
+    const { data: remaining } = await adb.from('payment_transaction').select('id').eq('team_id', id).limit(1)
+    if (!(remaining ?? []).length) await adb.from('team').update({ team_fee_status: 'unpaid' }).eq('id', id)
+    redirect(`/admin/iq-teams/${id}`)
+  }
 
   return (
     <AdminShell activePath="/admin/iq-teams">
@@ -127,10 +145,10 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
 
       {/* Roster */}
       <div style={card}>
-        <h3 style={h3}>Roster ({roster.length})</h3>
+        <h3 style={h3}>Roster ({roster.length}) · {signedCount}/{roster.length} waivers signed</h3>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead><tr><th style={cell}>Student</th><th style={cell}>Grade</th><th style={cell}>School</th><th style={cell}>Parent email</th></tr></thead>
-          <tbody>{roster.map((r, i) => <tr key={i}><td style={cell}>{r.name}</td><td style={cell}>{r.grade || '—'}</td><td style={cell}>{r.school || '—'}</td><td style={cell}>{r.parentEmail || '—'}</td></tr>)}</tbody>
+          <thead><tr><th style={cell}>Student</th><th style={cell}>Grade</th><th style={cell}>School</th><th style={cell}>Parent email</th><th style={cell}>Waivers</th></tr></thead>
+          <tbody>{roster.map((r, i) => <tr key={i}><td style={cell}>{r.name}</td><td style={cell}>{r.grade || '—'}</td><td style={cell}>{r.school || '—'}</td><td style={cell}>{r.parentEmail || '—'}</td><td style={{ ...cell, color: r.signed ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>{r.signed ? '✓ signed' : 'not yet'}</td></tr>)}</tbody>
         </table>
       </div>
 
@@ -139,7 +157,7 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
         <h3 style={h3}>Payments · ${totalPaid.toFixed(2)} of ${Number(team.team_fee_amount ?? 1200).toFixed(2)}</h3>
         {(payments ?? []).length > 0 && (
           <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '1rem' }}>
-            <thead><tr><th style={cell}>Source</th><th style={cell}>Ref / check #</th><th style={cell}>Amount</th><th style={cell}>Received</th><th style={cell}>Deposited</th></tr></thead>
+            <thead><tr><th style={cell}>Source</th><th style={cell}>Ref / check #</th><th style={cell}>Amount</th><th style={cell}>Received</th><th style={cell}>Deposited</th><th style={cell}></th></tr></thead>
             <tbody>{(payments ?? []).map((p: any) => (
               <tr key={p.id}>
                 <td style={cell}>{p.source}</td>
@@ -147,6 +165,7 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
                 <td style={cell}>${Number(p.amount).toFixed(2)}</td>
                 <td style={cell}>{p.received_at ? new Date(p.received_at).toLocaleDateString() : '—'}</td>
                 <td style={cell}>{p.deposited_at ? new Date(p.deposited_at).toLocaleDateString() : (canAct ? <form action={markDeposited}><input type="hidden" name="paymentId" value={p.id} /><button style={{ ...btn, padding: '3px 10px' }}>Mark deposited</button></form> : 'no')}</td>
+                <td style={cell}>{canAct && <form action={voidPayment}><input type="hidden" name="paymentId" value={p.id} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>Void</button></form>}</td>
               </tr>
             ))}</tbody>
           </table>
