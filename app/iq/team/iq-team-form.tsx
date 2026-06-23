@@ -4,12 +4,14 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageHeader, FormSection, FormField, TextInput, PrimaryButton, SecondaryButton, SuccessAlert, ErrorAlert, InfoAlert } from '@/components/ui'
 
-type RosterRow = { student_first: string; student_last: string; parent_first: string; parent_last: string; parent_email: string }
-const emptyRow = (): RosterRow => ({ student_first: '', student_last: '', parent_first: '', parent_last: '', parent_email: '' })
-const rowComplete = (r: RosterRow) => r.student_first.trim() && r.student_last.trim() && r.parent_email.trim()
+type RosterRow = { student_first: string; student_last: string; grade: string; school: string; parent_first: string; parent_last: string; parent_email: string }
+const emptyRow = (): RosterRow => ({ student_first: '', student_last: '', grade: '', school: '', parent_first: '', parent_last: '', parent_email: '' })
+const rowComplete = (r: RosterRow) => r.student_first.trim() && r.student_last.trim() && r.parent_email.trim() && r.grade
 
-const selectStyle: React.CSSProperties = { width: '100%', padding: '9px 12px', fontSize: '0.9375rem', color: 'var(--color-text-primary)', backgroundColor: 'var(--color-surface)', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box' }
-const lbl: React.CSSProperties = { display: 'block', fontSize: '0.9375rem', fontWeight: 500, marginBottom: '0.375rem' }
+const selectStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: '0.875rem', color: 'var(--color-text-primary)', backgroundColor: 'var(--color-surface)', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box' }
+const lbl: React.CSSProperties = { display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.25rem' }
+const grid2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }
+const GRADES = [3, 4, 5, 6]
 
 export default function IqTeamForm({ email, coach }: { email: string; coach: { first_name: string; last_name: string; phone: string } }) {
   const router = useRouter()
@@ -17,10 +19,9 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
   const [cLast, setCLast] = useState(coach.last_name)
   const [cPhone, setCPhone] = useState(coach.phone)
   const [aFirst, setAFirst] = useState(''); const [aLast, setALast] = useState(''); const [aEmail, setAEmail] = useState(''); const [aPhone, setAPhone] = useState('')
-  const [teamName, setTeamName] = useState('')
   const [returning, setReturning] = useState('')
   const [competes, setCompetes] = useState('unsure')
-  const [ocFirst, setOcFirst] = useState(''); const [ocLast, setOcLast] = useState('')
+  const [ocFirst, setOcFirst] = useState(''); const [ocLast, setOcLast] = useState(''); const [ocGrade, setOcGrade] = useState(''); const [ocSchool, setOcSchool] = useState('')
   const [feeAck, setFeeAck] = useState(false)
   const [roster, setRoster] = useState<RosterRow[]>([emptyRow(), emptyRow()])
   const [busy, setBusy] = useState(false)
@@ -28,7 +29,7 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
   const [result, setResult] = useState<{ members: { student: string; under: string }[] } | null>(null)
 
   const completeOthers = roster.filter(rowComplete).length
-  const ownCount = ocFirst.trim() && ocLast.trim() ? 1 : 0
+  const ownCount = ocFirst.trim() && ocLast.trim() && ocGrade ? 1 : 0
   const totalMembers = ownCount + completeOthers
   const valid = cFirst.trim() && cLast.trim() && feeAck && totalMembers >= 3
 
@@ -45,8 +46,8 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
         body: JSON.stringify({
           coach: { first_name: cFirst.trim(), last_name: cLast.trim(), phone: cPhone.trim() },
           assistant: aFirst.trim() ? { first_name: aFirst.trim(), last_name: aLast.trim(), email: aEmail.trim(), phone: aPhone.trim() } : null,
-          team_name: teamName.trim(), returning_number: returning.trim(), competes_outside: competes,
-          own_child: { first_name: ocFirst.trim(), last_name: ocLast.trim() },
+          returning_number: returning.trim(), competes_outside: competes,
+          own_child: ownCount ? { first_name: ocFirst.trim(), last_name: ocLast.trim(), grade: ocGrade, school: ocSchool.trim() } : {},
           fee_ack: feeAck,
           roster: roster.filter(rowComplete),
         }),
@@ -78,62 +79,81 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
     )
   }
 
+  const memberRow = (label: string, sf: string, setSf: (v: string) => void, sl: string, setSl: (v: string) => void, gr: string, setGr: (v: string) => void, sc: string, setSc: (v: string) => void, extra?: React.ReactNode) => (
+    <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem 0.875rem', marginBottom: '0.625rem' }}>
+      {label && <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.5rem' }}>{label}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem' }}>
+        <div><label style={lbl}>Student first</label><TextInput value={sf} onChange={(e) => setSf(e.target.value)} /></div>
+        <div><label style={lbl}>Student last</label><TextInput value={sl} onChange={(e) => setSl(e.target.value)} /></div>
+        <div><label style={lbl}>Grade</label><select style={selectStyle} value={gr} onChange={(e) => setGr(e.target.value)}><option value="">—</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+        <div><label style={lbl}>School</label><TextInput value={sc} onChange={(e) => setSc(e.target.value)} /></div>
+      </div>
+      {extra}
+    </div>
+  )
+
   return (
     <>
       <PageHeader title="Register an IQ team" subtitle="Coach application for the 2026–27 VEX IQ season (Elementary)." />
       {error && <div style={{ marginBottom: '1.25rem' }}><ErrorAlert title="Couldn’t submit">{error}</ErrorAlert></div>}
 
       <FormSection title="Coach" description={`Signed in as ${email}.`}>
-        <FormField label="First name" htmlFor="cf" required><TextInput id="cf" value={cFirst} onChange={(e) => setCFirst(e.target.value)} /></FormField>
-        <FormField label="Last name" htmlFor="cl" required><TextInput id="cl" value={cLast} onChange={(e) => setCLast(e.target.value)} /></FormField>
+        <div style={grid2}>
+          <FormField label="First name" htmlFor="cf" required><TextInput id="cf" value={cFirst} onChange={(e) => setCFirst(e.target.value)} /></FormField>
+          <FormField label="Last name" htmlFor="cl" required><TextInput id="cl" value={cLast} onChange={(e) => setCLast(e.target.value)} /></FormField>
+        </div>
         <FormField label="Phone" htmlFor="cp"><TextInput id="cp" type="tel" value={cPhone} onChange={(e) => setCPhone(e.target.value)} /></FormField>
       </FormSection>
 
       <FormSection title="Assistant coach / mentor (optional)">
-        <FormField label="First name" htmlFor="af"><TextInput id="af" value={aFirst} onChange={(e) => setAFirst(e.target.value)} /></FormField>
-        <FormField label="Last name" htmlFor="al"><TextInput id="al" value={aLast} onChange={(e) => setALast(e.target.value)} /></FormField>
-        <FormField label="Email" htmlFor="ae"><TextInput id="ae" type="email" value={aEmail} onChange={(e) => setAEmail(e.target.value)} /></FormField>
-        <FormField label="Phone" htmlFor="ap"><TextInput id="ap" type="tel" value={aPhone} onChange={(e) => setAPhone(e.target.value)} /></FormField>
-      </FormSection>
-
-      <FormSection title="Team" description="All Placer Robotics IQ teams are Elementary (ES).">
-        <FormField label="Robot team name (optional)" htmlFor="tn"><TextInput id="tn" value={teamName} onChange={(e) => setTeamName(e.target.value)} /></FormField>
-        <FormField label="Returning team number (optional)" htmlFor="rn" helpText="If you had a team number last season, enter it. New teams: leave blank — we'll assign one.">
-          <TextInput id="rn" value={returning} onChange={(e) => setReturning(e.target.value)} placeholder="e.g. 295Y" />
-        </FormField>
-        <div>
-          <label htmlFor="co" style={lbl}>Will your team compete outside the Placer League?</label>
-          <select id="co" style={selectStyle} value={competes} onChange={(e) => setCompetes(e.target.value)}>
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-            <option value="unsure">Unsure</option>
-          </select>
+        <div style={grid2}>
+          <FormField label="First name" htmlFor="af"><TextInput id="af" value={aFirst} onChange={(e) => setAFirst(e.target.value)} /></FormField>
+          <FormField label="Last name" htmlFor="al"><TextInput id="al" value={aLast} onChange={(e) => setALast(e.target.value)} /></FormField>
+        </div>
+        <div style={grid2}>
+          <FormField label="Email" htmlFor="ae"><TextInput id="ae" type="email" value={aEmail} onChange={(e) => setAEmail(e.target.value)} /></FormField>
+          <FormField label="Phone" htmlFor="ap"><TextInput id="ap" type="tel" value={aPhone} onChange={(e) => setAPhone(e.target.value)} /></FormField>
         </div>
       </FormSection>
 
-      <FormSection title="Your own child (optional)" description="If your child is on the team, add them here — they go under your account, no separate invite. Coaching without a child on the team? Skip this.">
-        <FormField label="First name" htmlFor="ocf"><TextInput id="ocf" value={ocFirst} onChange={(e) => setOcFirst(e.target.value)} /></FormField>
-        <FormField label="Last name" htmlFor="ocl"><TextInput id="ocl" value={ocLast} onChange={(e) => setOcLast(e.target.value)} /></FormField>
+      <FormSection title="Team" description="All Placer Robotics IQ teams are Elementary (ES). Team name/number are assigned later from RobotEvents.">
+        <div style={grid2}>
+          <FormField label="Returning team number (optional)" htmlFor="rn" helpText="Had a number last season? Enter it. New teams: leave blank.">
+            <TextInput id="rn" value={returning} onChange={(e) => setReturning(e.target.value)} placeholder="e.g. 295Y" />
+          </FormField>
+          <div>
+            <label htmlFor="co" style={lbl}>Compete outside the Placer League?</label>
+            <select id="co" style={selectStyle} value={competes} onChange={(e) => setCompetes(e.target.value)}>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+              <option value="unsure">Unsure</option>
+            </select>
+          </div>
+        </div>
       </FormSection>
 
-      <FormSection title="Team members" description="A team needs at least 3 members total. Each parent gets a magic link (after approval) to register their student.">
+      <FormSection title="Your own child (optional)" description="If your child is on the team, add them here — they go under your account, no separate invite.">
+        {memberRow('', ocFirst, setOcFirst, ocLast, setOcLast, ocGrade, setOcGrade, ocSchool, setOcSchool)}
+      </FormSection>
+
+      <FormSection title="Team members" description="At least 3 members total. Grade + school help us review and approve. Each parent gets a magic link (after approval) to register.">
         {roster.map((r, i) => (
-          <div key={i} style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.875rem', marginBottom: '0.75rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.625rem' }}>
-              <div><label style={lbl}>Student first</label><TextInput value={r.student_first} onChange={(e) => setRow(i, 'student_first', e.target.value)} /></div>
-              <div><label style={lbl}>Student last</label><TextInput value={r.student_last} onChange={(e) => setRow(i, 'student_last', e.target.value)} /></div>
-              <div><label style={lbl}>Parent first</label><TextInput value={r.parent_first} onChange={(e) => setRow(i, 'parent_first', e.target.value)} /></div>
-              <div><label style={lbl}>Parent last</label><TextInput value={r.parent_last} onChange={(e) => setRow(i, 'parent_last', e.target.value)} /></div>
-              <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Parent email</label><TextInput type="email" value={r.parent_email} onChange={(e) => setRow(i, 'parent_email', e.target.value)} /></div>
-            </div>
-            {roster.length > 2 && (
-              <button type="button" onClick={() => setRoster((rows) => rows.filter((_, idx) => idx !== i))} style={{ marginTop: '0.5rem', background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer' }}>Remove</button>
-            )}
-          </div>
+          memberRow(
+            `Member ${i + 1}`, r.student_first, (v) => setRow(i, 'student_first', v), r.student_last, (v) => setRow(i, 'student_last', v),
+            r.grade, (v) => setRow(i, 'grade', v), r.school, (v) => setRow(i, 'school', v),
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <div><label style={lbl}>Parent first</label><TextInput value={r.parent_first} onChange={(e) => setRow(i, 'parent_first', e.target.value)} /></div>
+                <div><label style={lbl}>Parent last</label><TextInput value={r.parent_last} onChange={(e) => setRow(i, 'parent_last', e.target.value)} /></div>
+                <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Parent email</label><TextInput type="email" value={r.parent_email} onChange={(e) => setRow(i, 'parent_email', e.target.value)} /></div>
+              </div>
+              {roster.length > 2 && <button type="button" onClick={() => setRoster((rows) => rows.filter((_, idx) => idx !== i))} style={{ marginTop: '0.5rem', background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer' }}>Remove</button>}
+            </>
+          )
         ))}
         <SecondaryButton onClick={() => setRoster((rows) => [...rows, emptyRow()])}>+ Add another member</SecondaryButton>
         {totalMembers < 3 && (
-          <div style={{ marginTop: '0.75rem' }}><InfoAlert title="Need 3 total">Add {3 - totalMembers} more — teams need at least 3 members total{ownCount ? ' (including your child)' : ''}.</InfoAlert></div>
+          <div style={{ marginTop: '0.75rem' }}><InfoAlert title="Need 3 total">Add {3 - totalMembers} more — teams need at least 3 members total{ownCount ? ' (including your child)' : ''}. Each needs a grade.</InfoAlert></div>
         )}
       </FormSection>
 
