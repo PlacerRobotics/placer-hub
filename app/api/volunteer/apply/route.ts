@@ -1,109 +1,91 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendEmail, volunteerApplicationReceivedHtml, volunteerAdminNotifyHtml } from '@/lib/email'
 
-// Standard volunteer clearance steps created on signup.
-const STANDARD_STEPS = [
-  'policy_acknowledgment',
-  'background_check',
-  'aps_youth_protection',
-  'youth_protection_quiz',
-  'lab_orientation',
-]
+const SEASON = '2026-27'
+const STANDARD_STEPS = ['policy_acknowledgment', 'background_check', 'aps_youth_protection', 'youth_protection_quiz', 'lab_orientation']
+const ADMIN_EMAIL = process.env.VOLUNTEER_ADMIN_EMAIL || 'punita.gupta@placerrobotics.org'
 
 /**
- * Public volunteer signup. Creates (or reuses) a family + guardian for the
- * email, then a volunteer_profile and the standard clearance steps. No student
- * required — this is the path for volunteers who don't have a child enrolled.
- * Uses the service-role client (the applicant is unauthenticated).
+ * Public volunteer application. Creates (or reuses) a guardian+family for the
+ * email, a volunteer_profile + standard steps, and a per-season volunteer_clearance.
+ * Captures the richer application (programs, role, door/key access, APS) — team
+ * assignments are NOT stored here (those live in team_member). Emails a confirmation
+ * to the applicant and a notification to the registrar. No magic links.
  */
 export async function POST(request: NextRequest) {
-  let body: { first_name?: string; last_name?: string; email?: string; phone?: string }
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
-  }
+  let b: any
+  try { b = await request.json() } catch { return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 }) }
 
-  const first = body.first_name?.trim()
-  const last = body.last_name?.trim()
-  const email = body.email?.trim().toLowerCase()
-  const phone = body.phone?.trim()
-  if (!first || !last || !email || !phone) {
-    return NextResponse.json({ error: 'Please complete all fields.' }, { status: 400 })
-  }
+  const first = String(b.first_name ?? '').trim()
+  const last = String(b.last_name ?? '').trim()
+  const email = String(b.email ?? '').trim().toLowerCase()
+  const phone = String(b.phone ?? '').trim()
+  const signature = String(b.signature ?? '').trim()
+  if (!first || !last || !email || !phone) return NextResponse.json({ error: 'Please complete your name, email, and phone.' }, { status: 400 })
+  if (!b.agreed_yp || !b.agreed_rc) return NextResponse.json({ error: 'You must agree to both policies.' }, { status: 400 })
+  if (!signature) return NextResponse.json({ error: 'Please type your name to sign.' }, { status: 400 })
 
   const db = createAdminClient()
 
-  // 1. Resolve or create the guardian + family.
-  let familyId: string
-  let guardianId: string
-  const { data: existingGuardian } = await db
-    .from('guardian')
-    .select('id, family_id')
-    .ilike('login_email', email)
-    .maybeSingle()
-
-  if (existingGuardian) {
-    guardianId = existingGuardian.id
-    familyId = existingGuardian.family_id
-  } else {
-    const { data: fam, error: famErr } = await db
-      .from('family')
-      .insert({ primary_email: email, display_name: `${last}` })
-      .select('id')
-      .single()
-    if (famErr) return NextResponse.json({ error: famErr.message }, { status: 500 })
+  // 1. Guardian + family.
+  let familyId: string, guardianId: string
+  const existing = (await db.from('guardian').select('id, family_id').ilike('login_email', email).maybeSingle()).data
+  if (existing) { guardianId = existing.id; familyId = existing.family_id; if (phone) await db.from('guardian').update({ phone }).eq('id', guardianId) }
+  else {
+    const { data: fam, error: fe } = await db.from('family').insert({ primary_email: email, display_name: last }).select('id').single()
+    if (fe) return NextResponse.json({ error: fe.message }, { status: 500 })
     familyId = fam.id
-    const { data: g, error: gErr } = await db
-      .from('guardian')
-      .insert({
-        family_id: familyId,
-        first_name: first,
-        last_name: last,
-        login_email: email,
-        phone,
-        role: 'single_guardian',
-      })
-      .select('id')
-      .single()
-    if (gErr) return NextResponse.json({ error: gErr.message }, { status: 500 })
+    const { data: g, error: ge } = await db.from('guardian').insert({ family_id: familyId, first_name: first, last_name: last, login_email: email, phone, role: 'single_guardian' }).select('id').single()
+    if (ge) return NextResponse.json({ error: ge.message }, { status: 500 })
     guardianId = g.id
   }
 
-  // 2. Volunteer profile (one per guardian).
-  const { data: existingProfile } = await db
-    .from('volunteer_profile')
-    .select('id')
-    .eq('guardian_id', guardianId)
-    .maybeSingle()
-
+  // 2. Volunteer profile.
   let profileId: string
-  if (existingProfile) {
-    profileId = existingProfile.id
-  } else {
-    const { data: vp, error: vpErr } = await db
-      .from('volunteer_profile')
-      .insert({
-        guardian_id: guardianId,
-        family_id: familyId,
-        status: 'pending',
-        applied_at: new Date().toISOString(),
-      })
-      .select('id')
-      .single()
-    if (vpErr) return NextResponse.json({ error: vpErr.message }, { status: 500 })
+  const ep = (await db.from('volunteer_profile').select('id').eq('guardian_id', guardianId).maybeSingle()).data
+  if (ep) profileId = ep.id
+  else {
+    const { data: vp, error: ve } = await db.from('volunteer_profile').insert({ guardian_id: guardianId, family_id: familyId, status: 'pending', applied_at: new Date().toISOString() }).select('id').single()
+    if (ve) return NextResponse.json({ error: ve.message }, { status: 500 })
     profileId = vp.id
   }
 
-  // 3. Standard clearance steps (idempotent via unique (volunteer_id, step)).
-  const stepRows = STANDARD_STEPS.map((step, i) => ({
-    volunteer_id: profileId,
-    step,
-    status: 'pending',
-    sort_order: i,
-  }))
-  await db.from('volunteer_step').upsert(stepRows, { onConflict: 'volunteer_id,step' })
+  // 3. Standard steps; policy_acknowledgment is complete (they signed).
+  await db.from('volunteer_step').upsert(STANDARD_STEPS.map((step, i) => ({ volunteer_id: profileId, step, status: step === 'policy_acknowledgment' ? 'complete' : 'pending', completed_at: step === 'policy_acknowledgment' ? new Date().toISOString() : null, sort_order: i })), { onConflict: 'volunteer_id,step' })
+
+  // 4. Per-season clearance.
+  const programs: string[] = Array.isArray(b.programs) ? b.programs : []
+  const keyReq = ['card', 'phone'].includes(b.key_access_request) ? b.key_access_request : b.key_access_request === 'renew' ? 'card' : 'none'
+  const notes = [
+    programs.length ? `Programs: ${programs.join(', ')}` : '',
+    b.primary_role ? `Role: ${b.primary_role}` : '',
+    b.is_returning ? 'Returning volunteer' : '',
+    (b.street_address || b.city) ? `Address: ${[b.street_address, b.city, b.state, b.zip].filter(Boolean).join(', ')}` : '',
+    b.has_door_access ? `Has door access: ${b.door_access_type ?? 'yes'}` : '',
+  ].filter(Boolean).join(' · ') || null
+  await db.from('volunteer_clearance').upsert({
+    volunteer_id: profileId, season: SEASON, status: 'pending',
+    application_submitted_at: new Date().toISOString(), application_source: 'hub',
+    key_access_requested: keyReq,
+    waiver_signed_date: new Date().toISOString(), waiver_signature_text: signature, waiver_signed_by_ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
+    notes,
+  }, { onConflict: 'volunteer_id,season' })
+
+  // 5. APS self-reported certificate (admin verifies).
+  const apsExpiry = String(b.aps_expiry ?? '').trim()
+  if (b.aps_choice === 'have' && apsExpiry) {
+    const exists = (await db.from('youth_protection_cert').select('id').eq('volunteer_id', profileId).eq('expiration_date', apsExpiry).maybeSingle()).data
+    if (!exists) await db.from('youth_protection_cert').insert({ volunteer_id: profileId, expiration_date: apsExpiry, issued_date: apsExpiry, cert_url: String(b.aps_cert_url ?? '').trim() || null })
+  }
+
+  // 6. Emails (best-effort).
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+  try {
+    await sendEmail({ to: [email], subject: 'Placer Robotics Volunteer Application Received', html: volunteerApplicationReceivedHtml({ name: `${first} ${last}`, season: SEASON }) })
+    await sendEmail({ to: [ADMIN_EMAIL], subject: `New Volunteer Application — ${first} ${last}`, html: volunteerAdminNotifyHtml({ name: `${first} ${last}`, email, programs: programs.join(', '), role: String(b.primary_role ?? ''), season: SEASON, hubUrl: site }) })
+  } catch (e) { console.error('[volunteer/apply] email failed:', e) }
 
   return NextResponse.json({ ok: true, email })
 }

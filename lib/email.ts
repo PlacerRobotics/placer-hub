@@ -87,6 +87,36 @@ export function iqTeamApprovedHtml({ coachName, teamName, season, hubUrl }: { co
     ${btn}`)
 }
 
+export function volunteerApplicationReceivedHtml({ name, season }: { name: string; season: string }): string {
+  return emailShell('Volunteer application received', `
+    <p style="${P}">Thank you ${name || 'volunteer'} for submitting your volunteer application for the ${season} season.</p>
+    <p style="${P}">We'll review your application and contact you with next steps (background check, training, quizzes, and the annual waiver). Questions? Contact <a href="mailto:registrar@placerrobotics.org" style="color:#0E2558;">registrar@placerrobotics.org</a>.</p>`)
+}
+
+export function volunteerAdminNotifyHtml({ name, email, programs, role, season, hubUrl }: { name: string; email: string; programs: string; role: string; season: string; hubUrl: string }): string {
+  return emailShell('New volunteer application', `
+    <p style="${P}"><strong>${name}</strong> (${email}) submitted a volunteer application for ${season}.</p>
+    <p style="${P}">Programs: ${programs || '—'} · Role: ${role || '—'}</p>
+    <p style="${P}"><a href="${hubUrl}/admin/volunteers" style="color:#0E2558;font-weight:700;">Review at the Hub &rarr;</a></p>`)
+}
+
+export function apsReminderHtml({ name, expiry, days }: { name: string; expiry: string; days: number }): string {
+  return emailShell('Your APS certificate is expiring', `
+    <p style="${P}">Hi ${name || 'volunteer'}, your APS Mandated Reporter certificate expires on <strong>${expiry}</strong> (about ${days} days).</p>
+    <p style="${P}">Renew the free course at <a href="https://abusepreventionsystems.com" style="color:#0E2558;font-weight:700;">abusepreventionsystems.com</a> to stay cleared to volunteer.</p>`)
+}
+
+export function volunteerRenewalReminderHtml({ name, season, statusLines, renewUrl }: { name: string; season: string; statusLines: string[]; renewUrl: string }): string {
+  const items = statusLines.map((l) => `<li style="margin-bottom:4px;color:#3a4a63;font-size:14px;">${l}</li>`).join('')
+  return emailShell(`${season} volunteer renewal`, `
+    <p style="${P}">Hi ${name || 'volunteer'}, it's time to renew your Registered Volunteer status for the ${season} season.</p>
+    <p style="margin:0 0 8px;color:#3a4a63;font-size:14px;">Your current status:</p>
+    <ul style="margin:0 0 16px;padding-left:18px;">${items}</ul>
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F2C352;border-radius:8px;">
+      <a href="${renewUrl}" style="display:inline-block;padding:13px 28px;color:#0E2558;font-size:15px;font-weight:700;text-decoration:none;">Complete your renewal &rarr;</a></td></tr></table>
+    <p style="margin:18px 0 0;color:#7a879c;font-size:13px;">Questions? Contact registrar@placerrobotics.org</p>`)
+}
+
 export function registrationConfirmationHtml({
   studentName,
   programLabel,
