@@ -273,7 +273,7 @@ export default function RegisterWizard({
               <label htmlFor="grade" style={labelStyle}>Grade<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
               <select id="grade" value={grade} onChange={(e) => setGrade(e.target.value)} style={selectStyle}>
                 <option value="">Select grade…</option>
-                {[3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((g) => <option key={g} value={g}>{g}</option>)}
+                {(program === 'vex_iq' ? [3, 4, 5, 6] : [6, 7, 8, 9, 10, 11, 12]).map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
