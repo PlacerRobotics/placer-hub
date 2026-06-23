@@ -51,10 +51,11 @@ export async function POST(req: NextRequest) {
   if (!String(coach.first_name ?? '').trim() || !String(coach.last_name ?? '').trim()) return NextResponse.json({ error: 'Coach first and last name are required.' }, { status: 400 })
   if (!body.fee_ack) return NextResponse.json({ error: 'You must agree to collect the program fee.' }, { status: 400 })
 
+  const ownChild = body.own_child ?? {}
+  const ownProvided = !!(String(ownChild.first_name ?? '').trim() && String(ownChild.last_name ?? '').trim())
   const coachLast = String(coach.last_name).trim().toLowerCase()
-  const roster = (Array.isArray(body.roster) ? body.roster : []).filter((r: any) => String(r.student_first ?? '').trim() && String(r.student_last ?? '').trim() && String(r.parent_email ?? '').trim())
-  if (roster.length < 2) return NextResponse.json({ error: 'A team needs at least 2 students.' }, { status: 400 })
-  if (roster.length > 10) return NextResponse.json({ error: 'A team can have at most 10 students.' }, { status: 400 })
+  const others = (Array.isArray(body.roster) ? body.roster : []).filter((r: any) => String(r.student_first ?? '').trim() && String(r.student_last ?? '').trim() && String(r.parent_email ?? '').trim())
+  if ((ownProvided ? 1 : 0) + others.length < 3) return NextResponse.json({ error: 'A team needs at least 3 members total.' }, { status: 400 })
 
   const db = createAdminClient()
 
@@ -101,15 +102,22 @@ export async function POST(req: NextRequest) {
   // 3. Coach team_member.
   await db.from('team_member').insert({ team_id: teamId, guardian_id: guardian.id, season: SEASON, team_role: 'coach', program: 'vex_iq' })
 
-  // 4. Roster — each student under their parent's family (the coach's own child
-  // folds under the coach when the parent email matches theirs).
+  // 4. Coach's own child (if provided) under the coach's family, then each other
+  // student under their parent's family (folding to the coach when the parent email
+  // matches theirs, or the last name matches with no parent email).
   const results: { student: string; under: string }[] = []
-  for (const r of roster) {
+  if (ownProvided) {
+    const oc1 = String(ownChild.first_name).trim(), oc2 = String(ownChild.last_name).trim()
+    const ocRes = await addMemberStub(db, coachFamilyId, oc1, oc2, teamId, Number(ownChild.grade), ownChild.school_id, ownChild.school)
+    results.push({ student: `${oc1} ${oc2}`, under: ocRes.error ? `error: ${ocRes.error}` : 'your family' })
+  }
+  for (const r of others) {
     const sFirst = String(r.student_first).trim(), sLast = String(r.student_last).trim()
     const pEmail = String(r.parent_email).trim().toLowerCase()
     const pFirst = String(r.parent_first ?? '').trim(), pLast = String(r.parent_last ?? '').trim() || sLast
     const grade = Number(r.grade), schoolId = r.school_id, school = r.school
-    if (pEmail === coachEmail) {
+    const isCoachChild = pEmail === coachEmail || (sLast.toLowerCase() === coachLast && !pEmail)
+    if (isCoachChild) {
       const res = await addMemberStub(db, coachFamilyId, sFirst, sLast, teamId, grade, schoolId, school)
       results.push({ student: `${sFirst} ${sLast}`, under: res.error ? `error: ${res.error}` : 'your family' }); continue
     }
