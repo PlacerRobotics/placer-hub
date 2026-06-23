@@ -98,7 +98,7 @@ export default async function IqTeamsPage() {
               <div key={t.id} style={card}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 600 }}>{t.team_name || 'Unnamed team'}</div>
+                    <div style={{ fontWeight: 600 }}>{t.team_name || (coachMap[t.id]?.name ? `${coachMap[t.id].name}’s team` : 'IQ team')}</div>
                     <div style={muted}>Coach: {coachMap[t.id]?.name || '—'} · {coachMap[t.id]?.email || '—'}</div>
                     <div style={muted}>{(rosterMap[t.id]?.length ?? 0)} students · created {new Date(t.created_at).toLocaleDateString()}</div>
                     <div style={muted}>Payment ref: <strong>{t.team_payment_reference_code || '—'}</strong></div>
@@ -115,7 +115,7 @@ export default async function IqTeamsPage() {
               <div key={t.id} style={card}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 600 }}>{t.team_name || 'Unnamed team'}</div>
+                    <div style={{ fontWeight: 600 }}>{t.team_name || (coachMap[t.id]?.name ? `${coachMap[t.id].name}’s team` : 'IQ team')}</div>
                     <div style={muted}>Coach: {coachMap[t.id]?.name || '—'} · <span style={{ color: 'var(--color-success)' }}>Fee paid</span></div>
                   </div>
                   <IqApproveButton teamId={t.id} canApprove={canApprove} />
@@ -137,7 +137,7 @@ export default async function IqTeamsPage() {
               const cs = coachMap[t.id]?.guardianId ? clearanceByGuardian[coachMap[t.id].guardianId] : undefined
               return (
                 <div key={t.id} style={card}>
-                  <div style={{ fontWeight: 600 }}>{t.team_name || 'Unnamed team'}</div>
+                  <div style={{ fontWeight: 600 }}>{t.team_name || (coachMap[t.id]?.name ? `${coachMap[t.id].name}’s team` : 'IQ team')}</div>
                   <div style={muted}>Coach: {coachMap[t.id]?.name || '—'} · clearance: <StatusBadge label={cs ? cs.replace(/_/g, ' ') : 'none'} variant={cs === 'cleared' ? 'success' : cs ? 'warning' : 'neutral'} /></div>
                   <div style={muted}>{(rosterMap[t.id]?.length ?? 0)} students · {SEASON}</div>
                   <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '0.625rem' }}>
