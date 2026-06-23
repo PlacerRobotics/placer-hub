@@ -50,7 +50,7 @@ export default async function DashboardPage({
 
   const { data: guardian } = await supabase
     .from('guardian')
-    .select('family_id, first_name, last_name')
+    .select('id, family_id, first_name, last_name')
     .ilike('login_email', user.email ?? '')
     .maybeSingle()
 
@@ -62,6 +62,8 @@ export default async function DashboardPage({
   const students: any[] = []
   const studentCards: { name: string; registered: boolean; rows: Row[] }[] = []
   let firstUnregisteredName = ''
+  let guardianHasSigned = false
+  let hasActiveWaivers = false
 
   if (guardian) {
     const familyId = guardian.family_id
@@ -154,11 +156,23 @@ export default async function DashboardPage({
         studentCards.push({ name, registered, rows })
       }
     }
+
+    const { data: mySig } = await supabase
+      .from('waiver_signature')
+      .select('id')
+      .eq('guardian_id', guardian.id)
+      .eq('season', SEASON)
+      .limit(1)
+    guardianHasSigned = (mySig ?? []).length > 0
+    const { data: activeW } = await supabase.from('waiver_template').select('id').eq('active', true).limit(1)
+    hasActiveWaivers = (activeW ?? []).length > 0
   }
 
   const [aidLabel, aidVariant] = AID_DISPLAY[aidStatus] ?? AID_DISPLAY.not_requested
   const showAidCallout = aidStatus === 'not_requested'
   const allRegistered = studentCards.length > 0 && studentCards.every((c) => c.registered)
+  const anyRegistered = studentCards.some((c) => c.registered)
+  const showSignPrompt = !!guardian && !guardianHasSigned && anyRegistered && hasActiveWaivers
 
   return (
     <FamilyShell familyName={familyLabel} maxWidth="lg">
@@ -174,6 +188,11 @@ export default async function DashboardPage({
           <SuccessAlert title="Registration submitted">
             We received your registration. Complete payment to secure the spot.
           </SuccessAlert>
+        </div>
+      )}
+      {notice === 'signed' && (
+        <div style={{ marginBottom: '1rem' }}>
+          <SuccessAlert title="Agreements signed">Thank you — your signatures were recorded.</SuccessAlert>
         </div>
       )}
 
@@ -202,6 +221,14 @@ export default async function DashboardPage({
             secure the spot.
           </SuccessAlert>
         </div>
+      )}
+      {showSignPrompt && (
+        <ActionCard
+          title="Sign your agreements"
+          description="You haven't signed this season's participation and policy agreements yet. Each parent or legal guardian can review and sign from their own account."
+          ctaLabel="Review & sign"
+          href="/waivers"
+        />
       )}
 
       {studentCards.length === 0 ? (
