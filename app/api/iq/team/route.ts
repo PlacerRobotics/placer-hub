@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendEmail, iqTeamSubmittedHtml } from '@/lib/email'
 
 const SEASON = '2026-27'
 
@@ -44,11 +45,12 @@ export async function POST(req: NextRequest) {
   const ownChild = body.own_child ?? {}
   if (!String(coach.first_name ?? '').trim() || !String(coach.last_name ?? '').trim()) return NextResponse.json({ error: 'Coach first and last name are required.' }, { status: 400 })
   if (!body.fee_ack) return NextResponse.json({ error: 'You must agree to collect the program fee.' }, { status: 400 })
-  if (!String(ownChild.first_name ?? '').trim() || !String(ownChild.last_name ?? '').trim()) return NextResponse.json({ error: "Your own child's name is required." }, { status: 400 })
 
+  // A coach may or may not have their own child on the team.
+  const ownProvided = !!(String(ownChild.first_name ?? '').trim() && String(ownChild.last_name ?? '').trim())
   const coachLast = String(coach.last_name).trim().toLowerCase()
   const others = (Array.isArray(body.roster) ? body.roster : []).filter((r: any) => String(r.student_first ?? '').trim() && String(r.student_last ?? '').trim() && String(r.parent_email ?? '').trim())
-  if (others.length < 2) return NextResponse.json({ error: 'A team needs at least 3 members total (your child plus two more).' }, { status: 400 })
+  if ((ownProvided ? 1 : 0) + others.length < 3) return NextResponse.json({ error: 'A team needs at least 3 members total.' }, { status: 400 })
 
   const db = createAdminClient()
 
@@ -93,11 +95,13 @@ export async function POST(req: NextRequest) {
   // 3. Coach team_member.
   await db.from('team_member').insert({ team_id: teamId, guardian_id: guardian.id, season: SEASON, team_role: 'coach', program: 'vex_iq' })
 
-  // 4. Coach's own child — under the coach's family.
+  // 4. Coach's own child (if they have one on the team) — under the coach's family.
   const results: { student: string; under: string }[] = []
-  const oc1 = String(ownChild.first_name).trim(), oc2 = String(ownChild.last_name).trim()
-  const ocRes = await addMemberStub(db, coachFamilyId, oc1, oc2, teamId)
-  results.push({ student: `${oc1} ${oc2}`, under: ocRes.error ? `error: ${ocRes.error}` : 'your family' })
+  if (ownProvided) {
+    const oc1 = String(ownChild.first_name).trim(), oc2 = String(ownChild.last_name).trim()
+    const ocRes = await addMemberStub(db, coachFamilyId, oc1, oc2, teamId)
+    results.push({ student: `${oc1} ${oc2}`, under: ocRes.error ? `error: ${ocRes.error}` : 'your family' })
+  }
 
   // 5. Other members — under each parent's family, UNLESS the parent email is the
   // coach's or the child's last name matches the coach's (then fold under coach).
@@ -122,6 +126,12 @@ export async function POST(req: NextRequest) {
     const res = await addMemberStub(db, familyId, sFirst, sLast, teamId)
     results.push({ student: `${sFirst} ${sLast}`, under: res.error ? `error: ${res.error}` : pEmail })
   }
+
+  // 6. Email the coach confirming submission (best-effort).
+  try {
+    const html = iqTeamSubmittedHtml({ coachName: `${String(coach.first_name).trim()} ${String(coach.last_name).trim()}`.trim(), teamName: String(body.team_name ?? '').trim() || null, memberCount: results.length, season: SEASON })
+    await sendEmail({ to: [coachEmail], subject: `IQ team submitted for approval — Placer Robotics ${SEASON}`, html })
+  } catch (e) { console.error('[iq/team] coach submit email failed:', e) }
 
   return NextResponse.json({ ok: true, teamId, pending: true, members: results })
 }

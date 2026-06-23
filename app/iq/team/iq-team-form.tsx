@@ -28,7 +28,9 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
   const [result, setResult] = useState<{ members: { student: string; under: string }[] } | null>(null)
 
   const completeOthers = roster.filter(rowComplete).length
-  const valid = cFirst.trim() && cLast.trim() && feeAck && ocFirst.trim() && ocLast.trim() && completeOthers >= 2
+  const ownCount = ocFirst.trim() && ocLast.trim() ? 1 : 0
+  const totalMembers = ownCount + completeOthers
+  const valid = cFirst.trim() && cLast.trim() && feeAck && totalMembers >= 3
 
   function setRow(i: number, k: keyof RosterRow, v: string) {
     setRoster((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
@@ -109,12 +111,12 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
         </div>
       </FormSection>
 
-      <FormSection title="Your own child" description="Your child is on the team. They'll be added under your account — no separate invite.">
-        <FormField label="First name" htmlFor="ocf" required><TextInput id="ocf" value={ocFirst} onChange={(e) => setOcFirst(e.target.value)} /></FormField>
-        <FormField label="Last name" htmlFor="ocl" required><TextInput id="ocl" value={ocLast} onChange={(e) => setOcLast(e.target.value)} /></FormField>
+      <FormSection title="Your own child (optional)" description="If your child is on the team, add them here — they go under your account, no separate invite. Coaching without a child on the team? Skip this.">
+        <FormField label="First name" htmlFor="ocf"><TextInput id="ocf" value={ocFirst} onChange={(e) => setOcFirst(e.target.value)} /></FormField>
+        <FormField label="Last name" htmlFor="ocl"><TextInput id="ocl" value={ocLast} onChange={(e) => setOcLast(e.target.value)} /></FormField>
       </FormSection>
 
-      <FormSection title="Other team members" description="A team needs at least 3 total — your child plus 2 more. Each parent gets a magic link (after approval) to register their student.">
+      <FormSection title="Team members" description="A team needs at least 3 members total. Each parent gets a magic link (after approval) to register their student.">
         {roster.map((r, i) => (
           <div key={i} style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.875rem', marginBottom: '0.75rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.625rem' }}>
@@ -130,8 +132,8 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
           </div>
         ))}
         <SecondaryButton onClick={() => setRoster((rows) => [...rows, emptyRow()])}>+ Add another member</SecondaryButton>
-        {!valid && (ocFirst.trim() || completeOthers > 0) && completeOthers < 2 && (
-          <div style={{ marginTop: '0.75rem' }}><InfoAlert title="Need 3 total">Add your child plus at least 2 more team members.</InfoAlert></div>
+        {totalMembers < 3 && (
+          <div style={{ marginTop: '0.75rem' }}><InfoAlert title="Need 3 total">Add {3 - totalMembers} more — teams need at least 3 members total{ownCount ? ' (including your child)' : ''}.</InfoAlert></div>
         )}
       </FormSection>
 

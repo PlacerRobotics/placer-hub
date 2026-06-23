@@ -3,6 +3,7 @@ import { createClient as createSupa } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
+import { sendEmail, iqTeamApprovedHtml } from '@/lib/email'
 
 const SEASON = '2026-27'
 
@@ -18,7 +19,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   }
 
   const { id: teamId } = await params
-  const { data: team } = await db.from('team').select('id, program, active').eq('id', teamId).maybeSingle()
+  const { data: team } = await db.from('team').select('id, program, active, team_name').eq('id', teamId).maybeSingle()
   if (!team || team.program !== 'vex_iq') return NextResponse.json({ error: 'IQ team not found.' }, { status: 404 })
 
   // Approve the team.
@@ -48,6 +49,16 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     const { error } = await sender.auth.signInWithOtp({ email: em, options: { emailRedirectTo: `${site}/api/auth/callback?redirectTo=/register` } })
     if (error) failed.push(em); else sent++
   }
+
+  // Email the coach that their team is approved (best-effort).
+  try {
+    const { data: coachTm } = await db.from('team_member').select('guardian:guardian_id(login_email, first_name, last_name)').eq('team_id', teamId).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()
+    const cg = coachTm ? (Array.isArray((coachTm as any).guardian) ? (coachTm as any).guardian[0] : (coachTm as any).guardian) : null
+    if (cg?.login_email) {
+      const html = iqTeamApprovedHtml({ coachName: `${cg.first_name ?? ''} ${cg.last_name ?? ''}`.trim(), teamName: team.team_name ?? null, season: SEASON, hubUrl: `${site}/dashboard` })
+      await sendEmail({ to: [cg.login_email], subject: `Your IQ team is approved — Placer Robotics ${SEASON}`, html })
+    }
+  } catch (e) { console.error('[iq-approve] coach email failed:', e) }
 
   return NextResponse.json({ ok: true, invited: sent, failed })
 }

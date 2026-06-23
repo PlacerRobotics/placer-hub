@@ -46,6 +46,47 @@ export async function sendEmail({
   }
 }
 
+// Shared branded shell for simple notification emails.
+function emailShell(heading: string, inner: string): string {
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background-color:#eef1f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef1f7;padding:24px 0;"><tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+      <tr><td style="background-color:#0E2558;padding:24px 32px;">
+        <div style="color:#F2C352;font-size:12px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;">Placer Robotics</div>
+        <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:3px;">Placer Robotics Hub</div>
+      </td></tr>
+      <tr><td style="padding:32px;">
+        <h1 style="margin:0 0 12px;color:#0E2558;font-size:20px;font-weight:700;">${heading}</h1>
+        ${inner}
+      </td></tr>
+      <tr><td style="padding:20px 32px;border-top:1px solid #e6eaf1;">
+        <p style="margin:0;color:#9aa6ba;font-size:12px;">Placer Advanced Robotics &amp; Technology &middot; Roseville, CA &middot; 501(c)(3) nonprofit</p>
+      </td></tr>
+    </table>
+  </td></tr></table></body></html>`
+}
+
+const P = 'margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.6;'
+
+export function iqTeamSubmittedHtml({ coachName, teamName, memberCount, season }: { coachName: string; teamName: string | null; memberCount: number; season: string }): string {
+  const team = teamName ? ` <strong>${teamName}</strong>` : ''
+  return emailShell('IQ team submitted for approval', `
+    <p style="${P}">Hi ${coachName || 'Coach'}, your VEX IQ team${team} has been submitted for the ${season} season with ${memberCount} member${memberCount === 1 ? '' : 's'}.</p>
+    <p style="${P}">It's now pending <strong>IQ Coordinator approval</strong>. Once approved, each parent receives a magic link to register their student — and we'll email you to confirm. Nothing is sent to parents until then.</p>`)
+}
+
+export function iqTeamApprovedHtml({ coachName, teamName, season, hubUrl }: { coachName: string; teamName: string | null; season: string; hubUrl: string }): string {
+  const team = teamName ? ` <strong>${teamName}</strong>` : ''
+  const btn = hubUrl
+    ? `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F2C352;border-radius:8px;">
+         <a href="${hubUrl}" style="display:inline-block;padding:13px 28px;color:#0E2558;font-size:15px;font-weight:700;text-decoration:none;">Open the Hub &rarr;</a></td></tr></table>`
+    : ''
+  return emailShell('Your IQ team is approved', `
+    <p style="${P}">Hi ${coachName || 'Coach'}, great news — your VEX IQ team${team} is approved for the ${season} season!</p>
+    <p style="${P}">We've emailed each parent a magic link to register their student. You can register your own child and track your roster from the Hub.</p>
+    ${btn}`)
+}
+
 export function registrationConfirmationHtml({
   studentName,
   programLabel,
