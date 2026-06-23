@@ -103,7 +103,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       const iqDivisionByStudent: Record<string, string> = {}
       for (const k of iqKids) {
         const t = iqTeamById[k.teamId]
-        iqLabelByStudent[k.studentId] = t ? (t.team_number || t.team_name || 'IQ team') : 'IQ team'
+        iqLabelByStudent[k.studentId] = t ? (t.team_name || t.team_number || 'IQ team') : 'IQ team'
         iqTeamIdByStudent[k.studentId] = k.teamId
         iqDivisionByStudent[k.studentId] = t?.division ?? 'ES'
       }
@@ -143,7 +143,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               { cap: 'Registration', val: registered ? 'Complete' : 'Not started', state: registered ? 'done' : 'todo' },
               { cap: 'Waivers', val: isSigned ? 'Signed' : 'Not signed', state: isSigned ? 'done' : 'todo' },
               { cap: 'Payment', val: payVal, state: payState },
-              { cap: 'Team', val: hasTeam ? (team.team_number || team.team_name || 'Assigned') : 'Pending', state: hasTeam ? 'done' : 'todo' },
+              { cap: 'Team', val: hasTeam ? (team.team_name || team.team_number || 'Assigned') : 'Pending', state: hasTeam ? 'done' : 'todo' },
             ]
         const complete = isIqKid ? isSigned : (registered && isSigned && paid && hasTeam)
         if (!isIqKid && !registered && !firstUnregisteredName) firstUnregisteredName = name
@@ -156,7 +156,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         })
 
         if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
-        else if (hasTeam) kidTeams.push({ name, teamLabel: team.team_number || team.team_name || 'Assigned', teamId: team.id, program: PROGRAM_LABELS[team.program] ?? team.program, division: team.division, isIq: false, studentId: s.id, dropRequested: false })
+        else if (hasTeam) kidTeams.push({ name, teamLabel: team.team_name || team.team_number || 'Assigned', teamId: team.id, program: PROGRAM_LABELS[team.program] ?? team.program, division: team.division, isIq: false, studentId: s.id, dropRequested: false })
       }
 
     }
@@ -221,7 +221,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   type TeamRow = { id: string; label: string; programLabel: string; divisionLabel: string; isIq: boolean; coached: boolean; status?: string; count: number; kids: { studentId: string; name: string; dropRequested: boolean }[] }
   const teamRowMap: Record<string, TeamRow> = {}
   for (const t of coachTeams) {
-    teamRowMap[t.id] = { id: t.id, label: t.team_number || t.team_name || 'Team', programLabel: PROGRAM_LABELS[t.program] ?? t.program, divisionLabel: DIVISION_LABELS[t.division] ?? t.division, isIq: t.program === 'vex_iq', coached: true, status: t.status, count: teamCount[t.id] ?? 0, kids: [] }
+    teamRowMap[t.id] = { id: t.id, label: t.team_name || t.team_number || 'Team', programLabel: PROGRAM_LABELS[t.program] ?? t.program, divisionLabel: DIVISION_LABELS[t.division] ?? t.division, isIq: t.program === 'vex_iq', coached: true, status: t.status, count: teamCount[t.id] ?? 0, kids: [] }
   }
   for (const k of kidTeams) {
     const row = (teamRowMap[k.teamId] ??= { id: k.teamId, label: k.teamLabel, programLabel: k.program, divisionLabel: DIVISION_LABELS[k.division] ?? k.division, isIq: k.isIq, coached: false, count: 0, kids: [] })

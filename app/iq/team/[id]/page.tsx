@@ -58,7 +58,7 @@ async function CoachTeamView(id: string) {
   if (!coach) redirect('/dashboard') // not this team's coach
 
   const db = createAdminClient()
-  const { data: team } = await db.from('team').select('id, team_name, status, program').eq('id', id).maybeSingle()
+  const { data: team } = await db.from('team').select('id, team_name, team_number, status, program').eq('id', id).maybeSingle()
   if (!team || team.program !== 'vex_iq') notFound()
 
   const { data: apps } = await db.from('student_application').select('family_id, student_id, student:student_id ( first_name, last_name, grade )').eq('season', SEASON).ilike('triage_notes', `%iq_team:${id}%`)
@@ -129,11 +129,25 @@ async function CoachTeamView(id: string) {
     await adb.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('team_id', id).eq('student_id', studentId).eq('team_role', 'student').is('revoked_at', null)
     redirect(`/iq/team/${id}`)
   }
+  async function renameTeam(formData: FormData) {
+    'use server'
+    const c = await coachFor(id); if (!c) return
+    const adb = createAdminClient()
+    await adb.from('team').update({ team_name: String(formData.get('team_name') ?? '').trim() || null }).eq('id', id)
+    redirect(`/iq/team/${id}`)
+  }
 
   return (
     <FamilyShell familyName={teamLabel} maxWidth="md">
-      <PageHeader title={teamLabel} subtitle={`Your VEX IQ team · ${SEASON}`} />
+      <PageHeader title={teamLabel} subtitle={`VEX IQ${team.team_number ? ` · ${team.team_number}` : ''} · ${SEASON}`} />
       <div style={{ marginBottom: '1.25rem' }}><StatusBadge label={sl} variant={sv} /></div>
+
+      <FormSection title="Team name" description="Your team’s display name. Renaming here does not update events.vex.com — change it there too.">
+        <form action={renameTeam} style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 240px' }}><TextInput name="team_name" defaultValue={team.team_name ?? ''} placeholder="e.g. Robo Raptors" /></div>
+          <PrimaryButton type="submit">Save name</PrimaryButton>
+        </form>
+      </FormSection>
 
       <FormSection title={`Team members (${roster.length})`} description="Add or drop students. Dropping a student removes them from your team.">
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -164,7 +178,7 @@ async function CoachTeamView(id: string) {
         </form>
       </FormSection>
 
-      <div style={{ marginBottom: '1rem' }}><InfoAlert title="Need other changes?">For team name/number or anything else, contact the IQ Coordinator at registrar@placerrobotics.org.</InfoAlert></div>
+      <div style={{ marginBottom: '1rem' }}><InfoAlert title="Need other changes?">For your team number or anything else, contact the IQ Coordinator at registrar@placerrobotics.org.</InfoAlert></div>
       <Link href="/dashboard" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>← Back to dashboard</Link>
     </FamilyShell>
   )
