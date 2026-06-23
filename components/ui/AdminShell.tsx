@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { href: '/admin/volunteers', label: 'Volunteers' },
   { href: '/admin/sync', label: 'Sync Issues' },
   { href: '/admin/settings', label: 'Settings' },
+  { href: '/admin/admins', label: 'Admins' },
   { href: '/admin/import', label: 'Import' },
   { href: '/admin/import-applicants', label: 'Import Applicants' },
   { href: '/admin/import-teams', label: 'Import Teams' },
