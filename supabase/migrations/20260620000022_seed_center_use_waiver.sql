@@ -18,7 +18,7 @@ select
   date '2026-08-01',
   true
 from (
-  select $w$Participation at the Placer Robotics Center requires all students and families to follow key safety, supervision, and facility-use policies. These expectations ensure a safe and respectful learning environment for everyone. The following highlights do not replace the full Placer Robotics Center Use Policy, which contains detailed guidance. All participants are expected to review and comply with the complete policy as part of registration.
+  select $w$Participation at the Placer Robotics Center requires all students and families to follow key safety, supervision, and facility use policies. These expectations ensure a safe and respectful learning environment for everyone. The following highlights do not replace the full Placer Robotics Center Use Policy, which contains detailed guidance. All participants are expected to review and comply with the complete policy as part of registration.
 
 SAFETY & CONDUCT
 
@@ -26,7 +26,7 @@ SAFETY & CONDUCT
 - Behavior: Students must act responsibly and follow safety rules. Horseplay or unsafe conduct may lead to removal.
 - Eye Protection: Safety glasses are required when using tools, handling batteries, soldering, or as required during matches.
 - Closed-Toe Shoes: Required at all times in the robotics center.
-- Tool/Battery Use: Machine room, Combat tools, and LiPo batteries follow strict safety protocols.
+- Tool/Battery Use: Machine room, Combat tools and LiPo batteries follow strict safety protocols.
 
 HEALTH, SECURITY & EMERGENCIES
 
