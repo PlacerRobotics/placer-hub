@@ -57,6 +57,9 @@ export async function POST(req: NextRequest) {
   const db = createAdminClient()
   const results: any[] = []
   let matched = 0, unmatched = 0, already = 0, applied = 0
+  // Each enrollment's fee is satisfied by ONE payment — track enrollments
+  // claimed within this batch so a second payment doesn't re-match the same one.
+  const claimed = new Set<string>()
 
   for (const p of payments) {
     if (p.status && p.status !== 'succeeded') continue
@@ -101,7 +104,7 @@ export async function POST(req: NextRequest) {
           else {
             const { data: enrs } = await db
               .from('enrollment')
-              .select('id, family_id, program, registration_fee_amount')
+              .select('id, family_id, program, registration_fee_amount, registration_fee_status')
               .eq('student_id', stu.id)
               .eq('season', SEASON)
             const list = (enrs ?? []) as any[]
@@ -120,6 +123,21 @@ export async function POST(req: NextRequest) {
         results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'unmatched', reason })
         continue
       }
+
+      // The fee is satisfied by one payment. If the enrollment is already paid/
+      // waived, or already claimed by another payment in this batch, this is a
+      // duplicate/overpayment — leave it unmatched for an admin to review.
+      if (enrollment.registration_fee_status === 'paid' || enrollment.registration_fee_status === 'waived') {
+        unmatched++
+        results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'unmatched', reason: `registration fee already ${enrollment.registration_fee_status}` })
+        continue
+      }
+      if (claimed.has(enrollment.id)) {
+        unmatched++
+        results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'unmatched', reason: 'another Zeffy payment in this batch already covers this enrollment' })
+        continue
+      }
+      claimed.add(enrollment.id)
 
       matched++
       results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'matched', enrollmentId: enrollment.id })
