@@ -17,17 +17,17 @@ export default async function IqTeamPage() {
     )
   }
 
-  const { data: g } = await supabase
-    .from('guardian')
-    .select('first_name, last_name, phone')
-    .ilike('login_email', user.email ?? '')
-    .maybeSingle()
+  const [{ data: g }, { data: schools }] = await Promise.all([
+    supabase.from('guardian').select('first_name, last_name, phone').ilike('login_email', user.email ?? '').maybeSingle(),
+    supabase.from('school').select('id, name, grade_min, grade_max').order('name'),
+  ])
 
   return (
     <PublicShell maxWidth="md">
       <IqTeamForm
         email={user.email ?? ''}
         coach={{ first_name: g?.first_name ?? '', last_name: g?.last_name ?? '', phone: g?.phone ?? '' }}
+        schools={schools ?? []}
       />
     </PublicShell>
   )

@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageHeader, FormSection, FormField, TextInput, PrimaryButton, SecondaryButton, SuccessAlert, ErrorAlert, InfoAlert } from '@/components/ui'
 
-type RosterRow = { student_first: string; student_last: string; grade: string; school: string; parent_first: string; parent_last: string; parent_email: string }
-const emptyRow = (): RosterRow => ({ student_first: '', student_last: '', grade: '', school: '', parent_first: '', parent_last: '', parent_email: '' })
+const OTHER_SCHOOL = '__other__'
+type School = { id: string; name: string; grade_min: number | null; grade_max: number | null }
+type RosterRow = { student_first: string; student_last: string; grade: string; schoolId: string; schoolOther: string; parent_first: string; parent_last: string; parent_email: string }
+const emptyRow = (): RosterRow => ({ student_first: '', student_last: '', grade: '', schoolId: '', schoolOther: '', parent_first: '', parent_last: '', parent_email: '' })
 const rowComplete = (r: RosterRow) => r.student_first.trim() && r.student_last.trim() && r.parent_email.trim() && r.grade
 
 const selectStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: '0.875rem', color: 'var(--color-text-primary)', backgroundColor: 'var(--color-surface)', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box' }
@@ -13,7 +15,7 @@ const lbl: React.CSSProperties = { display: 'block', fontSize: '0.8125rem', font
 const grid2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }
 const GRADES = [3, 4, 5, 6]
 
-export default function IqTeamForm({ email, coach }: { email: string; coach: { first_name: string; last_name: string; phone: string } }) {
+export default function IqTeamForm({ email, coach, schools }: { email: string; coach: { first_name: string; last_name: string; phone: string }; schools: School[] }) {
   const router = useRouter()
   const [cFirst, setCFirst] = useState(coach.first_name)
   const [cLast, setCLast] = useState(coach.last_name)
@@ -21,7 +23,7 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
   const [aFirst, setAFirst] = useState(''); const [aLast, setALast] = useState(''); const [aEmail, setAEmail] = useState(''); const [aPhone, setAPhone] = useState('')
   const [returning, setReturning] = useState('')
   const [competes, setCompetes] = useState('unsure')
-  const [ocFirst, setOcFirst] = useState(''); const [ocLast, setOcLast] = useState(''); const [ocGrade, setOcGrade] = useState(''); const [ocSchool, setOcSchool] = useState('')
+  const [ocFirst, setOcFirst] = useState(''); const [ocLast, setOcLast] = useState(''); const [ocGrade, setOcGrade] = useState(''); const [ocSchoolId, setOcSchoolId] = useState(''); const [ocSchoolOther, setOcSchoolOther] = useState('')
   const [feeAck, setFeeAck] = useState(false)
   const [roster, setRoster] = useState<RosterRow[]>([emptyRow(), emptyRow()])
   const [busy, setBusy] = useState(false)
@@ -47,9 +49,14 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
           coach: { first_name: cFirst.trim(), last_name: cLast.trim(), phone: cPhone.trim() },
           assistant: aFirst.trim() ? { first_name: aFirst.trim(), last_name: aLast.trim(), email: aEmail.trim(), phone: aPhone.trim() } : null,
           returning_number: returning.trim(), competes_outside: competes,
-          own_child: ownCount ? { first_name: ocFirst.trim(), last_name: ocLast.trim(), grade: ocGrade, school: ocSchool.trim() } : {},
+          own_child: ownCount ? { first_name: ocFirst.trim(), last_name: ocLast.trim(), grade: ocGrade, school_id: ocSchoolId && ocSchoolId !== OTHER_SCHOOL ? ocSchoolId : '', school: ocSchoolId === OTHER_SCHOOL ? ocSchoolOther.trim() : '' } : {},
           fee_ack: feeAck,
-          roster: roster.filter(rowComplete),
+          roster: roster.filter(rowComplete).map((r) => ({
+            student_first: r.student_first, student_last: r.student_last, grade: r.grade,
+            parent_first: r.parent_first, parent_last: r.parent_last, parent_email: r.parent_email,
+            school_id: r.schoolId && r.schoolId !== OTHER_SCHOOL ? r.schoolId : '',
+            school: r.schoolId === OTHER_SCHOOL ? r.schoolOther.trim() : '',
+          })),
         }),
       })
       const d = await res.json().catch(() => ({}))
@@ -79,14 +86,30 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
     )
   }
 
-  const memberRow = (label: string, sf: string, setSf: (v: string) => void, sl: string, setSl: (v: string) => void, gr: string, setGr: (v: string) => void, sc: string, setSc: (v: string) => void, extra?: React.ReactNode) => (
+  const schoolSelect = (grade: string, schoolId: string, schoolOther: string, onId: (v: string) => void, onOther: (v: string) => void) => {
+    const gnum = Number(grade)
+    const visible = !grade ? [] : schools.filter((s) => (s.grade_min == null || gnum >= s.grade_min) && (s.grade_max == null || gnum <= s.grade_max))
+    return (
+      <div>
+        <label style={lbl}>School</label>
+        <select style={selectStyle} value={schoolId} onChange={(e) => onId(e.target.value)}>
+          <option value="">{grade ? 'Select…' : 'Pick grade first'}</option>
+          {visible.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          <option value={OTHER_SCHOOL}>Other (not listed)</option>
+        </select>
+        {schoolId === OTHER_SCHOOL && <div style={{ marginTop: '0.4rem' }}><TextInput placeholder="School name" value={schoolOther} onChange={(e) => onOther(e.target.value)} /></div>}
+      </div>
+    )
+  }
+
+  const memberRow = (label: string, sf: string, setSf: (v: string) => void, sl: string, setSl: (v: string) => void, gr: string, setGr: (v: string) => void, schoolNode: React.ReactNode, extra?: React.ReactNode) => (
     <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem 0.875rem', marginBottom: '0.625rem' }}>
       {label && <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.5rem' }}>{label}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem' }}>
         <div><label style={lbl}>Student first</label><TextInput value={sf} onChange={(e) => setSf(e.target.value)} /></div>
         <div><label style={lbl}>Student last</label><TextInput value={sl} onChange={(e) => setSl(e.target.value)} /></div>
         <div><label style={lbl}>Grade</label><select style={selectStyle} value={gr} onChange={(e) => setGr(e.target.value)}><option value="">—</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
-        <div><label style={lbl}>School</label><TextInput value={sc} onChange={(e) => setSc(e.target.value)} /></div>
+        <div>{schoolNode}</div>
       </div>
       {extra}
     </div>
@@ -133,14 +156,15 @@ export default function IqTeamForm({ email, coach }: { email: string; coach: { f
       </FormSection>
 
       <FormSection title="Your own child (optional)" description="If your child is on the team, add them here — they go under your account, no separate invite.">
-        {memberRow('', ocFirst, setOcFirst, ocLast, setOcLast, ocGrade, setOcGrade, ocSchool, setOcSchool)}
+        {memberRow('', ocFirst, setOcFirst, ocLast, setOcLast, ocGrade, setOcGrade, schoolSelect(ocGrade, ocSchoolId, ocSchoolOther, setOcSchoolId, setOcSchoolOther))}
       </FormSection>
 
       <FormSection title="Team members" description="At least 3 members total. Grade + school help us review and approve. Each parent gets a magic link (after approval) to register.">
         {roster.map((r, i) => (
           memberRow(
             `Member ${i + 1}`, r.student_first, (v) => setRow(i, 'student_first', v), r.student_last, (v) => setRow(i, 'student_last', v),
-            r.grade, (v) => setRow(i, 'grade', v), r.school, (v) => setRow(i, 'school', v),
+            r.grade, (v) => setRow(i, 'grade', v),
+            schoolSelect(r.grade, r.schoolId, r.schoolOther, (v) => setRow(i, 'schoolId', v), (v) => setRow(i, 'schoolOther', v)),
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', marginTop: '0.5rem' }}>
                 <div><label style={lbl}>Parent first</label><TextInput value={r.parent_first} onChange={(e) => setRow(i, 'parent_first', e.target.value)} /></div>

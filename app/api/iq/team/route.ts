@@ -15,16 +15,17 @@ async function ensureFamilySeason(db: any, familyId: string, statusIfNew: string
 // Create an IQ member stub (student + application linked to the team) under a given
 // family. Grade + school are captured up front to help review/approval. No magic
 // link here — invites go out on approval.
-async function addMemberStub(db: any, familyId: string, sFirst: string, sLast: string, teamId: string, grade?: number, school?: string) {
+async function addMemberStub(db: any, familyId: string, sFirst: string, sLast: string, teamId: string, grade?: number, schoolId?: string, school?: string) {
   const gradeVal = grade && grade > 0 ? grade : 0
-  const schoolVal = (school ?? '').trim() || null
+  const sid = (schoolId ?? '').trim() || null
+  const schoolVal = sid ? null : ((school ?? '').trim() || null)
   let stu = (await db.from('student').select('id').eq('family_id', familyId).ilike('first_name', sFirst).ilike('last_name', sLast).maybeSingle()).data
   if (!stu) {
-    const { data: s, error } = await db.from('student').insert({ family_id: familyId, first_name: sFirst, last_name: sLast, city: 'Unknown', zip_code: '00000', grade: gradeVal, school_raw: schoolVal, status: 'active' }).select('id').single()
+    const { data: s, error } = await db.from('student').insert({ family_id: familyId, first_name: sFirst, last_name: sLast, city: 'Unknown', zip_code: '00000', grade: gradeVal, school_id: sid, school_raw: schoolVal, status: 'active' }).select('id').single()
     if (error) return { error: error.message }
     stu = s
-  } else if (gradeVal > 0 || schoolVal) {
-    await db.from('student').update({ grade: gradeVal, school_raw: schoolVal }).eq('id', stu.id)
+  } else if (gradeVal > 0 || sid || schoolVal) {
+    await db.from('student').update({ grade: gradeVal, school_id: sid, school_raw: schoolVal }).eq('id', stu.id)
   }
   await ensureFamilySeason(db, familyId, 'applied')
   await db.from('student_application').upsert(
@@ -104,7 +105,7 @@ export async function POST(req: NextRequest) {
   const results: { student: string; under: string }[] = []
   if (ownProvided) {
     const oc1 = String(ownChild.first_name).trim(), oc2 = String(ownChild.last_name).trim()
-    const ocRes = await addMemberStub(db, coachFamilyId, oc1, oc2, teamId, Number(ownChild.grade), ownChild.school)
+    const ocRes = await addMemberStub(db, coachFamilyId, oc1, oc2, teamId, Number(ownChild.grade), ownChild.school_id, ownChild.school)
     results.push({ student: `${oc1} ${oc2}`, under: ocRes.error ? `error: ${ocRes.error}` : 'your family' })
   }
 
@@ -114,10 +115,10 @@ export async function POST(req: NextRequest) {
     const sFirst = String(r.student_first).trim(), sLast = String(r.student_last).trim()
     const pEmail = String(r.parent_email).trim().toLowerCase()
     const pFirst = String(r.parent_first ?? '').trim(), pLast = String(r.parent_last ?? '').trim() || sLast
-    const grade = Number(r.grade), school = r.school
+    const grade = Number(r.grade), schoolId = r.school_id, school = r.school
     const isCoachChild = pEmail === coachEmail || (sLast.toLowerCase() === coachLast && !pEmail)
     if (isCoachChild) {
-      const res = await addMemberStub(db, coachFamilyId, sFirst, sLast, teamId, grade, school)
+      const res = await addMemberStub(db, coachFamilyId, sFirst, sLast, teamId, grade, schoolId, school)
       results.push({ student: `${sFirst} ${sLast}`, under: res.error ? `error: ${res.error}` : 'your family' }); continue
     }
     let pg = (await db.from('guardian').select('id, family_id').ilike('login_email', pEmail).maybeSingle()).data
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
       familyId = fam.id
       await db.from('guardian').insert({ family_id: familyId, first_name: pFirst || pLast, last_name: pLast, login_email: pEmail, phone: '', role: 'primary' })
     }
-    const res = await addMemberStub(db, familyId, sFirst, sLast, teamId, grade, school)
+    const res = await addMemberStub(db, familyId, sFirst, sLast, teamId, grade, schoolId, school)
     results.push({ student: `${sFirst} ${sLast}`, under: res.error ? `error: ${res.error}` : pEmail })
   }
 
