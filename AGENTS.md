@@ -80,6 +80,17 @@ Use the next free number; validate with `pglast` before committing.
 - **0016** team_member coach support (`revoked_at`, `assistant_coach`/`mentor`)
 - **0017** `program_selection += 'both'` — coupled with apply/import/register code
 - **0018** `family_season_status += 'cancelled'` + `registration_audit_log` (admin RLS)
+- **0019** `team_member` partial unique indexes (one active membership per enrollment;
+  per team+guardian for coaches) — `revoked_at is null`
+- **0020** seed participation / liability waiver (active)
+- **0021** `tshirt_size += ym/yl/xxxl` (Youth M/L + Adult 3XL; xs/s/m reused as Adult XS/S/M)
+- **0022** seed Center Use waiver · **0023** Expectations Agreement · **0024** Youth
+  Protection summary — all active `waiver_template` rows
+- **0025** `waiver_signature.participant_typed_name` — **coupled with the register route**
+  (student + parent dual signature); registration submit errors until it's applied
+
+Applied through **0024** this session (0016 + 0017 had silently never been applied and
+were fixed). **Confirm 0025 is applied** before relying on registration.
 
 **Enum caveat:** `ALTER TYPE … ADD VALUE` can't be referenced in the same transaction.
 If the editor wraps a file in one transaction and errors on an `ADD VALUE` line, run
@@ -93,15 +104,43 @@ that line on its own first.
   records only — **never send magic links during import**. Held → `family_season
   'applied'` + `student_application 'submitted'`; approved → `accepted` /
   `cleared_to_register`. Invites go out via separate Send-Invites flows.
-- **Magic links** use `supabase.auth.signInWithOtp` (Supabase sends the email). No
-  custom email sender (Resend/SMTP) is wired up — `auth.admin.generateLink` can't send.
+- **Magic links** use `supabase.auth.signInWithOtp` (Supabase sends via its configured
+  SMTP). Admin-sent invites arrive via implicit flow (tokens in the URL hash); `/login`
+  consumes the hash to finish sign-in. `auth.admin.generateLink` only *returns* a link
+  (used by view-as-family) — it can't send.
+- **App-sent email** (e.g. registration confirmation) goes through `lib/email.ts`
+  (Resend REST API), gated on `RESEND_API_KEY` — it no-ops/logs if unset so it never
+  breaks a flow. Branded templates live in `docs/email-templates/`.
+- **Payments / Zeffy:** reconciliation is a **pull** via the Zeffy API (`lib/zeffy.ts`,
+  `/admin/payments → Sync from Zeffy`; env `ZEFFY_API_KEY` + `ZEFFY_REGISTRATION_CAMPAIGN_ID`).
+  Match key = guardian sign-in email + student name + program; one payment per enrollment.
+  The native Zeffy webhook (Beta) never delivered — `/api/webhooks/zeffy` stays as a
+  capture-only fallback. **`matched_status` has NO `'matched'` value** — use
+  `auto_matched` / `manually_matched`.
+- **Admin roles** are managed at `/admin/admins` (super-admin only) — no SQL needed.
 - Season is hard-coded `'2026-27'` (`const SEASON`) in most routes.
+
+## Where things live (built this season)
+
+- Family: `/dashboard` (per-student completion + supporter level + receipt),
+  `/dashboard/edit` (self-service), `/register` wizard (4 waivers, dual signature),
+  `/waivers` (second-parent signing).
+- Admin: `/admin/registrations`, `/admin/families` (+ `[id]` detail, change-email /
+  resend / view-as-family), `/admin/admins` (roles), `/admin/payments` (Zeffy sync).
 
 ## Known open items
 
-- Confirm the login/callback flow writes `guardian.last_login_at` (login-status dots
-  depend on it).
-- Production email (Resend/SMTP) for magic links at volume.
-- Family dashboard checklist partly mocked; Google/Slack sync (`sync_log`) not built.
+- `guardian.last_login_at` is still **not written** on login — the login-status dots
+  read "never logged in" for everyone. Fix in `app/api/auth/callback/route.ts`.
+- Production email at volume: Supabase SMTP (for magic links) still being configured;
+  app email (`RESEND_API_KEY`) not yet set.
+- The auth-admin actions (`change-email`, `view-as-family`, grant-role-by-email) use
+  `auth.admin.*` and have **not been run against live** — verify before relying on them.
 - Combat teams not yet defined (only 15 V5 teams imported).
-- Zeffy registration ticketing campaign exists but is unlisted/draft pending review.
+- Deferred registration polish (see `docs/KNOWN_ISSUES.md`): bulk-send hides per-email
+  failures; reinstate always → `cleared_to_register`; `family_season.updated_at` not
+  set; `registration_audit_log` isn't append-only; `/admin/guardians/new` 404 from the
+  coach flow.
+- Google/Slack sync (`sync_log`) and volunteer-clearance integrations not built.
+
+See `docs/KNOWN_ISSUES.md` for the full, severity-tagged list.
