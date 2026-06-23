@@ -108,7 +108,11 @@ export async function POST(request: NextRequest) {
     .order('resolved_at', { ascending: false })
     .limit(1)
     .maybeSingle()
-  const feeStatus = aid?.registration_fee_waived ? 'waived' : 'unpaid'
+  // Registration fee is ALWAYS 'unpaid' at registration. Financial aid adjusts the
+  // fundraising target only — it must never drive registration_fee_status. Waiving a
+  // fee is a Super-Admin action with a mandatory audit entry, not an automatic effect
+  // of an approved aid record.
+  const feeStatus = 'unpaid'
   const fundraisingTarget =
     aid && aid.adjusted_fundraising_target != null ? aid.adjusted_fundraising_target : target
 
@@ -216,7 +220,7 @@ export async function POST(request: NextRequest) {
       body_hash: w.body_hash,
       typed_name: typedName,
       participant_typed_name: participantName || null,
-      electronic_consent_checked: true,
+      electronic_consent_checked: body.electronicConsent === true,
       read_and_agree_checked: true,
       authenticated_email: user.email,
       ip_address: ip,

@@ -8,13 +8,13 @@ const TYPES = [
   ['registration_fee', 'Registration fee'],
   ['fundraising', 'Fundraising'],
   ['iq_team_fee', 'IQ team fee'],
-  ['sponsorship_credit', 'Sponsorship credit'],
+  ['sponsorship', 'Sponsorship credit'],
 ]
 const SOURCES = [
   ['check', 'Check'],
   ['cash', 'Cash'],
   ['benevity', 'Benevity'],
-  ['corporate_match', 'Corporate match'],
+  ['corporate_platform', 'Corporate match'],
   ['other', 'Other'],
 ]
 

@@ -4,8 +4,8 @@ import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { findEnrollmentByRef, SEASON } from '@/lib/payments'
 
-const VALID_TYPES = ['registration_fee', 'fundraising', 'iq_team_fee', 'sponsorship_credit']
-const VALID_SOURCES = ['check', 'cash', 'benevity', 'corporate_match', 'other']
+const VALID_TYPES = ['registration_fee', 'fundraising', 'iq_team_fee', 'sponsorship']
+const VALID_SOURCES = ['check', 'cash', 'benevity', 'corporate_platform', 'other']
 
 export async function POST(request: NextRequest) {
   const admin = await getAdminProfile()
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       payment_type: paymentType,
       payment_reference_code: ref || null,
       received_at: paymentDate,
-      matched_status: matched ? 'matched' : 'unmatched',
+      matched_status: matched ? 'manually_matched' : 'unmatched',
       enrollment_id: enrollment?.id ?? null,
       matched_by: matched ? admin.id : null,
       matched_at: matched ? now : null,

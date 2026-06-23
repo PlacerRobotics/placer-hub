@@ -160,6 +160,7 @@ export default function RegisterWizard({
   const [agreed, setAgreed] = useState<Record<string, boolean>>({})
   const [studentSig, setStudentSig] = useState('')
   const [signature, setSignature] = useState('')
+  const [electronicConsent, setElectronicConsent] = useState(false)
 
   const schoolName = useMemo(() => {
     if (schoolId === OTHER_SCHOOL) return schoolOther
@@ -186,7 +187,7 @@ export default function RegisterWizard({
   const step1Valid = first.trim() && last.trim() && dob && grade && tshirt && (schoolId !== OTHER_SCHOOL || schoolOther.trim()) && schoolId
   const step2Valid = ec1First.trim() && ec1Last.trim() && ec1Rel.trim() && ec1Phone.trim()
   const allWaiversAgreed = waivers.length > 0 ? waivers.every((w) => agreed[w.id]) : true
-  const step3Valid = allWaiversAgreed && studentSig.trim() && signature.trim()
+  const step3Valid = allWaiversAgreed && electronicConsent && studentSig.trim() && signature.trim()
 
   async function handleSubmit() {
     if (submitting) return
@@ -198,6 +199,7 @@ export default function RegisterWizard({
       paymentReferenceCode,
       signatureName: signature.trim(),
       studentSignatureName: studentSig.trim(),
+      electronicConsent,
       student: {
         first_name: first.trim(),
         last_name: last.trim(),
@@ -410,6 +412,10 @@ export default function RegisterWizard({
             title="Signatures"
             description="Both the participant and a parent or legal guardian acknowledge all of the agreements above. Type each full legal name below — today's date is recorded automatically with each signature."
           >
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem', fontSize: '0.9375rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
+              <input type="checkbox" checked={electronicConsent} onChange={(e) => setElectronicConsent(e.target.checked)} style={{ marginTop: '0.25rem' }} />
+              <span>I agree that typing my name below is my electronic signature, that it is the legal equivalent of a handwritten signature, and that it is legally binding. I consent to signing these agreements electronically.</span>
+            </label>
             <FormField
               label="Student / participant full legal name"
               htmlFor="studentSig"
