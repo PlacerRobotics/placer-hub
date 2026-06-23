@@ -355,7 +355,7 @@ export default async function DashboardPage({
                 return (
                   <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: i < iqTeams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                     <div>
-                      <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{t.team_name || 'IQ team'}</span>
+                      <Link href={`/iq/team/${t.id}`} style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>{t.team_name || 'IQ team'}</Link>
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{iqMemberCount[t.id] ?? 0} students</div>
                     </div>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -363,6 +363,7 @@ export default async function DashboardPage({
                       {t.status === 'pending_payment' && zeffyIqUrl && (
                         <Link href={zeffyIqUrl} target="_blank" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>Pay $1,200 fee →</Link>
                       )}
+                      <Link href={`/iq/team/${t.id}`} style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>Manage →</Link>
                     </span>
                   </div>
                 )
