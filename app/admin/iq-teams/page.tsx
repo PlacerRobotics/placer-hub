@@ -71,7 +71,7 @@ function Section({ label, teams, coachMap, countMap, canApprove, showApprove }: 
             <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
               <div>
                 <div style={{ fontWeight: 600 }}>{t.team_name || 'Unnamed team'} {t.team_number ? <span style={{ color: 'var(--color-text-muted)' }}>· {t.team_number}</span> : <span style={{ color: 'var(--color-text-muted)' }}>· (number TBD)</span>}</div>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
                   Coach: {coachMap[t.id] || '—'} · {countMap[t.id] ?? 0} member{(countMap[t.id] ?? 0) === 1 ? '' : 's'}
                 </div>
               </div>

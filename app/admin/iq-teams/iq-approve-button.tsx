@@ -25,7 +25,7 @@ export default function IqApproveButton({ teamId, canApprove }: { teamId: string
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
       <PrimaryButton onClick={approve} loading={busy}>Approve &amp; send invites</PrimaryButton>
-      {msg && <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>{msg}</span>}
+      {msg && <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{msg}</span>}
     </div>
   )
 }

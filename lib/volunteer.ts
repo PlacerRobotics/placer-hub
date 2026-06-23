@@ -1,0 +1,43 @@
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+
+export const VOLUNTEER_SEASON = '2026-27'
+// APS certificates must be valid through the end of the season.
+export const APS_VALID_THROUGH = '2027-05-31'
+
+export type CurrentVolunteer = {
+  profileId: string
+  status: string
+  guardianId: string
+  name: string
+  email: string
+}
+
+/**
+ * Resolve the signed-in user to their volunteer_profile (guardian-linked).
+ * Returns null if not signed in or not a volunteer. Uses the service-role client
+ * for the lookups after authenticating via the session.
+ */
+export async function getCurrentVolunteer(): Promise<CurrentVolunteer | null> {
+  const session = await createClient()
+  const { data: { user } } = await session.auth.getUser()
+  if (!user?.email) return null
+  const db = createAdminClient()
+  const { data: g } = await db.from('guardian').select('id, first_name, last_name, login_email').ilike('login_email', user.email).maybeSingle()
+  if (!g) return null
+  const { data: vp } = await db.from('volunteer_profile').select('id, status').eq('guardian_id', g.id).maybeSingle()
+  if (!vp) return null
+  return { profileId: vp.id, status: vp.status, guardianId: g.id, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), email: g.login_email }
+}
+
+/** Get (or create) the per-season clearance row for a volunteer. */
+export async function ensureClearance(db: any, volunteerId: string, season = VOLUNTEER_SEASON) {
+  const { data } = await db.from('volunteer_clearance').select('*').eq('volunteer_id', volunteerId).eq('season', season).maybeSingle()
+  if (data) return data
+  const { data: created } = await db
+    .from('volunteer_clearance')
+    .insert({ volunteer_id: volunteerId, season, status: 'in_progress' })
+    .select('*')
+    .single()
+  return created
+}
