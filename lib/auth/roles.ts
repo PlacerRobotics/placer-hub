@@ -16,6 +16,17 @@ export const ADMIN_ROLES: { value: string; label: string }[] = [
 export const ROLE_VALUES = new Set(ADMIN_ROLES.map((r) => r.value))
 export const ROLE_LABEL: Record<string, string> = Object.fromEntries(ADMIN_ROLES.map((r) => [r.value, r.label]))
 
+export async function hasAnyRole(db: any, adminProfileId: string, roles: string[]): Promise<boolean> {
+  const { data } = await db
+    .from('admin_role_assignment')
+    .select('id')
+    .eq('admin_profile_id', adminProfileId)
+    .in('role', roles)
+    .is('revoked_at', null)
+    .limit(1)
+  return (data ?? []).length > 0
+}
+
 export async function isSuperAdmin(db: any, adminProfileId: string): Promise<boolean> {
   const { data } = await db
     .from('admin_role_assignment')
