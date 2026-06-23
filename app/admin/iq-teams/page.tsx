@@ -5,6 +5,7 @@ import { getAdminProfile } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 import { AdminShell, PageHeader, EmptyState, StatusBadge } from '@/components/ui'
 import IqApproveButton from './iq-approve-button'
+import IqMarkPaidButton from './iq-mark-paid-button'
 
 const SEASON = '2026-27'
 
@@ -95,10 +96,15 @@ export default async function IqTeamsPage() {
           <Tab label={`Pending Payment (${pendingPayment.length})`}>
             {pendingPayment.map((t) => (
               <div key={t.id} style={card}>
-                <div style={{ fontWeight: 600 }}>{t.team_name || 'Unnamed team'}</div>
-                <div style={muted}>Coach: {coachMap[t.id]?.name || '—'} · {coachMap[t.id]?.email || '—'}</div>
-                <div style={muted}>{(rosterMap[t.id]?.length ?? 0)} students · created {new Date(t.created_at).toLocaleDateString()}</div>
-                <div style={muted}>Payment ref: <strong>{t.team_payment_reference_code || '—'}</strong> · awaiting payment</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{t.team_name || 'Unnamed team'}</div>
+                    <div style={muted}>Coach: {coachMap[t.id]?.name || '—'} · {coachMap[t.id]?.email || '—'}</div>
+                    <div style={muted}>{(rosterMap[t.id]?.length ?? 0)} students · created {new Date(t.created_at).toLocaleDateString()}</div>
+                    <div style={muted}>Payment ref: <strong>{t.team_payment_reference_code || '—'}</strong></div>
+                  </div>
+                  <IqMarkPaidButton teamId={t.id} canAct={canApprove} />
+                </div>
               </div>
             ))}
           </Tab>
