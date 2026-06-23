@@ -14,7 +14,7 @@ async function ensureFamilySeason(db: any, familyId: string, statusIfNew: string
 
 // Create an IQ member stub (student + application linked to the team) under a given
 // family. Grade + school are captured up front to help review/approval. No magic
-// link here — invites go out on approval.
+// link here — invites go out only after payment + IQ Coordinator approval.
 async function addMemberStub(db: any, familyId: string, sFirst: string, sLast: string, teamId: string, grade?: number, schoolId?: string, school?: string) {
   const gradeVal = grade && grade > 0 ? grade : 0
   const sid = (schoolId ?? '').trim() || null
@@ -35,28 +35,26 @@ async function addMemberStub(db: any, familyId: string, sFirst: string, sLast: s
   return { ok: true }
 }
 
-// POST /api/iq/team — a signed-in coach submits an IQ team for approval. Creates
-// the team (pending_admin_confirmation, inactive), the coach team_member, and member
-// stubs (the coach's own child under the coach's family; other members under their
-// parent's family). NO invites are sent — the IQ Coordinator approves first.
+// POST /api/iq/team — a signed-in coach creates an IQ team. The team starts in
+// 'pending_payment'; once the $1,200 fee is paid (Zeffy webhook) it moves to
+// 'pending_admin_confirmation', and the IQ Coordinator approves it to 'active'.
+// Member stubs are created now; invites go out only after approval.
 export async function POST(req: NextRequest) {
   const session = await createClient()
   const { data: { user } } = await session.auth.getUser()
-  if (!user?.email) return NextResponse.json({ error: 'Please sign in first.' }, { status: 401 })
+  if (!user?.email) return NextResponse.json({ error: 'Please sign in to your family account first.' }, { status: 401 })
   const coachEmail = user.email.toLowerCase()
 
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid body.' }, { status: 400 }) }
   const coach = body.coach ?? {}
-  const ownChild = body.own_child ?? {}
   if (!String(coach.first_name ?? '').trim() || !String(coach.last_name ?? '').trim()) return NextResponse.json({ error: 'Coach first and last name are required.' }, { status: 400 })
   if (!body.fee_ack) return NextResponse.json({ error: 'You must agree to collect the program fee.' }, { status: 400 })
 
-  // A coach may or may not have their own child on the team.
-  const ownProvided = !!(String(ownChild.first_name ?? '').trim() && String(ownChild.last_name ?? '').trim())
   const coachLast = String(coach.last_name).trim().toLowerCase()
-  const others = (Array.isArray(body.roster) ? body.roster : []).filter((r: any) => String(r.student_first ?? '').trim() && String(r.student_last ?? '').trim() && String(r.parent_email ?? '').trim())
-  if ((ownProvided ? 1 : 0) + others.length < 3) return NextResponse.json({ error: 'A team needs at least 3 members total.' }, { status: 400 })
+  const roster = (Array.isArray(body.roster) ? body.roster : []).filter((r: any) => String(r.student_first ?? '').trim() && String(r.student_last ?? '').trim() && String(r.parent_email ?? '').trim())
+  if (roster.length < 2) return NextResponse.json({ error: 'A team needs at least 2 students.' }, { status: 400 })
+  if (roster.length > 10) return NextResponse.json({ error: 'A team can have at most 10 students.' }, { status: 400 })
 
   const db = createAdminClient()
 
@@ -74,9 +72,10 @@ export async function POST(req: NextRequest) {
     guardian = g; coachFamilyId = g.family_id
   }
 
-  // 2. Team — pending IQ Coordinator approval. IQ is always ES + Placer Robotics.
-  const { data: config } = await db.from('season_config').select('iq_team_fee').eq('season', SEASON).maybeSingle()
+  // 2. Team — pending payment. IQ is always ES + Placer Robotics.
+  const { data: config } = await db.from('season_config').select('iq_team_fee, zeffy_iq_team_url').eq('season', SEASON).maybeSingle()
   const fee = config?.iq_team_fee ?? 1200
+  const paymentRef = `IQT-${globalThis.crypto.randomUUID().slice(0, 8).toUpperCase()}`
   const asst = body.assistant ?? {}
   const asstLine = asst.first_name ? `Assistant: ${asst.first_name} ${asst.last_name ?? ''} ${asst.email ?? ''} ${asst.phone ?? ''}`.trim() : 'Assistant: none'
   const notes = [
@@ -93,7 +92,8 @@ export async function POST(req: NextRequest) {
     team_name: String(body.team_name ?? '').trim() || null,
     school_org: 'Placer Robotics',
     team_fee_amount: fee, team_fee_status: 'unpaid',
-    status: 'pending_admin_confirmation', active: false, notes,
+    team_payment_reference_code: paymentRef,
+    status: 'pending_payment', active: false, notes,
   }).select('id').single()
   if (tErr) return NextResponse.json({ error: `Could not create team: ${tErr.message}` }, { status: 500 })
   const teamId = team.id
@@ -101,23 +101,15 @@ export async function POST(req: NextRequest) {
   // 3. Coach team_member.
   await db.from('team_member').insert({ team_id: teamId, guardian_id: guardian.id, season: SEASON, team_role: 'coach', program: 'vex_iq' })
 
-  // 4. Coach's own child (if they have one on the team) — under the coach's family.
+  // 4. Roster — each student under their parent's family (the coach's own child
+  // folds under the coach when the parent email matches theirs).
   const results: { student: string; under: string }[] = []
-  if (ownProvided) {
-    const oc1 = String(ownChild.first_name).trim(), oc2 = String(ownChild.last_name).trim()
-    const ocRes = await addMemberStub(db, coachFamilyId, oc1, oc2, teamId, Number(ownChild.grade), ownChild.school_id, ownChild.school)
-    results.push({ student: `${oc1} ${oc2}`, under: ocRes.error ? `error: ${ocRes.error}` : 'your family' })
-  }
-
-  // 5. Other members — under each parent's family, UNLESS the parent email is the
-  // coach's or the child's last name matches the coach's (then fold under coach).
-  for (const r of others) {
+  for (const r of roster) {
     const sFirst = String(r.student_first).trim(), sLast = String(r.student_last).trim()
     const pEmail = String(r.parent_email).trim().toLowerCase()
     const pFirst = String(r.parent_first ?? '').trim(), pLast = String(r.parent_last ?? '').trim() || sLast
     const grade = Number(r.grade), schoolId = r.school_id, school = r.school
-    const isCoachChild = pEmail === coachEmail || (sLast.toLowerCase() === coachLast && !pEmail)
-    if (isCoachChild) {
+    if (pEmail === coachEmail) {
       const res = await addMemberStub(db, coachFamilyId, sFirst, sLast, teamId, grade, schoolId, school)
       results.push({ student: `${sFirst} ${sLast}`, under: res.error ? `error: ${res.error}` : 'your family' }); continue
     }
@@ -134,11 +126,11 @@ export async function POST(req: NextRequest) {
     results.push({ student: `${sFirst} ${sLast}`, under: res.error ? `error: ${res.error}` : pEmail })
   }
 
-  // 6. Email the coach confirming submission (best-effort).
+  // 5. Email the coach the payment reference + Zeffy link (best-effort).
   try {
-    const html = iqTeamSubmittedHtml({ coachName: `${String(coach.first_name).trim()} ${String(coach.last_name).trim()}`.trim(), teamName: String(body.team_name ?? '').trim() || null, memberCount: results.length, season: SEASON })
-    await sendEmail({ to: [coachEmail], subject: `IQ team submitted for approval — Placer Robotics ${SEASON}`, html })
+    const html = iqTeamSubmittedHtml({ coachName: `${String(coach.first_name).trim()} ${String(coach.last_name).trim()}`.trim(), teamName: String(body.team_name ?? '').trim() || null, season: SEASON, paymentRef, zeffyUrl: config?.zeffy_iq_team_url ?? null, fee })
+    await sendEmail({ to: [coachEmail], subject: `IQ team created — payment needed (Placer Robotics ${SEASON})`, html })
   } catch (e) { console.error('[iq/team] coach submit email failed:', e) }
 
-  return NextResponse.json({ ok: true, teamId, pending: true, members: results })
+  return NextResponse.json({ ok: true, teamId, paymentRef, members: results })
 }

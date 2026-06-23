@@ -36,6 +36,13 @@ const AID_DISPLAY: Record<string, [string, Variant]> = {
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type Row = { label: string; value: string; variant?: Variant; href?: string; hrefLabel?: string }
 
+const IQ_STATUS: Record<string, [string, Variant]> = {
+  pending_payment: ['Awaiting Payment', 'warning'],
+  pending_admin_confirmation: ['Under Review', 'info'],
+  active: ['Active', 'success'],
+  suspended: ['Suspended', 'error'],
+}
+
 function supporterLevel(amount: number): string | null {
   if (amount >= 1040) return 'Champion'
   if (amount >= 790) return 'Standard'
@@ -72,6 +79,9 @@ export default async function DashboardPage({
   let firstUnregisteredName = ''
   let guardianHasSigned = false
   let hasActiveWaivers = false
+  let iqTeams: any[] = []
+  const iqMemberCount: Record<string, number> = {}
+  let zeffyIqUrl: string | null = null
 
   if (guardian) {
     const familyId = guardian.family_id
@@ -220,6 +230,19 @@ export default async function DashboardPage({
     guardianHasSigned = (mySig ?? []).length > 0
     const { data: activeW } = await supabase.from('waiver_template').select('id').eq('active', true).limit(1)
     hasActiveWaivers = (activeW ?? []).length > 0
+
+    // IQ coaching — teams this guardian coaches this season.
+    const { data: coachTms } = await supabase
+      .from('team_member')
+      .select('team:team_id ( id, team_name, status )')
+      .eq('guardian_id', guardian.id).eq('season', SEASON).eq('team_role', 'coach').eq('program', 'vex_iq').is('revoked_at', null)
+    iqTeams = (coachTms ?? []).map((c: any) => (Array.isArray(c.team) ? c.team[0] : c.team)).filter(Boolean)
+    if (iqTeams.length) {
+      const { data: iqApps } = await supabase.from('student_application').select('triage_notes').eq('season', SEASON).ilike('triage_notes', '%iq_team:%')
+      for (const a of iqApps ?? []) { const m = String(a.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i); if (m) iqMemberCount[m[1]] = (iqMemberCount[m[1]] ?? 0) + 1 }
+    }
+    const { data: cfg } = await supabase.from('season_config').select('zeffy_iq_team_url').eq('season', SEASON).maybeSingle()
+    zeffyIqUrl = cfg?.zeffy_iq_team_url ?? null
   }
 
   const [aidLabel, aidVariant] = AID_DISPLAY[aidStatus] ?? AID_DISPLAY.not_requested
@@ -319,6 +342,40 @@ export default async function DashboardPage({
             </div>
           </div>
         ))
+      )}
+
+      {guardian && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>Coaching an IQ Team?</h2>
+          {iqTeams.length === 0 ? (
+            <ActionCard
+              title="Create an IQ Team"
+              description="Register your VEX IQ team for the 2026–27 season. The $1,200 team fee covers up to 10 students."
+              ctaLabel="Create IQ Team →"
+              href="/iq/team"
+            />
+          ) : (
+            <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
+              {iqTeams.map((t: any, i: number) => {
+                const [lbl, variant] = IQ_STATUS[t.status] ?? ['—', 'neutral' as Variant]
+                return (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: i < iqTeams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                    <div>
+                      <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{t.team_name || 'IQ team'}</span>
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{iqMemberCount[t.id] ?? 0} students</div>
+                    </div>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <StatusBadge label={lbl} variant={variant} />
+                      {t.status === 'pending_payment' && zeffyIqUrl && (
+                        <Link href={zeffyIqUrl} target="_blank" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>Pay $1,200 fee →</Link>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {guardian && (

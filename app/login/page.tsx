@@ -20,6 +20,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<Status>('idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [redirectTo, setRedirectTo] = useState('')
+  const isIqCoach = redirectTo === '/iq/team'
+
+  useEffect(() => {
+    const rt = new URLSearchParams(window.location.search).get('redirectTo') || ''
+    if (rt.startsWith('/')) setRedirectTo(rt)
+  }, [])
 
   // Implicit-flow magic links (admin-sent invites) deliver the session as tokens
   // in the URL hash, which the server callback can't read — so they land here.
@@ -43,8 +50,9 @@ export default function LoginPage() {
           return
         }
         // Strip the tokens from the URL, then continue into the app.
+        const rt = new URLSearchParams(window.location.search).get('redirectTo')
         window.history.replaceState(null, '', window.location.pathname)
-        router.replace('/dashboard')
+        router.replace(rt && rt.startsWith('/') ? rt : '/dashboard')
       })
   }, [router])
 
@@ -59,7 +67,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL + '/api/auth/callback',
+        emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL + '/api/auth/callback' + (redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ''),
       },
     })
 
@@ -77,6 +85,15 @@ export default function LoginPage() {
       <p className="text-body" style={{ marginTop: '0.75rem', color: 'var(--color-text-muted)' }}>
         We&apos;ll email you a secure sign-in link. No password needed.
       </p>
+
+      {isIqCoach && (
+        <div style={{ marginTop: '1.25rem' }}>
+          <InfoAlert title="Sign in to create your IQ team">
+            Please sign in to your family account to create an IQ team. Don&apos;t have an account?{' '}
+            <Link href="/apply">Register your family first</Link>, then return here to create your IQ team.
+          </InfoAlert>
+        </div>
+      )}
 
       {status === 'completing' ? (
         <div style={{ marginTop: '1.75rem' }}>

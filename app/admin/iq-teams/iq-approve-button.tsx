@@ -11,12 +11,12 @@ export default function IqApproveButton({ teamId, canApprove }: { teamId: string
 
   async function approve() {
     if (busy) return
-    if (!confirm('Approve this team and send magic-link invites to all parents?')) return
+    if (!confirm('Approve this team? Member families become ready to register (you send invites from Registrations).')) return
     setBusy(true); setMsg('')
     const res = await fetch(`/api/admin/iq-teams/${teamId}/approve`, { method: 'POST' })
     const d = await res.json().catch(() => ({}))
     if (!res.ok) { setMsg(d.error || 'Failed.'); setBusy(false); return }
-    setMsg(`Approved · ${d.invited ?? 0} invite(s) sent${d.failed?.length ? ` · ${d.failed.length} failed` : ''}`)
+    setMsg(`Approved · ${d.families ?? 0} family(ies) cleared — send invites from Registrations`)
     setBusy(false)
     router.refresh()
   }
@@ -24,7 +24,7 @@ export default function IqApproveButton({ teamId, canApprove }: { teamId: string
   if (!canApprove) return <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>IQ Coordinator approval required</span>
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-      <PrimaryButton onClick={approve} loading={busy}>Approve &amp; send invites</PrimaryButton>
+      <PrimaryButton onClick={approve} loading={busy}>Approve team</PrimaryButton>
       {msg && <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{msg}</span>}
     </div>
   )

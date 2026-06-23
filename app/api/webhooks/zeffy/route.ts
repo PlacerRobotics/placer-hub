@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { findEnrollmentByRef, linkPaymentToEnrollment, SEASON } from '@/lib/payments'
+import { sendEmail, iqTeamPaidNotifyHtml } from '@/lib/email'
 
 /**
  * Zeffy payment webhook.
@@ -97,7 +98,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, captured: true, minimal: true })
   }
 
-  // 2) Best-effort auto-match — never throws; the payload is already captured.
+  // 2) Try IQ team fee match FIRST (team_payment_reference_code, e.g. "IQT-XXXX").
+  //    A team match short-circuits — it never falls through to enrollment matching.
+  try {
+    const tComment = String(body.comment ?? body.note ?? body.message ?? body.reference ?? '')
+    const teamRef = tComment.match(/IQT-[A-Z0-9]+/i)?.[0]?.toUpperCase() ?? null
+    if (teamRef) {
+      const { data: team } = await db.from('team').select('id, team_name').eq('team_payment_reference_code', teamRef).maybeSingle()
+      if (team) {
+        await db.from('team').update({ team_fee_status: 'paid', status: 'pending_admin_confirmation', active: false }).eq('id', team.id)
+        await db.from('payment_transaction').update({ payment_type: 'iq_team_fee', payment_reference_code: teamRef, matched_status: 'auto_matched', matched_at: now }).eq('id', pay.id)
+        try {
+          const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+          const { data: admins } = await db.from('admin_role_assignment').select('admin:admin_profile_id ( email )').in('role', ['iq_coordinator', 'super_admin']).is('revoked_at', null)
+          const emails = [...new Set((admins ?? []).map((a: any) => (Array.isArray(a.admin) ? a.admin[0] : a.admin)?.email).filter(Boolean))] as string[]
+          if (emails.length) await sendEmail({ to: emails, subject: `IQ Team Payment Received — ${team.team_name ?? 'IQ team'}`, html: iqTeamPaidNotifyHtml({ teamName: team.team_name ?? 'IQ team', amount, hubUrl: site }) })
+        } catch (e: any) { console.error('[zeffy] iq notify failed:', e?.message) }
+        return NextResponse.json({ ok: true, matched: 'iq_team' })
+      }
+    }
+  } catch (e: any) {
+    console.error('[zeffy] iq team match failed:', e?.message)
+  }
+
+  // 3) Best-effort enrollment auto-match — never throws; the payload is already captured.
   //    Current heuristic: a PART-… reference code in a comment field. Will be
   //    replaced with guardian email + student name + program once the real
   //    payload shape is confirmed from a test transaction.

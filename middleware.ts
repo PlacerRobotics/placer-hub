@@ -12,9 +12,8 @@ const PUBLIC_ROUTES = [
   '/login',
   '/auth/callback',
   '/auth/confirm',
-  // /iq/team is public so a new coach can hit the in-page sign-in step; the page
-  // itself shows a sign-in card until authed, and the submit route checks the session.
-  '/iq',
+  // Note: /iq/team is NOT public — IQ team creation requires a family account
+  // (PRD FR-IQ-001). Unauthenticated requests fall through to the /login redirect.
 ]
 
 function isPublicRoute(pathname: string): boolean {

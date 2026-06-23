@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { PageHeader, FormSection, FormField, TextInput, PrimaryButton, SecondaryButton, SuccessAlert, ErrorAlert, InfoAlert } from '@/components/ui'
 
 const OTHER_SCHOOL = '__other__'
+const MAX_STUDENTS = 10
+const MIN_STUDENTS = 2
 type School = { id: string; name: string; grade_min: number | null; grade_max: number | null }
 type RosterRow = { student_first: string; student_last: string; grade: string; schoolId: string; schoolOther: string; parent_first: string; parent_last: string; parent_email: string }
 const emptyRow = (): RosterRow => ({ student_first: '', student_last: '', grade: '', schoolId: '', schoolOther: '', parent_first: '', parent_last: '', parent_email: '' })
@@ -23,17 +25,14 @@ export default function IqTeamForm({ email, coach, schools }: { email: string; c
   const [aFirst, setAFirst] = useState(''); const [aLast, setALast] = useState(''); const [aEmail, setAEmail] = useState(''); const [aPhone, setAPhone] = useState('')
   const [returning, setReturning] = useState('')
   const [competes, setCompetes] = useState('unsure')
-  const [ocFirst, setOcFirst] = useState(''); const [ocLast, setOcLast] = useState(''); const [ocGrade, setOcGrade] = useState(''); const [ocSchoolId, setOcSchoolId] = useState(''); const [ocSchoolOther, setOcSchoolOther] = useState('')
   const [feeAck, setFeeAck] = useState(false)
   const [roster, setRoster] = useState<RosterRow[]>([emptyRow(), emptyRow()])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [result, setResult] = useState<{ members: { student: string; under: string }[] } | null>(null)
+  const [result, setResult] = useState<{ paymentRef: string; members: { student: string; under: string }[] } | null>(null)
 
-  const completeOthers = roster.filter(rowComplete).length
-  const ownCount = ocFirst.trim() && ocLast.trim() && ocGrade ? 1 : 0
-  const totalMembers = ownCount + completeOthers
-  const valid = cFirst.trim() && cLast.trim() && feeAck && totalMembers >= 3
+  const completeStudents = roster.filter(rowComplete).length
+  const valid = cFirst.trim() && cLast.trim() && feeAck && completeStudents >= MIN_STUDENTS
 
   function setRow(i: number, k: keyof RosterRow, v: string) {
     setRoster((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
@@ -48,9 +47,7 @@ export default function IqTeamForm({ email, coach, schools }: { email: string; c
         body: JSON.stringify({
           coach: { first_name: cFirst.trim(), last_name: cLast.trim(), phone: cPhone.trim() },
           assistant: aFirst.trim() ? { first_name: aFirst.trim(), last_name: aLast.trim(), email: aEmail.trim(), phone: aPhone.trim() } : null,
-          returning_number: returning.trim(), competes_outside: competes,
-          own_child: ownCount ? { first_name: ocFirst.trim(), last_name: ocLast.trim(), grade: ocGrade, school_id: ocSchoolId && ocSchoolId !== OTHER_SCHOOL ? ocSchoolId : '', school: ocSchoolId === OTHER_SCHOOL ? ocSchoolOther.trim() : '' } : {},
-          fee_ack: feeAck,
+          returning_number: returning.trim(), competes_outside: competes, fee_ack: feeAck,
           roster: roster.filter(rowComplete).map((r) => ({
             student_first: r.student_first, student_last: r.student_last, grade: r.grade,
             parent_first: r.parent_first, parent_last: r.parent_last, parent_email: r.parent_email,
@@ -61,17 +58,18 @@ export default function IqTeamForm({ email, coach, schools }: { email: string; c
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setError(d.error || 'Something went wrong.'); setBusy(false); return }
-      setResult({ members: d.members ?? [] })
+      setResult({ paymentRef: d.paymentRef ?? '', members: d.members ?? [] })
     } catch { setError('Network error — please try again.'); setBusy(false) }
   }
 
   if (result) {
     return (
       <>
-        <PageHeader title="Team submitted" subtitle="Your IQ team is in for review." />
-        <SuccessAlert title="Submitted for IQ Coordinator approval">
-          Once the IQ Coordinator approves your team, each parent gets a magic link to register their student. We&apos;ll
-          email you when it&apos;s approved. Nothing is sent to parents until then.
+        <PageHeader title="IQ team created" subtitle="One more step — pay your team fee." />
+        <SuccessAlert title="Team created — payment needed">
+          We emailed you a Zeffy payment link and your reference code <strong>{result.paymentRef}</strong>. Once your $1,200
+          team fee is confirmed, the IQ Coordinator reviews your team. After approval, each family receives a registration
+          invitation — nothing is sent to parents until then.
         </SuccessAlert>
         <div style={{ marginTop: '1.25rem', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
           {result.members.map((m, i) => (
@@ -102,22 +100,9 @@ export default function IqTeamForm({ email, coach, schools }: { email: string; c
     )
   }
 
-  const memberRow = (label: string, sf: string, setSf: (v: string) => void, sl: string, setSl: (v: string) => void, gr: string, setGr: (v: string) => void, schoolNode: React.ReactNode, extra?: React.ReactNode) => (
-    <div style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem 0.875rem', marginBottom: '0.625rem' }}>
-      {label && <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.5rem' }}>{label}</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem' }}>
-        <div><label style={lbl}>Student first</label><TextInput value={sf} onChange={(e) => setSf(e.target.value)} /></div>
-        <div><label style={lbl}>Student last</label><TextInput value={sl} onChange={(e) => setSl(e.target.value)} /></div>
-        <div><label style={lbl}>Grade</label><select style={selectStyle} value={gr} onChange={(e) => setGr(e.target.value)}><option value="">—</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
-        <div>{schoolNode}</div>
-      </div>
-      {extra}
-    </div>
-  )
-
   return (
     <>
-      <PageHeader title="Register an IQ team" subtitle="Coach application for the 2026–27 VEX IQ season (Elementary)." />
+      <PageHeader title="Create your IQ team" subtitle="Coach application for the 2026–27 VEX IQ season (Elementary)." />
       {error && <div style={{ marginBottom: '1.25rem' }}><ErrorAlert title="Couldn’t submit">{error}</ErrorAlert></div>}
 
       <FormSection title="Coach" description={`Signed in as ${email}.`}>
@@ -155,29 +140,30 @@ export default function IqTeamForm({ email, coach, schools }: { email: string; c
         </div>
       </FormSection>
 
-      <FormSection title="Your own child (optional)" description="If your child is on the team, add them here — they go under your account, no separate invite.">
-        {memberRow('', ocFirst, setOcFirst, ocLast, setOcLast, ocGrade, setOcGrade, schoolSelect(ocGrade, ocSchoolId, ocSchoolOther, setOcSchoolId, setOcSchoolOther))}
-      </FormSection>
-
-      <FormSection title="Team members" description="At least 3 members total. Grade + school help us review and approve. Each parent gets a magic link (after approval) to register.">
+      <FormSection title="Students" description="2–10 students. Grade + school help us review and approve.">
         {roster.map((r, i) => (
-          memberRow(
-            `Member ${i + 1}`, r.student_first, (v) => setRow(i, 'student_first', v), r.student_last, (v) => setRow(i, 'student_last', v),
-            r.grade, (v) => setRow(i, 'grade', v),
-            schoolSelect(r.grade, r.schoolId, r.schoolOther, (v) => setRow(i, 'schoolId', v), (v) => setRow(i, 'schoolOther', v)),
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', marginTop: '0.5rem' }}>
-                <div><label style={lbl}>Parent first</label><TextInput value={r.parent_first} onChange={(e) => setRow(i, 'parent_first', e.target.value)} /></div>
-                <div><label style={lbl}>Parent last</label><TextInput value={r.parent_last} onChange={(e) => setRow(i, 'parent_last', e.target.value)} /></div>
-                <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Parent email</label><TextInput type="email" value={r.parent_email} onChange={(e) => setRow(i, 'parent_email', e.target.value)} /></div>
-              </div>
-              {roster.length > 2 && <button type="button" onClick={() => setRoster((rows) => rows.filter((_, idx) => idx !== i))} style={{ marginTop: '0.5rem', background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer' }}>Remove</button>}
-            </>
-          )
+          <div key={i} style={{ border: '1px solid var(--color-border)', borderRadius: '8px', padding: '0.75rem 0.875rem', marginBottom: '0.625rem' }}>
+            <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.5rem' }}>Student {i + 1}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem' }}>
+              <div><label style={lbl}>Student first</label><TextInput value={r.student_first} onChange={(e) => setRow(i, 'student_first', e.target.value)} /></div>
+              <div><label style={lbl}>Student last</label><TextInput value={r.student_last} onChange={(e) => setRow(i, 'student_last', e.target.value)} /></div>
+              <div><label style={lbl}>Grade</label><select style={selectStyle} value={r.grade} onChange={(e) => setRow(i, 'grade', e.target.value)}><option value="">—</option>{GRADES.map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
+              <div>{schoolSelect(r.grade, r.schoolId, r.schoolOther, (v) => setRow(i, 'schoolId', v), (v) => setRow(i, 'schoolOther', v))}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <div><label style={lbl}>Parent first</label><TextInput value={r.parent_first} onChange={(e) => setRow(i, 'parent_first', e.target.value)} /></div>
+              <div><label style={lbl}>Parent last</label><TextInput value={r.parent_last} onChange={(e) => setRow(i, 'parent_last', e.target.value)} /></div>
+              <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Parent email</label><TextInput type="email" value={r.parent_email} onChange={(e) => setRow(i, 'parent_email', e.target.value)} /></div>
+            </div>
+            {roster.length > MIN_STUDENTS && <button type="button" onClick={() => setRoster((rows) => rows.filter((_, idx) => idx !== i))} style={{ marginTop: '0.5rem', background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer' }}>Remove</button>}
+          </div>
         ))}
-        <SecondaryButton onClick={() => setRoster((rows) => [...rows, emptyRow()])}>+ Add another member</SecondaryButton>
-        {totalMembers < 3 && (
-          <div style={{ marginTop: '0.75rem' }}><InfoAlert title="Need 3 total">Add {3 - totalMembers} more — teams need at least 3 members total{ownCount ? ' (including your child)' : ''}. Each needs a grade.</InfoAlert></div>
+        {roster.length < MAX_STUDENTS && <SecondaryButton onClick={() => setRoster((rows) => [...rows, emptyRow()])}>+ Add another student</SecondaryButton>}
+        <div style={{ marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+          Parent emails will receive a registration invitation once your team is approved and the fee is confirmed. Do not use student email addresses.
+        </div>
+        {completeStudents < MIN_STUDENTS && (
+          <div style={{ marginTop: '0.75rem' }}><InfoAlert title="Need at least 2 students">Add {MIN_STUDENTS - completeStudents} more — each needs first name, last name, grade, and a parent email.</InfoAlert></div>
         )}
       </FormSection>
 
@@ -189,7 +175,7 @@ export default function IqTeamForm({ email, coach, schools }: { email: string; c
       </FormSection>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-        <PrimaryButton loading={busy} disabled={!valid} onClick={submit}>Submit team for approval</PrimaryButton>
+        <PrimaryButton loading={busy} disabled={!valid} onClick={submit}>Create team</PrimaryButton>
       </div>
     </>
   )

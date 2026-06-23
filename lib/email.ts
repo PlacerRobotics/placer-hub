@@ -68,23 +68,39 @@ function emailShell(heading: string, inner: string): string {
 
 const P = 'margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.6;'
 
-export function iqTeamSubmittedHtml({ coachName, teamName, memberCount, season }: { coachName: string; teamName: string | null; memberCount: number; season: string }): string {
+export function iqTeamSubmittedHtml({ coachName, teamName, season, paymentRef, zeffyUrl, fee }: { coachName: string; teamName: string | null; season: string; paymentRef: string; zeffyUrl: string | null; fee: number }): string {
   const team = teamName ? ` <strong>${teamName}</strong>` : ''
-  return emailShell('IQ team submitted for approval', `
-    <p style="${P}">Hi ${coachName || 'Coach'}, your VEX IQ team${team} has been submitted for the ${season} season with ${memberCount} member${memberCount === 1 ? '' : 's'}.</p>
-    <p style="${P}">It's now pending <strong>IQ Coordinator approval</strong>. Once approved, each parent receives a magic link to register their student — and we'll email you to confirm. Nothing is sent to parents until then.</p>`)
+  const payBtn = zeffyUrl
+    ? `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F2C352;border-radius:8px;">
+         <a href="${zeffyUrl}" style="display:inline-block;padding:13px 28px;color:#0E2558;font-size:15px;font-weight:700;text-decoration:none;">Pay the $${fee} team fee via Zeffy &rarr;</a></td></tr></table>`
+    : `<p style="${P}">A secure online payment link will be provided shortly.</p>`
+  return emailShell('IQ team created — payment needed', `
+    <p style="${P}">Hi ${coachName || 'Coach'}, your VEX IQ team${team} has been created for the ${season} season.</p>
+    <p style="margin:0 0 8px;color:#3a4a63;font-size:15px;line-height:1.6;">Include this payment reference with your payment:</p>
+    <p style="margin:0 0 20px;"><span style="display:inline-block;background-color:#f4f6fb;border:1px solid #e6eaf1;border-radius:6px;padding:8px 14px;color:#0E2558;font-size:16px;font-weight:700;letter-spacing:0.04em;">${paymentRef}</span></p>
+    ${payBtn}
+    <p style="margin:20px 0 0;color:#3a4a63;font-size:14px;line-height:1.6;">Once payment is confirmed, our IQ Coordinator will review your team. You will receive a separate email with your login link and clearance instructions once your team is approved.</p>`)
 }
 
-export function iqTeamApprovedHtml({ coachName, teamName, season, hubUrl }: { coachName: string; teamName: string | null; season: string; hubUrl: string }): string {
-  const team = teamName ? ` <strong>${teamName}</strong>` : ''
-  const btn = hubUrl
-    ? `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F2C352;border-radius:8px;">
-         <a href="${hubUrl}" style="display:inline-block;padding:13px 28px;color:#0E2558;font-size:15px;font-weight:700;text-decoration:none;">Open the Hub &rarr;</a></td></tr></table>`
-    : ''
+export function iqTeamApprovedHtml({ coachName, teamName, season, volunteerUrl }: { coachName: string; teamName: string | null; season: string; volunteerUrl: string }): string {
+  const team = teamName || 'your team'
   return emailShell('Your IQ team is approved', `
-    <p style="${P}">Hi ${coachName || 'Coach'}, great news — your VEX IQ team${team} is approved for the ${season} season!</p>
-    <p style="${P}">We've emailed each parent a magic link to register their student. You can register your own child and track your roster from the Hub.</p>
-    ${btn}`)
+    <p style="${P}">Congratulations${coachName ? ` ${coachName}` : ''}! Your VEX IQ team <strong>${team}</strong> has been approved for the ${season} season.</p>
+    <p style="margin:0 0 8px;color:#3a4a63;font-size:14px;font-weight:700;">Next steps for you:</p>
+    <ol style="margin:0 0 16px;padding-left:18px;color:#3a4a63;font-size:14px;line-height:1.6;">
+      <li>Complete your Registered Volunteer clearance at <a href="${volunteerUrl}" style="color:#0E2558;font-weight:600;">the volunteer portal</a>.</li>
+      <li>Your students' families will receive registration invitations shortly.</li>
+    </ol>
+    <p style="margin:0 0 16px;color:#3a4a63;font-size:14px;line-height:1.6;">Team details:<br/>Team name: ${team}<br/>Season: ${season}</p>
+    <p style="margin:0;color:#7a879c;font-size:13px;">Questions? Contact registrar@placerrobotics.org</p>`)
+}
+
+export function iqTeamPaidNotifyHtml({ teamName, amount, hubUrl }: { teamName: string; amount: number; hubUrl: string }): string {
+  return emailShell('IQ Team Payment Received', `
+    <p style="${P}">Payment of $${amount} received for IQ team <strong>${teamName}</strong>.</p>
+    <p style="${P}">The team is now pending your review and approval.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F2C352;border-radius:8px;">
+      <a href="${hubUrl}/admin/iq-teams" style="display:inline-block;padding:13px 28px;color:#0E2558;font-size:15px;font-weight:700;text-decoration:none;">Review at the Hub &rarr;</a></td></tr></table>`)
 }
 
 export function volunteerApplicationReceivedHtml({ name, season }: { name: string; season: string }): string {

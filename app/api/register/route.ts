@@ -93,6 +93,18 @@ export async function POST(request: NextRequest) {
   const emailCertified = body.emailCertified === true
   const slackConsent = under13 ? false : body.slackConsent === true
 
+  // FR-IQ-007: IQ students may not register until their coach's team is 'active'.
+  if (program === 'vex_iq') {
+    const { data: appn } = await db.from('student_application').select('triage_notes').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
+    const tm = (appn?.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i)
+    if (tm) {
+      const { data: t } = await db.from('team').select('status').eq('id', tm[1]).maybeSingle()
+      if (!t || t.status !== 'active') {
+        return NextResponse.json({ error: 'IQ team registration is not yet open. Your coach’s team is pending payment or admin approval. You will receive an email when registration opens.' }, { status: 400 })
+      }
+    }
+  }
+
   // 5. Update the student record with the registration details.
   const { error: stuErr } = await db
     .from('student')
