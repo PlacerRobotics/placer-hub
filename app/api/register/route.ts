@@ -181,6 +181,7 @@ export async function POST(request: NextRequest) {
     .select('id, waiver_type, version, body_hash')
     .eq('active', true)
   const typedName: string = body.signatureName ?? ''
+  const participantName: string = body.studentSignatureName ?? ''
   if (waivers?.length) {
     const sigs = waivers.map((w: any) => ({
       waiver_template_id: w.id,
@@ -193,6 +194,7 @@ export async function POST(request: NextRequest) {
       waiver_version: w.version,
       body_hash: w.body_hash,
       typed_name: typedName,
+      participant_typed_name: participantName || null,
       electronic_consent_checked: true,
       read_and_agree_checked: true,
       authenticated_email: user.email,
