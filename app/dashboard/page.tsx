@@ -10,7 +10,6 @@ import {
   WarningAlert,
   SuccessAlert,
 } from '@/components/ui'
-import { FinancialAidCallout } from '@/components/FinancialAidCallout'
 import { supporterLevel } from '@/lib/supporter'
 
 const ADMIN_EMAIL = 'kevin.miller@placerrobotics.org'
@@ -268,104 +267,98 @@ export default async function DashboardPage({
   const fullyComplete = cards.length > 0 && fsStatus === 'registered' && cards.every((c) => c.complete)
   const anyRegistered = cards.some((c) => c.rows.find((r) => r.label === 'Registration')?.value === 'Complete')
   const showSignPrompt = !!guardian && !guardianHasSigned && anyRegistered && hasActiveWaivers
-  // (3) aid callout only before registration is complete.
-  const showAidCallout = aidStatus === 'not_requested' && fsStatus !== 'registered'
-  const pendingSummary = [...new Set(cards.flatMap((c) => c.pending))]
+
+  // Every outstanding action collected into one place (the "Next steps" panel) so
+  // the listings below stay status-only.
+  const nextSteps: { title: string; desc: string; cta: string; href: string }[] = []
+  if (firstUnregisteredName) nextSteps.push({ title: `Complete registration for ${firstUnregisteredName}`, desc: 'Finish the form and submit payment to secure the 2026–27 spot.', cta: 'Continue registration', href: '/register' })
+  if (showSignPrompt) nextSteps.push({ title: 'Sign your agreements', desc: 'Review and sign this season’s participation and policy agreements from your account.', cta: 'Review & sign', href: '/waivers' })
+
+  const panel: React.CSSProperties = { backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }
+  const rowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem' }
+  const smallLink: React.CSSProperties = { fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }
+  const ctaBtn: React.CSSProperties = { fontSize: '0.8125rem', fontWeight: 600, color: '#fff', background: 'var(--color-navy-deep)', padding: '7px 14px', borderRadius: 6, whiteSpace: 'nowrap' }
 
   return (
     <FamilyShell familyName={familyLabel} maxWidth="lg">
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
-        <Link href="/dashboard/edit" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>
-          My Account →
-        </Link>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        {isAdmin ? (
+          <Link href="/admin" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>Admin dashboard →</Link>
+        ) : <span />}
+        <Link href="/dashboard/edit" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>My Account →</Link>
       </div>
 
       {notice === 'not_cleared' && (
-        <div style={{ marginBottom: '1rem' }}>
-          <WarningAlert title="Not cleared to register yet">You need to be accepted before registering.</WarningAlert>
-        </div>
+        <div style={{ marginBottom: '1rem' }}><WarningAlert title="Not cleared to register yet">You need to be accepted before registering.</WarningAlert></div>
       )}
       {notice === 'registered' && (
-        <div style={{ marginBottom: '1rem' }}>
-          <SuccessAlert title="Registration submitted">We received your registration. Complete payment to secure the spot.</SuccessAlert>
-        </div>
+        <div style={{ marginBottom: '1rem' }}><SuccessAlert title="Registration submitted">We received your registration. Complete payment to secure the spot.</SuccessAlert></div>
       )}
       {notice === 'signed' && (
-        <div style={{ marginBottom: '1rem' }}>
-          <SuccessAlert title="Agreements signed">Thank you — your signatures were recorded.</SuccessAlert>
-        </div>
+        <div style={{ marginBottom: '1rem' }}><SuccessAlert title="Agreements signed">Thank you — your signatures were recorded.</SuccessAlert></div>
       )}
 
-      {isAdmin && (
-        <div style={{ marginBottom: '1rem' }}>
-          <Link href="/admin" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>Admin dashboard →</Link>
-        </div>
-      )}
+      <PageHeader title="Your Dashboard" subtitle={`Signed in as ${email}.`} />
 
-      <PageHeader title="Your Dashboard" subtitle={`Signed in as ${email}. Here's where each student stands.`} />
-
-      {firstUnregisteredName && (
-        <ActionCard
-          title={`Complete registration for ${firstUnregisteredName}`}
-          description="Finish the registration form and submit payment to secure the spot for the 2026–27 season."
-          ctaLabel="Continue registration"
-          href="/register"
-        />
-      )}
-      {fullyComplete ? (
-        <div style={{ marginBottom: '0.5rem' }}>
-          <SuccessAlert title="Registration complete">
-            Every student is registered, signed, paid, and assigned to a team for {SEASON}. You&apos;re all set!
-          </SuccessAlert>
-        </div>
-      ) : cards.length > 0 && !firstUnregisteredName && (
-        <div style={{ marginBottom: '0.5rem' }}>
-          <WarningAlert title="Registration in progress">
-            Still pending: {pendingSummary.join(', ')}.
-          </WarningAlert>
-        </div>
-      )}
-      {showSignPrompt && (
-        <ActionCard
-          title="Sign your agreements"
-          description="You haven't signed this season's participation and policy agreements yet. Each parent or legal guardian can review and sign from their own account."
-          ctaLabel="Review & sign"
-          href="/waivers"
-        />
-      )}
-
-      {cards.length === 0 ? (
-        <div style={{ marginTop: '1.5rem' }}>
-          <WarningAlert title="No students yet">
-            We don&apos;t have a student on your account for {SEASON} yet. If you applied, an admin will clear you to register soon.
-          </WarningAlert>
-        </div>
-      ) : (
-        cards.map((card) => (
-          <div key={card.name} style={{ marginTop: '1.5rem' }}>
-            <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>{card.name}</h2>
-            <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
-              {card.rows.map((item, i) => (
-                <div key={item.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: i < card.rows.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
-                  <span style={{ fontSize: '0.9375rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>{item.label}</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    {item.variant ? <StatusBadge label={item.value} variant={item.variant} /> : <span style={{ fontSize: '0.875rem' }}>{item.value}</span>}
-                    {item.href && (
-                      <Link href={item.href} target={item.href.startsWith('http') ? '_blank' : undefined} style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>
-                        {item.hrefLabel}
-                      </Link>
-                    )}
-                  </span>
+      {/* NEXT STEPS — every outstanding action in one place */}
+      {cards.length > 0 && nextSteps.length > 0 && (
+        <section style={{ marginBottom: '1.75rem' }}>
+          <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>Next steps</h2>
+          <div style={panel}>
+            {nextSteps.map((a, i) => (
+              <div key={a.title} style={{ ...rowFlex, borderBottom: i < nextSteps.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                <div>
+                  <div style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{a.title}</div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{a.desc}</div>
                 </div>
-              ))}
-            </div>
+                <Link href={a.href} style={ctaBtn}>{a.cta} →</Link>
+              </div>
+            ))}
           </div>
-        ))
+        </section>
+      )}
+      {cards.length > 0 && nextSteps.length === 0 && fullyComplete && (
+        <div style={{ marginBottom: '1.75rem' }}>
+          <SuccessAlert title="You're all set">Every student is registered, signed, paid, and assigned to a team for {SEASON}.</SuccessAlert>
+        </div>
       )}
 
+      {/* YOUR STUDENTS — status at a glance */}
+      {cards.length === 0 ? (
+        <WarningAlert title="No students yet">
+          We don&apos;t have a student on your account for {SEASON} yet. If you applied, an admin will clear you to register soon.
+        </WarningAlert>
+      ) : (
+        <section>
+          <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>Your students</h2>
+          {cards.map((card) => (
+            <div key={card.name} style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.625rem' }}>
+                <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, margin: 0 }}>{card.name}</h3>
+                <StatusBadge label={card.complete ? 'Complete' : 'In progress'} variant={card.complete ? 'success' : 'warning'} />
+              </div>
+              <div style={panel}>
+                {card.rows.map((item, i) => (
+                  <div key={item.label} style={{ ...rowFlex, borderBottom: i < card.rows.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                    <span style={{ fontSize: '0.9375rem', fontWeight: 500, color: 'var(--color-text-primary)' }}>{item.label}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      {item.variant ? <StatusBadge label={item.value} variant={item.variant} /> : <span style={{ fontSize: '0.875rem' }}>{item.value}</span>}
+                      {item.href && (
+                        <Link href={item.href} target={item.href.startsWith('http') ? '_blank' : undefined} style={smallLink}>{item.hrefLabel}</Link>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* IQ TEAM COACHING */}
       {guardian && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>Coaching an IQ Team?</h2>
+        <section style={{ marginTop: '2rem' }}>
+          <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>IQ team coaching</h2>
           {iqTeams.length === 0 ? (
             <ActionCard
               title="Create an IQ Team"
@@ -374,11 +367,11 @@ export default async function DashboardPage({
               href="/iq/team"
             />
           ) : (
-            <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
+            <div style={panel}>
               {iqTeams.map((t: any, i: number) => {
                 const [lbl, variant] = IQ_STATUS[t.status] ?? ['—', 'neutral' as Variant]
                 return (
-                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: i < iqTeams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                  <div key={t.id} style={{ ...rowFlex, borderBottom: i < iqTeams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                     <div>
                       <Link href={`/iq/team/${t.id}`} style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>{t.team_name || 'IQ team'}</Link>
                       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{iqMemberCount[t.id] ?? 0} students</div>
@@ -386,57 +379,56 @@ export default async function DashboardPage({
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                       <StatusBadge label={lbl} variant={variant} />
                       {t.status === 'pending_payment' && zeffyIqUrl && (
-                        <Link href={zeffyIqUrl} target="_blank" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>Pay $1,200 fee →</Link>
+                        <Link href={zeffyIqUrl} target="_blank" style={smallLink}>Pay $1,200 fee →</Link>
                       )}
-                      <Link href={`/iq/team/${t.id}`} style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>Manage →</Link>
+                      <Link href={`/iq/team/${t.id}`} style={smallLink}>Manage →</Link>
                     </span>
                   </div>
                 )
               })}
             </div>
           )}
-        </div>
+        </section>
       )}
 
+      {/* IQ TEAM STUDENTS */}
       {iqStudents.length > 0 && (
-        <div style={{ marginTop: '1.5rem' }}>
+        <section style={{ marginTop: '2rem' }}>
           <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>Your IQ team {iqStudents.length === 1 ? 'student' : 'students'}</h2>
-          <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
+          <div style={panel}>
             {iqStudents.map((s, i) => (
-              <div key={s.studentId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: i < iqStudents.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+              <div key={s.studentId} style={{ ...rowFlex, borderBottom: i < iqStudents.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                 <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{s.name}</span>
                 {s.dropRequested
                   ? <span style={{ fontSize: '0.8125rem', color: '#C9971B', fontWeight: 600 }}>Drop requested — pending coordinator confirmation</span>
-                  : <form action={requestDrop}><input type="hidden" name="studentId" value={s.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer' }}>Request to drop</button></form>}
+                  : <form action={requestDrop}><input type="hidden" name="studentId" value={s.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Request to drop</button></form>}
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
+      {/* MY HOUSEHOLD */}
       {guardian && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>Household</h2>
-          <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem', borderBottom: '1px solid var(--color-border)' }}>
+        <section style={{ marginTop: '2rem' }}>
+          <h2 className="text-section-title" style={{ margin: '0 0 0.75rem' }}>My household</h2>
+          <div style={panel}>
+            <div style={{ ...rowFlex, borderBottom: '1px solid var(--color-border)' }}>
               <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Second guardian</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{guardian2 ? `${guardian2.name}${guardian2.email ? ` · ${guardian2.email}` : ''}` : 'Not added'}</span>
-                <Link href="/dashboard/edit" style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>{guardian2 ? 'Edit' : 'Add'}</Link>
+                <Link href="/dashboard/edit" style={smallLink}>{guardian2 ? 'Edit' : 'Add'}</Link>
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem' }}>
+            <div style={rowFlex}>
               <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Financial aid</span>
-              <StatusBadge label={aidLabel} variant={aidVariant} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <StatusBadge label={aidLabel} variant={aidVariant} />
+                {aidStatus === 'not_requested' && <Link href="/financial-aid" style={smallLink}>Request</Link>}
+              </span>
             </div>
           </div>
-        </div>
-      )}
-
-      {showAidCallout && (
-        <div style={{ marginTop: '1.5rem' }}>
-          <FinancialAidCallout />
-        </div>
+        </section>
       )}
     </FamilyShell>
   )

@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid body.' }, { status: 400 }) }
   const signature = String(body.signature ?? '').trim()
   if (!signature) return NextResponse.json({ error: 'Signature is required.' }, { status: 400 })
+  if (body.acknowledged !== true) return NextResponse.json({ error: 'You must accept the policy to sign.' }, { status: 400 })
 
   const db = createAdminClient()
   const clearance = await ensureClearance(db, vol.profileId)

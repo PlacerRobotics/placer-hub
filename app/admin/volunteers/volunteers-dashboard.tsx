@@ -42,9 +42,11 @@ const flag = (ok: boolean) => <span style={{ color: ok ? GREEN : RED, fontWeight
 export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
   const router = useRouter()
   const [tab, setTab] = useState('all')
+  const [q, setQ] = useState('')
 
   const count = (t: string) => rows.filter((r) => matchTab(r, t)).length
-  const filtered = rows.filter((r) => matchTab(r, tab))
+  const s = q.trim().toLowerCase()
+  const filtered = rows.filter((r) => matchTab(r, tab) && (!s || r.name.toLowerCase().includes(s) || r.email.toLowerCase().includes(s)))
 
   const STATS: [string, string, string][] = [
     ['all', 'Total', GREY],
@@ -76,6 +78,12 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
         ))}
       </div>
 
+      <input
+        placeholder="Search by name or email…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        style={{ width: '100%', maxWidth: 360, padding: '8px 11px', fontSize: '0.875rem', border: '1.5px solid var(--color-border)', borderRadius: 6, marginBottom: '0.75rem', fontFamily: 'inherit' }}
+      />
       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '0.625rem' }}>
         Showing {filtered.length} {tab === 'all' ? 'volunteers' : `· ${tab.replace(/_/g, ' ')}`} · APS must be valid through the season end (5/31/2027)
       </div>
