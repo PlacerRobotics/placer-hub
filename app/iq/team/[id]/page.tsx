@@ -1,4 +1,4 @@
-import { redirect, notFound } from 'next/navigation'
+import { redirect, notFound, unstable_rethrow } from 'next/navigation'
 import Link from 'next/link'
 import { createClient as createSupa } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
@@ -31,6 +31,25 @@ async function coachFor(teamId: string): Promise<{ gid: string; famId: string } 
 
 export default async function CoachTeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  try {
+    return await CoachTeamView(id)
+  } catch (e) {
+    unstable_rethrow(e) // let redirect() / notFound() pass through
+    console.error('[iq/team detail] load failed:', e)
+    return (
+      <FamilyShell familyName="IQ team" maxWidth="md">
+        <PageHeader title="Couldn’t load this team" subtitle="Something went wrong loading your team." />
+        <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '1rem 1.25rem', marginBottom: '1rem', fontSize: '0.875rem' }}>
+          <p style={{ margin: '0 0 0.5rem' }}>Please try again. If it keeps happening, send this detail to the IQ Coordinator:</p>
+          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: '0.75rem', color: 'var(--color-error)' }}>{String((e as { message?: string })?.message ?? e)}</pre>
+        </div>
+        <Link href="/dashboard" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>← Back to dashboard</Link>
+      </FamilyShell>
+    )
+  }
+}
+
+async function CoachTeamView(id: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect(`/login?redirectTo=/iq/team/${id}`)
