@@ -1,7 +1,13 @@
+'use client'
+
 /**
  * Form components
  * FormSection — labeled section within a multi-step form
  * FormField — labeled input with help text and error state
+ *
+ * Marked 'use client' because TextInput/TextArea attach onFocus/onBlur handlers.
+ * Without this, rendering them from a Server Component (e.g. /iq/team/[id]) throws
+ * "Event handlers cannot be passed to Client Component props".
  */
 
 import React from 'react'
