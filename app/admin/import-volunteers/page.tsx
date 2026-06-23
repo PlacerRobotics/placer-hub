@@ -29,6 +29,48 @@ function parseCSV(text: string): Row[] {
 }
 
 const yes = (v: any) => ['yes', 'true', 'y', '1', 'x'].includes(String(v ?? '').trim().toLowerCase())
+const no = (v: string) => ['', 'no', 'n', 'false', '0'].includes(v.trim().toLowerCase())
+
+// Direct header → canonical-field renames for the volunteer registration CSV.
+const DIRECT: Record<string, string> = {
+  'First Name': 'first_name',
+  'Last Name': 'last_name',
+  'Email Address': 'email',
+  'Cell Phone': 'phone',
+  'Street Address': 'street_address',
+  'City': 'city',
+  'State / Province': 'state',
+  'Postal / Zip Code': 'zip',
+  'APS UserID': 'aps_user_id',
+  'APS ExternalID': 'aps_external_id',
+  'APS Score': 'aps_score',
+  'APS Cert Link': 'aps_cert_url',
+  'Certificate Expiration Date': 'aps_cert_expiry',
+}
+
+// Map a raw CSV row (keyed by the form's column headers) to the canonical fields
+// the preview + import API expect. Quizzes/DOJ store completion DATES in this CSV,
+// so "has a value" means complete.
+function normalizeRow(raw: Row): Row {
+  const v = (k: string) => (raw[k] ?? '').trim()
+  const o: Row = {}
+  for (const [csv, key] of Object.entries(DIRECT)) o[key] = v(csv)
+
+  const rc = v('RC Quiz'); o.rc_quiz_passed = rc ? 'yes' : ''; o.rc_quiz_passed_date = rc
+  const yp = v('AB506 YP Quiz'); o.yp_quiz_passed = yp ? 'yes' : ''; o.yp_quiz_passed_date = yp
+  o.doj_cleared = no(v('DOJ Clear')) ? '' : 'yes'
+  o.approved = (yes(v('Approved!')) || yes(v('Ready to Approve'))) ? 'yes' : ''
+  o.is_returning = v('Are you a returning volunteer')
+  o.has_door_access = v('Do you currently have robotics center door access via card or app?')
+
+  const role = v('Are you a V5 Coach?')
+  o.primary_role = no(role) ? '' : role
+  const progs: string[] = []
+  if (v('IQ Team')) progs.push('VEX IQ')
+  if (v('V5 Team') || o.primary_role) progs.push('VEX V5')
+  o.programs = progs.join(', ')
+  return o
+}
 const cell: React.CSSProperties = { padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left', whiteSpace: 'nowrap' }
 const th: React.CSSProperties = { ...cell, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '0.6875rem', color: 'var(--color-text-muted)' }
 
@@ -50,7 +92,7 @@ export default function ImportVolunteersPage() {
 
   function preview() {
     try {
-      const parsed = parseCSV(fileText)
+      const parsed = parseCSV(fileText).map(normalizeRow)
       if (!parsed.length) { setParseError('No data rows found.'); return }
       setRows(parsed); setParseError(''); setResult(null)
     } catch { setParseError('Could not parse the CSV.') }
