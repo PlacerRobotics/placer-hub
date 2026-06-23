@@ -93,6 +93,7 @@ async function CoachTeamView(id: string) {
     const pFirst = String(formData.get('parent_first') ?? '').trim()
     if (!sFirst || !sLast || !pEmail) return
     const adb = createAdminClient()
+    const { data: teamRow } = await adb.from('team').select('status').eq('id', id).maybeSingle()
     // Parent family.
     let familyId: string
     const pg = (await adb.from('guardian').select('id, family_id').ilike('login_email', pEmail).maybeSingle()).data
@@ -106,10 +107,10 @@ async function CoachTeamView(id: string) {
     let stu = (await adb.from('student').select('id').eq('family_id', familyId).ilike('first_name', sFirst).ilike('last_name', sLast).maybeSingle()).data
     if (!stu) stu = (await adb.from('student').insert({ family_id: familyId, first_name: sFirst, last_name: sLast, city: 'Unknown', zip_code: '00000', grade: grade > 0 ? grade : 0, status: 'active' }).select('id').single()).data!
     const { data: fsRow } = await adb.from('family_season').select('id').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
-    if (!fsRow) await adb.from('family_season').insert({ family_id: familyId, season: SEASON, status: team!.status === 'active' ? 'cleared_to_register' : 'applied' })
+    if (!fsRow) await adb.from('family_season').insert({ family_id: familyId, season: SEASON, status: teamRow?.status === 'active' ? 'cleared_to_register' : 'applied' })
     await adb.from('student_application').upsert({ family_id: familyId, student_id: stu.id, season: SEASON, program_interest: 'vex_iq', status: 'accepted', source: 'admin_import', triage_notes: `iq_team:${id}` }, { onConflict: 'student_id,season' })
     // If the team is already active, clear + invite the new family now.
-    if (team!.status === 'active') {
+    if (teamRow?.status === 'active') {
       await adb.from('family_season').update({ status: 'cleared_to_register', magic_link_sent: true }).eq('family_id', familyId).eq('season', SEASON)
       try {
         const sender = createSupa(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
