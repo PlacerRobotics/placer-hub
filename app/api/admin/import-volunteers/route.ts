@@ -61,11 +61,11 @@ export async function POST(req: NextRequest) {
       // 3. volunteer_profile (unique on guardian_id).
       let vp = (await db.from('volunteer_profile').select('id').eq('guardian_id', g.id).maybeSingle()).data
       if (!vp) {
-        const { data: nvp, error: ve } = await db.from('volunteer_profile').insert({ guardian_id: g.id, family_id: g.family_id, status, applied_at: new Date().toISOString(), cleared_at: status === 'cleared' ? new Date().toISOString() : null }).select('id').single()
+        const { data: nvp, error: ve } = await db.from('volunteer_profile').insert({ guardian_id: g.id, family_id: g.family_id, status, applied_at: new Date().toISOString(), cleared_at: status === 'cleared' ? new Date().toISOString() : null, aps_user_id: String(r.aps_user_id ?? '').trim() || null, aps_external_id: String(r.aps_external_id ?? '').trim() || null }).select('id').single()
         if (ve) throw new Error(ve.message)
         vp = nvp; created = true
       } else {
-        await db.from('volunteer_profile').update({ status }).eq('id', vp.id)
+        await db.from('volunteer_profile').update({ status, aps_user_id: String(r.aps_user_id ?? '').trim() || undefined, aps_external_id: String(r.aps_external_id ?? '').trim() || undefined }).eq('id', vp.id)
       }
 
       // 4. Per-season clearance (notes capture the fields with no dedicated column).

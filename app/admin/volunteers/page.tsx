@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { AdminShell, PageHeader } from '@/components/ui'
 import VolunteersQueue, { type VolunteerItem } from './volunteers-queue'
+import ApsSyncButton from './aps-sync-button'
 
 export default async function AdminVolunteersPage() {
   const supabase = await createClient()
@@ -27,6 +28,7 @@ export default async function AdminVolunteersPage() {
   return (
     <AdminShell activePath="/admin/volunteers">
       <PageHeader title="Volunteers" subtitle="Volunteer clearance profiles." />
+      <ApsSyncButton />
       {error ? (
         <p style={{ color: 'var(--color-error)' }}>Couldn’t load volunteers: {error.message}</p>
       ) : (
