@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui'
 
 type Variant = 'success' | 'warning' | 'info' | 'error' | 'neutral'
 export type IqRow = {
-  id: string; label: string; teamNumber: string; coach: string; students: number; waivers: string
+  id: string; label: string; teamNumber: string; kit: string; coach: string; students: number; waivers: string
   statusLabel: string; statusVariant: Variant; fee: string; events: boolean; created: string; createdRaw: string
 }
 
@@ -18,6 +18,7 @@ const linkStyle: React.CSSProperties = { fontWeight: 600, color: 'var(--color-na
 type Col = { key: string; label: string; get: (r: IqRow) => string | number; sortable?: boolean }
 const COLS: Col[] = [
   { key: 'teamNumber', label: 'Team #', get: (r) => r.teamNumber, sortable: true },
+  { key: 'kit', label: 'Kit #', get: (r) => r.kit, sortable: true },
   { key: 'label', label: 'Team', get: (r) => r.label.toLowerCase(), sortable: true },
   { key: 'coach', label: 'Coach', get: (r) => r.coach.toLowerCase(), sortable: true },
   { key: 'students', label: 'Students', get: (r) => r.students, sortable: true },
@@ -79,6 +80,7 @@ export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: 
               <tr key={r.id}>
                 {canAct && <td style={cell}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r.id)} /></td>}
                 <td style={cell}>{r.teamNumber || '—'}</td>
+                <td style={cell}>{r.kit || '—'}</td>
                 <td style={cell}><Link href={`/admin/iq-teams/${r.id}`} style={linkStyle}>{r.label}</Link></td>
                 <td style={cell}>{r.coach}</td>
                 <td style={cell}>{r.students}</td>

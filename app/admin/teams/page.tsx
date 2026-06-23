@@ -11,7 +11,7 @@ export default async function TeamsPage() {
   const supabase = await createClient()
   const { data } = await supabase
     .from('team')
-    .select('id, team_name, team_number, program, division, season, school_org, active, notes')
+    .select('id, team_name, team_number, program, division, season, school_org, active, notes, kit_number, kit_checkout_date, kit_return_date, kit_return_verified')
     .eq('season', SEASON)
     .order('created_at', { ascending: true })
   const teams = (data ?? []) as any[]

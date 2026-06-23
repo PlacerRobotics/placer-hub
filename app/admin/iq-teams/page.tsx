@@ -22,7 +22,7 @@ export default async function IqTeamsPage() {
 
   const { data: teamData } = await supabase
     .from('team')
-    .select('id, team_name, team_number, status, team_fee_status, events_vex_com_registered, created_at')
+    .select('id, team_name, team_number, status, team_fee_status, events_vex_com_registered, created_at, kit_number')
     .eq('season', SEASON).eq('program', 'vex_iq')
   const teams = (teamData ?? []) as any[]
   const teamIds = teams.map((t) => t.id)
@@ -59,6 +59,7 @@ export default async function IqTeamsPage() {
       id: t.id,
       label: t.team_name || (coachMap[t.id] ? `${coachMap[t.id]}’s team` : 'IQ team'),
       teamNumber: t.team_number ?? '',
+      kit: t.kit_number ?? '',
       coach: coachMap[t.id] || '—',
       students: total,
       waivers: `${signedN}/${total}`,
