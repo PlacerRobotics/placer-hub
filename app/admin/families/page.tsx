@@ -19,12 +19,21 @@ export default async function AdminFamiliesPage() {
   const { data: fseasons } = familyIds.length
     ? await supabase.from('family_season').select('family_id, status').eq('season', SEASON).in('family_id', familyIds)
     : { data: [] as any[] }
+  const { data: enrolls } = familyIds.length
+    ? await supabase.from('enrollment').select('family_id, program, division').eq('season', SEASON).in('family_id', familyIds)
+    : { data: [] as any[] }
 
   const g1ByFamily: Record<string, any> = {}
   for (const g of guardians ?? []) if (!g1ByFamily[g.family_id]) g1ByFamily[g.family_id] = g
   const studentsByFamily: Record<string, string[]> = {}
   for (const s of students ?? []) (studentsByFamily[s.family_id] ??= []).push(`${s.first_name} ${s.last_name}`.trim())
   const statusByFamily: Record<string, string> = Object.fromEntries((fseasons ?? []).map((f: any) => [f.family_id, f.status]))
+  const programsByFamily: Record<string, Set<string>> = {}
+  const divisionsByFamily: Record<string, Set<string>> = {}
+  for (const e of enrolls ?? []) {
+    (programsByFamily[e.family_id] ??= new Set()).add(e.program)
+    if (e.division) (divisionsByFamily[e.family_id] ??= new Set()).add(e.division)
+  }
 
   const rows: FamilyRow[] = (families ?? []).map((f: any) => {
     const g1 = g1ByFamily[f.id]
@@ -35,6 +44,8 @@ export default async function AdminFamiliesPage() {
       guardianEmail: g1?.login_email ?? f.primary_email ?? '—',
       students: studentNames,
       status: statusByFamily[f.id] ?? '—',
+      programs: [...(programsByFamily[f.id] ?? [])],
+      divisions: [...(divisionsByFamily[f.id] ?? [])],
     }
   }).sort((a, b) => a.familyName.localeCompare(b.familyName))
 

@@ -130,6 +130,17 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     await adb.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('team_id', id).eq('student_id', studentId).eq('team_role', 'student').is('revoked_at', null)
     redirect(`/admin/iq-teams/${id}`)
   }
+  async function cancelDropRequest(formData: FormData) {
+    'use server'
+    const a = await getAdminProfile(); if (!a) return
+    const adb = createAdminClient()
+    if (!(await hasAnyRole(adb, a.id, ROLES))) return
+    const studentId = String(formData.get('studentId') ?? '')
+    if (!studentId) return
+    // Clear the drop_requested flag — student stays on the team.
+    await adb.from('student_application').update({ triage_notes: `iq_team:${id}` }).eq('student_id', studentId).eq('season', SEASON)
+    redirect(`/admin/iq-teams/${id}`)
+  }
 
   return (
     <AdminShell activePath="/admin/iq-teams">
@@ -162,7 +173,14 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
         <h3 style={h3}>Roster ({roster.length}) · {signedCount}/{roster.length} waivers signed</h3>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr><th style={cell}>Student</th><th style={cell}>Grade</th><th style={cell}>School</th><th style={cell}>Parent email</th><th style={cell}>Waivers</th><th style={cell}></th></tr></thead>
-          <tbody>{roster.map((r, i) => <tr key={i}><td style={cell}>{r.name}{r.dropRequested && <span style={{ color: '#C9971B', fontWeight: 700, fontSize: '0.6875rem' }}> ⚠ DROP REQUESTED</span>}</td><td style={cell}>{r.grade || '—'}</td><td style={cell}>{r.school || '—'}</td><td style={cell}>{r.parentEmail || '—'}</td><td style={{ ...cell, color: r.signed ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>{r.signed ? '✓ signed' : 'not yet'}</td><td style={cell}>{canAct && <form action={dropStudent}><input type="hidden" name="studentId" value={r.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>{r.dropRequested ? 'Confirm drop' : 'Drop'}</button></form>}</td></tr>)}</tbody>
+          <tbody>{roster.map((r, i) => <tr key={i}><td style={cell}>{r.name}{r.dropRequested && <span style={{ color: '#C9971B', fontWeight: 700, fontSize: '0.6875rem' }}> ⚠ DROP REQUESTED</span>}</td><td style={cell}>{r.grade || '—'}</td><td style={cell}>{r.school || '—'}</td><td style={cell}>{r.parentEmail || '—'}</td><td style={{ ...cell, color: r.signed ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>{r.signed ? '✓ signed' : 'not yet'}</td><td style={cell}>{canAct && (r.dropRequested ? (
+              <span style={{ display: 'flex', gap: '0.625rem', whiteSpace: 'nowrap' }}>
+                <form action={dropStudent}><input type="hidden" name="studentId" value={r.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>Confirm drop</button></form>
+                <form action={cancelDropRequest}><input type="hidden" name="studentId" value={r.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>Cancel request</button></form>
+              </span>
+            ) : (
+              <form action={dropStudent}><input type="hidden" name="studentId" value={r.studentId} /><button style={{ background: 'none', border: 'none', color: 'var(--color-error)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>Drop</button></form>
+            ))}</td></tr>)}</tbody>
         </table>
       </div>
 
