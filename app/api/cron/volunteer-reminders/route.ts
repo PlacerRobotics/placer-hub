@@ -35,21 +35,36 @@ export async function GET(req: NextRequest) {
     apsSync = (await syncApsForAll(db, process.env.APS_API_KEY, process.env.APS_SURVEY_CODE || undefined)).summary
   }
 
-  // --- APS expiry reminders (90/30/14 days) ---
+  // --- APS: expire lapsed certs (FIX 9) + 60/30-day reminders (FIX 10) ---
+  let expired = 0
   const { data: clearances } = await db
     .from('volunteer_clearance')
-    .select('id, volunteer_id, reminder_90_sent_at, reminder_30_sent_at, reminder_14_sent_at, volunteer:volunteer_id ( guardian:guardian_id ( first_name, last_name, login_email ) )')
+    .select('id, volunteer_id, status, reminder_60_sent_at, reminder_30_sent_at, volunteer:volunteer_id ( status, guardian:guardian_id ( first_name, last_name, login_email ) )')
     .eq('season', SEASON)
 
   for (const c of clearances ?? []) {
     const cert = (await db.from('youth_protection_cert').select('expiration_date').eq('volunteer_id', c.volunteer_id).order('expiration_date', { ascending: false }).limit(1).maybeSingle()).data
     if (!cert?.expiration_date) continue
     const days = Math.ceil((new Date(cert.expiration_date).getTime() - now.getTime()) / 86400000)
-    if (days < 0) continue
+    const vp = Array.isArray((c as any).volunteer) ? (c as any).volunteer[0] : (c as any).volunteer
+    const profileStatus = vp?.status
+
+    // Cert lapsed → set status='expired'. Never touch a suspended volunteer; do NOT
+    // remove from Google Groups / Slack (PRD keeps those active).
+    if (days < 0) {
+      if (profileStatus !== 'suspended' && profileStatus !== 'expired') {
+        await db.from('volunteer_clearance').update({ status: 'expired' }).eq('id', c.id)
+        await db.from('volunteer_profile').update({ status: 'expired' }).eq('id', c.volunteer_id)
+        await db.from('admin_action_log').insert({ actor_email: 'cron@placerrobotics.org', action_type: 'auto_expired', target_table: 'volunteer_profile', target_id: c.volunteer_id, new_values: { reason: 'APS cert expired', expiration_date: cert.expiration_date } })
+        expired++
+      }
+      continue
+    }
+
+    // 60/30-day reminders (FR-VOL-009).
     let field: string | null = null
-    if (days <= 14 && !c.reminder_14_sent_at) field = 'reminder_14_sent_at'
-    else if (days <= 30 && !c.reminder_30_sent_at) field = 'reminder_30_sent_at'
-    else if (days <= 90 && !c.reminder_90_sent_at) field = 'reminder_90_sent_at'
+    if (days <= 30 && !c.reminder_30_sent_at) field = 'reminder_30_sent_at'
+    else if (days <= 60 && !c.reminder_60_sent_at) field = 'reminder_60_sent_at'
     if (!field) continue
     const g = unwrapGuardian(c)
     if (!g?.login_email) continue
@@ -79,5 +94,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, apsSync, apsSent, renewalSent })
+  return NextResponse.json({ ok: true, apsSync, expired, apsSent, renewalSent })
 }

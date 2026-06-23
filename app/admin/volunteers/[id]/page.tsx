@@ -61,6 +61,15 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
     await createAdminClient().from('volunteer_step').update({ status: 'complete', completed_at: new Date().toISOString() }).eq('id', stepId)
     redirect(`/admin/volunteers/${id}`)
   }
+  async function setAps(formData: FormData) {
+    'use server'
+    if (!(await getAdminProfile())) return
+    const exp = String(formData.get('expiry') ?? '').trim()
+    if (!exp) return
+    // Admin-verified APS certificate — the only trusted path for cert expiry.
+    await createAdminClient().from('youth_protection_cert').insert({ volunteer_id: id, expiration_date: exp, issued_date: exp })
+    redirect(`/admin/volunteers/${id}`)
+  }
   async function markQuiz(formData: FormData) {
     'use server'
     if (!(await getAdminProfile())) return
@@ -126,7 +135,7 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
         <h3 className="text-card-title" style={{ marginBottom: '0.875rem' }}>{SEASON} clearance</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', marginBottom: '1.5rem' }}>
           <ClearRow label="DOJ Background Check" ok={(steps ?? []).some((s: any) => s.step === 'background_check' && s.status === 'complete')} detail="One-time background clearance" />
-          <ClearRow label="APS Training" ok={!!cert?.expiration_date && cert.expiration_date >= APS_VALID_THROUGH} detail={apsLabel} />
+          <ClearRow label="APS Training" ok={!!cert?.expiration_date && cert.expiration_date >= APS_VALID_THROUGH} detail={apsLabel} action={<form action={setAps} style={{ display: 'flex', gap: '0.4rem' }}><input type="date" name="expiry" style={{ padding: '5px 8px', fontSize: '0.8125rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit' }} /><button style={smallBtn}>Set</button></form>} />
           <ClearRow label="Robotics Center Quiz" ok={!!clearance?.rc_quiz_passed} detail={clearance?.rc_quiz_passed ? `Passed ${clearance.rc_quiz_passed_date ?? ''}` : 'Not passed this season'} action={!clearance?.rc_quiz_passed ? <form action={markQuiz}><input type="hidden" name="which" value="rc" /><button style={smallBtn}>Mark passed</button></form> : undefined} />
           <ClearRow label="Youth Protection Quiz" ok={!!clearance?.yp_quiz_passed} detail={clearance?.yp_quiz_passed ? `Passed ${clearance.yp_quiz_passed_date ?? ''}` : 'Not passed this season'} action={!clearance?.yp_quiz_passed ? <form action={markQuiz}><input type="hidden" name="which" value="yp" /><button style={smallBtn}>Mark passed</button></form> : undefined} />
           <ClearRow label="Annual Waiver" ok={!!clearance?.waiver_signed_date} detail={clearance?.waiver_signed_date ? `Signed — ${clearance.waiver_signature_text ?? ''}` : 'Not signed this season'} />

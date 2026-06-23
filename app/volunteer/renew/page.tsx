@@ -43,13 +43,6 @@ export default async function VolunteerRenewPage() {
     await createAdminClient().from('guardian').update({ phone: String(formData.get('phone') ?? '').trim() }).eq('id', v.guardianId)
     redirect('/volunteer/renew')
   }
-  async function reportAps(formData: FormData) {
-    'use server'
-    const v = await getCurrentVolunteer(); if (!v) return
-    const exp = String(formData.get('expiry') ?? '').trim()
-    if (exp) await createAdminClient().from('youth_protection_cert').insert({ volunteer_id: v.profileId, expiration_date: exp, issued_date: exp })
-    redirect('/volunteer/renew')
-  }
   async function signWaiver(formData: FormData) {
     'use server'
     const v = await getCurrentVolunteer(); if (!v) return
@@ -96,12 +89,7 @@ export default async function VolunteerRenewPage() {
             <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.625rem' }}>
               {cert?.expiration_date ? `Your certificate expires ${cert.expiration_date}` : 'No certificate on file'} — it must be valid through {APS_VALID_THROUGH}. Renew the free course at <a href="https://abusepreventionsystems.com" target="_blank" rel="noreferrer" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>abusepreventionsystems.com</a>.
             </div>
-            <form action={reportAps} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Already renewed? New expiry:</label>
-              <input type="date" name="expiry" style={{ ...input, maxWidth: 180 }} />
-              <button style={btn}>Submit date</button>
-            </form>
-            <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.4rem' }}>An admin verifies your certificate before clearance.</div>
+            <div style={{ fontSize: '0.8125rem', color: '#C9971B', fontWeight: 600 }}>Your APS training status is pending admin verification. You may complete the other renewal steps now.</div>
           </>
         )}
       </div>
