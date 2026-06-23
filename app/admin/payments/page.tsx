@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { AdminShell, PageHeader } from '@/components/ui'
 import PaymentRecordForm from './payment-record-form'
 import UnmatchedQueue, { type UnmatchedPayment } from './unmatched-queue'
+import ZeffySync from './zeffy-sync'
 
 export default async function AdminPaymentsPage() {
   const supabase = await createClient()
@@ -27,7 +28,10 @@ export default async function AdminPaymentsPage() {
     <AdminShell activePath="/admin/payments">
       <PageHeader title="Payments" subtitle="Record manual payments and match unmatched ones." />
 
-      <h2 className="text-section-title" style={{ margin: '0 0 1rem' }}>Record a payment</h2>
+      <h2 className="text-section-title" style={{ margin: '0 0 1rem' }}>Sync from Zeffy</h2>
+      <ZeffySync />
+
+      <h2 className="text-section-title" style={{ margin: '2.5rem 0 1rem' }}>Record a payment</h2>
       <PaymentRecordForm />
 
       <h2 className="text-section-title" style={{ margin: '2.5rem 0 1rem' }}>Unmatched payments</h2>

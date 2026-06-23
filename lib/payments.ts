@@ -29,7 +29,9 @@ export async function linkPaymentToEnrollment(
   await db
     .from('payment_transaction')
     .update({
-      matched_status: 'matched',
+      // 'matched' is NOT a valid matched_status enum value. Admin-triggered =
+      // manually_matched; automated (no adminId, e.g. webhook) = auto_matched.
+      matched_status: opts.adminId ? 'manually_matched' : 'auto_matched',
       enrollment_id: opts.enrollment.id,
       family_id: opts.enrollment.family_id,
       matched_by: opts.adminId ?? null,
