@@ -91,7 +91,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
 
   const { data: config } = await supabase
     .from('season_config')
-    .select('zeffy_student_url')
+    .select('zeffy_student_url, one_program_fundraising_target')
     .eq('season', SEASON)
     .maybeSingle()
 
@@ -123,6 +123,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       paymentReferenceCode={paymentRef}
       guardianName={`${guardian.first_name} ${guardian.last_name}`}
       zeffyUrl={config?.zeffy_student_url ?? null}
+      fundraisingTarget={config?.one_program_fundraising_target ?? 550}
       emergency={ecRow ? { first_name: ecRow.first_name ?? '', last_name: ecRow.last_name ?? '', relationship: ecRow.relationship ?? '', phone: ecRow.phone ?? '' } : null}
     />
   )

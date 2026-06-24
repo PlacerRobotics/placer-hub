@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 import RegistrationEdit from './edit-modal'
 import TeamAssign, { type AssignTeam } from './team-assign'
@@ -8,6 +9,7 @@ const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', both: 'VEX V5 & Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure' }
 const STATUS_LABELS: Record<string, string> = { cleared_to_register: 'Cleared to Register', registered: 'Registered', cancelled: 'Cancelled' }
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { cleared_to_register: 'info', registered: 'success', cancelled: 'neutral' }
+const FUND_LABELS: Record<string, string> = { direct_donation: 'Direct contribution', corporate_match: 'Employer / corporate match', sponsored: 'Business sponsorship', paper_check: 'Paper check', pending: 'Financial assistance' }
 
 export default async function RegistrationDetailPage({
   params,
@@ -22,7 +24,7 @@ export default async function RegistrationDetailPage({
 
   const { data: fs } = await supabase
     .from('family_season')
-    .select('id, family_id, status, magic_link_sent, updated_at')
+    .select('id, family_id, status, magic_link_sent, updated_at, fundraising_method')
     .eq('id', id)
     .maybeSingle()
   if (!fs) {
@@ -76,6 +78,13 @@ export default async function RegistrationDetailPage({
   const { data: audit } = await supabase.from('registration_audit_log').select('field_changed, old_value, new_value, changed_at, notes').eq('family_season_id', id).order('changed_at', { ascending: false })
   const { data: allTeams } = await supabase.from('team').select('id, team_number, team_name, program, division').eq('season', SEASON).eq('active', true).order('team_number', { ascending: true })
 
+  // Fundraising (Part 5) — method on family_season; employer-match on family;
+  // sponsorship interest in family_sponsor_interest. Read via service role (admin).
+  const adb = createAdminClient()
+  const { data: fam } = await adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', fs.family_id).maybeSingle()
+  const { data: sponsor } = await adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount, status').eq('family_id', fs.family_id).eq('season', SEASON).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const fundMethod = fs.fundraising_method ?? ''
+
   const name = student ? `${student.first_name} ${student.last_name}` : 'Registration'
   const assignTeams: AssignTeam[] = (allTeams ?? []).map((t: any) => ({ id: t.id, number: t.team_number ?? '', name: t.team_name ?? '', program: t.program }))
 
@@ -103,6 +112,22 @@ export default async function RegistrationDetailPage({
     { label: 'T-shirt size', value: student?.tshirt_size ? String(student.tshirt_size).toUpperCase() : '—' },
     { label: 'Payment', value: pay ? `$${pay.amount} · ${pay.source} · ${pay.matched_status}${pay.payment_reference_code ? ` · ${pay.payment_reference_code}` : ''}` : 'No payment on file' },
   ]
+  const fundMethodLabel = fundMethod ? (FUND_LABELS[fundMethod] ?? fundMethod) : '—'
+  const fundraisingFields = [{ label: 'Method', value: fundMethodLabel }]
+  if (fundMethod === 'corporate_match') {
+    fundraisingFields.push(
+      { label: 'Employer', value: fam?.employer_match_company ?? '—' },
+      { label: 'Match %', value: fam?.employer_match_pct != null ? `${fam.employer_match_pct}%` : '—' },
+      { label: 'Submitted via', value: fam?.employer_match_portal ?? '—' },
+    )
+  } else if (fundMethod === 'sponsored') {
+    fundraisingFields.push(
+      { label: 'Business', value: sponsor?.business_name ?? '—' },
+      { label: 'Contact', value: sponsor?.contact_name ?? '—' },
+      { label: 'Estimated amount', value: sponsor?.estimated_amount != null ? `$${sponsor.estimated_amount}` : '—' },
+      { label: 'Status', value: sponsor?.status ?? '—' },
+    )
+  }
 
   return (
     <AdminShell activePath="/admin/registrations">
@@ -119,6 +144,13 @@ export default async function RegistrationDetailPage({
               division: divisionVal ?? '',
               emergency_name: ec ? `${ec.first_name} ${ec.last_name}` : '',
               emergency_phone: ec?.phone ?? '',
+              fundraising_method: fundMethod,
+              employer_company: fam?.employer_match_company ?? '',
+              employer_pct: fam?.employer_match_pct != null ? String(fam.employer_match_pct) : '',
+              employer_portal: fam?.employer_match_portal ?? '',
+              sponsor_business: sponsor?.business_name ?? '',
+              sponsor_contact: sponsor?.contact_name ?? '',
+              sponsor_amount: sponsor?.estimated_amount != null ? String(sponsor.estimated_amount) : '',
             }}
           />
         </div>
@@ -127,6 +159,7 @@ export default async function RegistrationDetailPage({
       <AdminDetailPanel title="Student" fields={studentFields} />
       <AdminDetailPanel title="Guardian" fields={guardianFields} />
       <AdminDetailPanel title="Registration" fields={regFields} />
+      <AdminDetailPanel title="Fundraising" fields={fundraisingFields} />
 
       <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
         <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-light)' }}>

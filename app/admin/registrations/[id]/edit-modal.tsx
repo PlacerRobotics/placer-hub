@@ -14,7 +14,11 @@ export default function RegistrationEdit({
 }: {
   familySeasonId: string
   studentId: string
-  current: { tshirt_size: string; program: string; division: string; emergency_name: string; emergency_phone: string }
+  current: {
+    tshirt_size: string; program: string; division: string; emergency_name: string; emergency_phone: string
+    fundraising_method: string; employer_company: string; employer_pct: string; employer_portal: string
+    sponsor_business: string; sponsor_contact: string; sponsor_amount: string
+  }
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -81,6 +85,42 @@ export default function RegistrationEdit({
         <div>
           <label style={labelStyle}>Emergency contact phone</label>
           <input style={inputStyle} value={f.emergency_phone} onChange={(e) => set('emergency_phone', e.target.value)} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
+        <div style={{ fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-primary)' }}>Fundraising</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.875rem' }}>
+          <div>
+            <label style={labelStyle}>Method</label>
+            <select style={inputStyle} value={f.fundraising_method} onChange={(e) => set('fundraising_method', e.target.value)}>
+              <option value="">—</option>
+              <option value="direct_donation">Direct contribution</option>
+              <option value="corporate_match">Employer / corporate match</option>
+              <option value="sponsored">Business sponsorship</option>
+              <option value="paper_check">Paper check</option>
+              <option value="pending">Financial assistance</option>
+            </select>
+          </div>
+          {f.fundraising_method === 'corporate_match' && (
+            <>
+              <div><label style={labelStyle}>Employer</label><input style={inputStyle} value={f.employer_company} onChange={(e) => set('employer_company', e.target.value)} /></div>
+              <div><label style={labelStyle}>Match %</label><input style={inputStyle} type="number" min={1} max={100} value={f.employer_pct} onChange={(e) => set('employer_pct', e.target.value)} /></div>
+              <div>
+                <label style={labelStyle}>Submitted via</label>
+                <select style={inputStyle} value={f.employer_portal} onChange={(e) => set('employer_portal', e.target.value)}>
+                  <option value="">—</option><option value="benevity">Benevity</option><option value="yourcause">YourCause</option><option value="employer_portal">Employer portal</option><option value="other">Other</option>
+                </select>
+              </div>
+            </>
+          )}
+          {f.fundraising_method === 'sponsored' && (
+            <>
+              <div><label style={labelStyle}>Business</label><input style={inputStyle} value={f.sponsor_business} onChange={(e) => set('sponsor_business', e.target.value)} /></div>
+              <div><label style={labelStyle}>Contact</label><input style={inputStyle} value={f.sponsor_contact} onChange={(e) => set('sponsor_contact', e.target.value)} /></div>
+              <div><label style={labelStyle}>Estimated amount</label><input style={inputStyle} type="number" min={0} value={f.sponsor_amount} onChange={(e) => set('sponsor_amount', e.target.value)} /></div>
+            </>
+          )}
         </div>
       </div>
       {err && <p style={{ color: 'var(--color-error)', fontSize: '0.8125rem', marginTop: '0.625rem' }}>{err}</p>}

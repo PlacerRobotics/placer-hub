@@ -10,7 +10,7 @@ const SEASON = '2026-27'
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
-type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string }
+type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean }
 type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; division: string; isIq: boolean; studentId: string; dropRequested: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
@@ -46,13 +46,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let coachTeams: any[] = []
   const teamCount: Record<string, number> = {}
   let zeffyIqUrl: string | null = null
+  let zeffyStudentUrl: string | null = null
+  let fundraisingMethod = ''
+  let employerCompany = ''
   let volunteer: { label: string; variant: Variant } | null = null
 
   if (guardian) {
     const familyId = guardian.family_id
 
-    const { data: fs } = await supabase.from('family_season').select('status').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
+    const { data: fs } = await supabase.from('family_season').select('status, fundraising_method').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
     fsStatus = fs?.status ?? ''
+    fundraisingMethod = fs?.fundraising_method ?? ''
 
     const { data: aid } = await supabase.from('financial_aid').select('status').eq('family_id', familyId).eq('season', SEASON).order('requested_at', { ascending: false }).limit(1).maybeSingle()
     if (aid) aidStatus = aid.status
@@ -154,6 +158,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           complete,
           checks,
           detail: `Emergency contact ${ec ? 'added' : 'missing'} · T-shirt ${s.tshirt_size ? (TSHIRT_LABELS[s.tshirt_size] ?? s.tshirt_size) : 'not set'}`,
+          isIqKid,
+          registered,
+          paid,
         })
 
         if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
@@ -171,6 +178,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // student_id NULL, which the RLS select policy hides from non-admins — so read
     // these with the service-role client, scoped to this guardian.
     const adb = createAdminClient()
+    const { data: famRow } = await adb.from('family').select('employer_match_company').eq('id', familyId).maybeSingle()
+    employerCompany = famRow?.employer_match_company ?? ''
     const { data: coachTms } = await adb.from('team_member').select('team:team_id ( id, team_name, team_number, program, division, status )').eq('guardian_id', guardian.id).eq('season', SEASON).eq('team_role', 'coach').is('revoked_at', null)
     coachTeams = (coachTms ?? []).map((c: any) => (Array.isArray(c.team) ? c.team[0] : c.team)).filter(Boolean)
     if (coachTeams.length) {
@@ -180,8 +189,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       const { data: iqApps } = await adb.from('student_application').select('triage_notes').eq('season', SEASON).ilike('triage_notes', '%iq_team:%')
       for (const a of iqApps ?? []) { const m = String(a.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i); if (m && ids.includes(m[1])) teamCount[m[1]] = (teamCount[m[1]] ?? 0) + 1 }
     }
-    const { data: cfg } = await supabase.from('season_config').select('zeffy_iq_team_url').eq('season', SEASON).maybeSingle()
+    const { data: cfg } = await supabase.from('season_config').select('zeffy_iq_team_url, zeffy_student_url').eq('season', SEASON).maybeSingle()
     zeffyIqUrl = cfg?.zeffy_iq_team_url ?? null
+    zeffyStudentUrl = cfg?.zeffy_student_url ?? null
 
     // Volunteer clearance for the logged-in guardian.
     const { data: vp } = await supabase.from('volunteer_profile').select('id, status').eq('guardian_id', guardian.id).maybeSingle()
@@ -216,6 +226,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const anyRegistered = studentCards.some((c) => c.checks[0].state === 'done')
   const showSignPrompt = !!guardian && !guardianHasSigned && anyRegistered && hasActiveWaivers
   const readyCount = studentCards.filter((c) => c.complete).length
+
+  // Fundraising display (Part 4) — family-level method, shown on each registered card.
+  let fundraisingDisplay = 'Not selected'
+  let fundraisingNotSelected = true
+  if (fundraisingMethod === 'direct_donation') { fundraisingDisplay = 'Via Zeffy contribution'; fundraisingNotSelected = false }
+  else if (fundraisingMethod === 'corporate_match') { fundraisingDisplay = `Employer match${employerCompany ? ` — ${employerCompany}` : ''}`; fundraisingNotSelected = false }
+  else if (fundraisingMethod === 'sponsored') { fundraisingDisplay = 'Business sponsorship — pending'; fundraisingNotSelected = false }
+  else if (fundraisingMethod === 'paper_check') { fundraisingDisplay = 'Paper check'; fundraisingNotSelected = false }
+  else if (fundraisingMethod === 'pending') { fundraisingDisplay = 'Financial aid — pending review'; fundraisingNotSelected = false }
 
   // Team-centric "My teams": one row per team, grouping my kids onto their team and
   // merging with any team I coach (a team can be both).
@@ -311,6 +330,34 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <Link href="/dashboard/edit" style={smallLink}>Edit details</Link>
                 </span>
               </div>
+
+              {/* Payment callout (non-IQ) — fee is the $40 registration fee (Part 4). */}
+              {!card.isIqKid && card.registered && !card.paid && fsStatus === 'registered' && (
+                <div style={{ marginTop: '0.75rem', backgroundColor: '#FFF8E6', border: '1px solid var(--color-gold)', borderRadius: 8, padding: '0.75rem 0.875rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#8a6d1a' }}>Registration fee not yet received</div>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>Pay the $40 registration fee via Zeffy to secure {card.name}’s spot.</div>
+                  {zeffyStudentUrl && (
+                    <a href={zeffyStudentUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.5rem', padding: '7px 14px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 6, textDecoration: 'none' }}>Pay Now via Zeffy →</a>
+                  )}
+                </div>
+              )}
+              {!card.isIqKid && !card.registered && fsStatus === 'cleared_to_register' && (
+                <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Complete registration to pay</span>
+                  <Link href={`/register?student=${card.studentId}`} style={smallLink}>Complete Registration →</Link>
+                </div>
+              )}
+
+              {/* Fundraising row (non-IQ, registered) — family-level method (Part 4). */}
+              {!card.isIqKid && fsStatus === 'registered' && (
+                <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Fundraising</span>
+                  <span style={{ display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
+                    <span style={{ color: fundraisingNotSelected ? '#C9971B' : 'var(--color-text-primary)', fontWeight: 600 }}>{fundraisingDisplay}</span>
+                    {fundraisingNotSelected && <Link href="/dashboard/edit" style={smallLink}>Update</Link>}
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </section>

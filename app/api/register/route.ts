@@ -270,6 +270,47 @@ export async function POST(request: NextRequest) {
     .eq('season', SEASON)
   if (fsErr) return NextResponse.json({ error: `Could not finalize registration: ${fsErr.message}` }, { status: 500 })
 
+  // 10b. Fundraising selection (Payment & Fundraising wizard step; non-IQ — IQ is
+  // team-managed and sends fundraising = null). Best-effort: registration is already
+  // committed above, so a write hiccup here must not roll it back.
+  try {
+    const FUND_METHODS = new Set(['direct_donation', 'corporate_match', 'sponsored', 'paper_check', 'pending'])
+    const fr = body.fundraising
+    if (fr && FUND_METHODS.has(fr.method)) {
+      await db.from('family_season').update({ fundraising_method: fr.method }).eq('family_id', familyId).eq('season', SEASON)
+
+      // Employer-match details live on the family record. Set them for corporate_match,
+      // clear them otherwise so the record matches the current selection.
+      if (fr.method === 'corporate_match') {
+        await db.from('family').update({
+          employer_match_company: fr.employer_company ?? null,
+          employer_match_pct: fr.employer_pct ?? null,
+          employer_match_portal: fr.employer_portal ?? null,
+        }).eq('id', familyId)
+      } else {
+        await db.from('family').update({ employer_match_company: null, employer_match_pct: null, employer_match_portal: null }).eq('id', familyId)
+      }
+
+      // Business-sponsorship interest → family_sponsor_interest (sponsor_commitment is
+      // the admin sponsor CRM, keyed to a sponsor entity — it can't hold this). Replace
+      // any prior registration-wizard row for this season to avoid duplicates on re-submit.
+      await db.from('family_sponsor_interest').delete().eq('family_id', familyId).eq('season', SEASON).eq('source', 'registration_wizard')
+      if (fr.method === 'sponsored') {
+        await db.from('family_sponsor_interest').insert({
+          family_id: familyId,
+          season: SEASON,
+          business_name: fr.sponsor_business ?? null,
+          contact_name: fr.sponsor_contact ?? null,
+          estimated_amount: fr.sponsor_amount ?? null,
+          status: 'pending',
+          source: 'registration_wizard',
+        })
+      }
+    }
+  } catch (e) {
+    console.error('[register] fundraising save failed:', e)
+  }
+
   // 11. Confirmation email to both guardians + the student. Best-effort — never
   // fail the registration if email isn't configured or the send errors.
   try {

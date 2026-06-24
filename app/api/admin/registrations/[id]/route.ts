@@ -116,5 +116,45 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await log('emergency_contact', ec ? `${ec.first_name} ${ec.last_name} ${ec.phone}` : null, `${name} ${phone}`.trim())
   }
 
+  // fundraising — family_season.fundraising_method + family employer-match columns +
+  // family_sponsor_interest (the spec's family-level sponsorship table; sponsor_commitment
+  // is the admin sponsor CRM and can't hold this).
+  if (body.fundraising_method !== undefined) {
+    const FUND = new Set(['direct_donation', 'corporate_match', 'sponsored', 'paper_check', 'pending'])
+    const m = String(body.fundraising_method || '')
+    if (m && !FUND.has(m)) return NextResponse.json({ error: 'Invalid fundraising method.' }, { status: 400 })
+    const { data: stu } = await db.from('student').select('family_id').eq('id', studentId).maybeSingle()
+    const famId = stu?.family_id
+    if (m && famId) {
+      const { data: fsRow } = await db.from('family_season').select('fundraising_method').eq('id', id).maybeSingle()
+      if (m !== (fsRow?.fundraising_method ?? '')) {
+        await db.from('family_season').update({ fundraising_method: m }).eq('id', id)
+        await log('fundraising_method', fsRow?.fundraising_method, m)
+      }
+      // Employer match lives on family — set for corporate_match, clear otherwise.
+      if (m === 'corporate_match') {
+        await db.from('family').update({
+          employer_match_company: body.employer_company || null,
+          employer_match_pct: body.employer_pct ? Number(body.employer_pct) : null,
+          employer_match_portal: body.employer_portal || null,
+        }).eq('id', famId)
+      } else {
+        await db.from('family').update({ employer_match_company: null, employer_match_pct: null, employer_match_portal: null }).eq('id', famId)
+      }
+      // Sponsorship interest — update the existing wizard row if present (preserves any
+      // admin-set status), else insert. Left in place when the method changes away.
+      if (m === 'sponsored') {
+        const vals = {
+          business_name: body.sponsor_business || null,
+          contact_name: body.sponsor_contact || null,
+          estimated_amount: body.sponsor_amount ? Number(body.sponsor_amount) : null,
+        }
+        const { data: existing } = await db.from('family_sponsor_interest').select('id').eq('family_id', famId).eq('season', SEASON).eq('source', 'registration_wizard').order('created_at', { ascending: false }).limit(1).maybeSingle()
+        if (existing) await db.from('family_sponsor_interest').update(vals).eq('id', existing.id)
+        else await db.from('family_sponsor_interest').insert({ family_id: famId, season: SEASON, ...vals, status: 'pending', source: 'registration_wizard' })
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true })
 }
