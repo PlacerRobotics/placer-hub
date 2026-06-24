@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient as createSupa } from '@supabase/supabase-js'
+import { sendMagicLinkEmail } from '@/lib/email'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
@@ -106,8 +106,15 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
     const { data: row } = await db.from('volunteer_profile').select('guardian:guardian_id ( login_email )').eq('id', id).maybeSingle()
     const gg: any = row ? (Array.isArray((row as any).guardian) ? (row as any).guardian[0] : (row as any).guardian) : null
     if (gg?.login_email) {
-      const sender = createSupa(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-      await sender.auth.signInWithOtp({ email: gg.login_email, options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/api/auth/callback?redirectTo=/volunteer` } })
+      await sendMagicLinkEmail({
+        email: gg.login_email,
+        redirectPath: '/volunteer',
+        subject: 'Your volunteer sign-in link — Placer Robotics Hub',
+        heading: 'Your sign-in link',
+        intro: 'Click below to sign in and continue your Registered Volunteer steps.',
+        buttonLabel: 'Sign in to continue →',
+        preheader: 'Sign in to continue your volunteer clearance.',
+      })
     }
     redirect(`/admin/volunteers/${id}`)
   }

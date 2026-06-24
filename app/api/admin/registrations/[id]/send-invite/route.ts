@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient as createSupa } from '@supabase/supabase-js'
+import { sendMagicLinkEmail } from '@/lib/email'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
 
 // POST /api/admin/registrations/[id]/send-invite — magic link to the family's
-// guardian1 (primary) email; sets magic_link_sent = true. Uses signInWithOtp
-// (Supabase sends the email); generateLink would require a custom email sender.
+// guardian1 (primary) email; sets magic_link_sent = true. Branded magic link via
+// Resend (sendMagicLinkEmail) — no dependency on Supabase SMTP.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await getAdminProfile()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -23,12 +23,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const email = (fs as any).family?.primary_email
   if (!email) return NextResponse.json({ error: 'No guardian email on file.' }, { status: 400 })
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
-  const sender = createSupa(url, anon)
-  const { error } = await sender.auth.signInWithOtp({ email, options: { emailRedirectTo: `${site}/api/auth/callback` } })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const r = await sendMagicLinkEmail({
+    email,
+    redirectPath: '/register',
+    subject: 'You’re invited to register — Placer Robotics 2026-27',
+    heading: 'You’re invited to register',
+    intro: "You're cleared to register for the 2026-27 Placer Robotics season. Click below to sign in and complete your student's registration.",
+    buttonLabel: 'Sign in to register →',
+    preheader: 'Sign in to complete your Placer Robotics registration.',
+  })
+  if (!r.ok) return NextResponse.json({ error: r.error === 'no_api_key' ? "Email isn't configured yet." : 'Could not send the invite.' }, { status: 500 })
 
   await db.from('family_season').update({ magic_link_sent: true }).eq('id', id)
   await logRegAudit(db, {

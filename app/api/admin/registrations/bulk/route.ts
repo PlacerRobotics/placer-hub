@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient as createSupa } from '@supabase/supabase-js'
+import { sendMagicLinkEmail } from '@/lib/email'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
@@ -45,10 +45,6 @@ export async function POST(req: NextRequest) {
       .eq('status', 'cleared_to_register')
       .eq('magic_link_sent', false)
     const eligible = (rows ?? []) as any[]
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
-    const sender = createSupa(url, anon)
     const sentEmails = new Set<string>()
     let sent = 0
     const failures: string[] = []
@@ -56,8 +52,16 @@ export async function POST(req: NextRequest) {
       const email = fs.family?.primary_email
       if (!email) continue
       if (!sentEmails.has(email)) {
-        const { error } = await sender.auth.signInWithOtp({ email, options: { emailRedirectTo: `${site}/api/auth/callback` } })
-        if (error) { failures.push(`${email}: ${error.message}`); continue }
+        const r = await sendMagicLinkEmail({
+          email,
+          redirectPath: '/register',
+          subject: 'You’re invited to register — Placer Robotics 2026-27',
+          heading: 'You’re invited to register',
+          intro: "You're cleared to register for the 2026-27 Placer Robotics season. Click below to sign in and complete your student's registration.",
+          buttonLabel: 'Sign in to register →',
+          preheader: 'Sign in to complete your Placer Robotics registration.',
+        })
+        if (!r.ok) { failures.push(`${email}: ${r.error ?? 'failed'}`); continue }
         sentEmails.add(email)
         sent++
       }

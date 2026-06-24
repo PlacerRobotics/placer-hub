@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createClient as createSupa } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
-import { sendEmail, iqTeamApprovedHtml } from '@/lib/email'
+import { sendEmail, iqTeamApprovedHtml, sendMagicLinkEmail } from '@/lib/email'
 
 const SEASON = '2026-27'
 
@@ -42,15 +41,20 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     ? await db.from('guardian').select('login_email').in('family_id', familyIds)
     : { data: [] as any[] }
   const emails = [...new Set((guardians ?? []).map((g: any) => String(g.login_email ?? '').toLowerCase()).filter(Boolean))]
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
-  const sender = createSupa(url, anon)
   let sent = 0
   const failed: string[] = []
   for (const em of emails) {
-    const { error } = await sender.auth.signInWithOtp({ email: em, options: { emailRedirectTo: `${site}/api/auth/callback?redirectTo=/register` } })
-    if (error) failed.push(em); else sent++
+    const r = await sendMagicLinkEmail({
+      email: em,
+      redirectPath: '/register',
+      subject: 'You’re invited to register — Placer Robotics 2026-27',
+      heading: 'You’re invited to register',
+      intro: "Your VEX IQ team has been approved! Click below to sign in and complete your student's registration for the 2026-27 season.",
+      buttonLabel: 'Sign in to register →',
+      preheader: 'Your IQ team is approved — sign in to register.',
+    })
+    if (!r.ok) failed.push(em); else sent++
   }
 
   // Email the coach next steps (best-effort).

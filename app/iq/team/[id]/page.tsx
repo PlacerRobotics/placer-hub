@@ -1,8 +1,8 @@
 import { redirect, notFound, unstable_rethrow } from 'next/navigation'
 import Link from 'next/link'
-import { createClient as createSupa } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendMagicLinkEmail } from '@/lib/email'
 import { FamilyShell, PageHeader, FormSection, FormField, TextInput, PrimaryButton, StatusBadge, InfoAlert } from '@/components/ui'
 
 const SEASON = '2026-27'
@@ -113,8 +113,15 @@ async function CoachTeamView(id: string) {
     if (teamRow?.status === 'active') {
       await adb.from('family_season').update({ status: 'cleared_to_register', magic_link_sent: true }).eq('family_id', familyId).eq('season', SEASON)
       try {
-        const sender = createSupa(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-        await sender.auth.signInWithOtp({ email: pEmail, options: { emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/api/auth/callback?redirectTo=/register` } })
+        await sendMagicLinkEmail({
+          email: pEmail,
+          redirectPath: '/register',
+          subject: 'You’re invited to register — Placer Robotics 2026-27',
+          heading: 'You’re invited to register',
+          intro: "Your student has been added to a VEX IQ team. Click below to sign in and complete their registration for the 2026-27 season.",
+          buttonLabel: 'Sign in to register →',
+          preheader: 'Sign in to complete your Placer Robotics registration.',
+        })
       } catch (e) { console.error('[iq coach add] invite failed:', e) }
     }
     redirect(`/iq/team/${id}`)
