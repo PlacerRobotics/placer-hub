@@ -384,24 +384,9 @@ export default function RegisterWizard({
             </FormField>
           </FormSection>
 
-          <FormSection title="Secondary emergency contact (optional)">
-            <FormField label="First name" htmlFor="ec2First">
-              <TextInput id="ec2First" value={ec2First} onChange={(e) => setEc2First(e.target.value)} />
-            </FormField>
-            <FormField label="Last name" htmlFor="ec2Last">
-              <TextInput id="ec2Last" value={ec2Last} onChange={(e) => setEc2Last(e.target.value)} />
-            </FormField>
-            <FormField label="Relationship to student" htmlFor="ec2Rel">
-              <TextInput id="ec2Rel" value={ec2Rel} onChange={(e) => setEc2Rel(e.target.value)} />
-            </FormField>
-            <FormField label="Phone" htmlFor="ec2Phone">
-              <TextInput id="ec2Phone" type="tel" value={ec2Phone} onChange={(e) => setEc2Phone(e.target.value)} />
-            </FormField>
-          </FormSection>
-
           <div style={{ marginBottom: '1.25rem' }}>
             <WarningAlert>
-              Emergency contact cannot be a parent/guardian already listed on your account.
+              Please list one emergency contact who is <strong>not</strong> a parent/guardian already on your account.
             </WarningAlert>
           </div>
 
@@ -433,25 +418,14 @@ export default function RegisterWizard({
               }}
             >
               <h3 className="text-card-title" style={{ marginBottom: '0.5rem' }}>{w.title}</h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.625rem' }}>
-                Scroll within the box below to read the full agreement.
-              </p>
-              <div
-                style={{
-                  maxHeight: '300px',
-                  overflowY: 'auto',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '6px',
-                  padding: '0.875rem',
-                  fontSize: '0.875rem',
-                  lineHeight: 1.6,
-                  color: 'var(--color-text-muted)',
-                  whiteSpace: 'pre-wrap',
-                  marginBottom: '0.875rem',
-                }}
-              >
-                {w.body_markdown}
-              </div>
+              <details open style={{ border: '1px solid var(--color-border)', borderRadius: '6px', padding: '0.875rem', marginBottom: '0.875rem' }}>
+                <summary style={{ cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>
+                  Full agreement — read below, then collapse if you like
+                </summary>
+                <div style={{ fontSize: '0.875rem', lineHeight: 1.7, color: 'var(--color-text-primary)', whiteSpace: 'pre-wrap', marginTop: '0.875rem' }}>
+                  {w.body_markdown}
+                </div>
+              </details>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem', fontSize: '0.9375rem', cursor: 'pointer' }}>
                 <input
                   type="checkbox"
