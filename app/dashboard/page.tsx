@@ -10,7 +10,7 @@ const SEASON = '2026-27'
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
-type StudentCard = { name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string }
+type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string }
 type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; division: string; isIq: boolean; studentId: string; dropRequested: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
@@ -148,6 +148,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         const complete = isIqKid ? isSigned : (registered && isSigned && paid && hasTeam)
         if (!isIqKid && !registered && !firstUnregisteredName) firstUnregisteredName = name
         studentCards.push({
+          studentId: s.id,
           name,
           program: isIqKid ? 'VEX IQ' : (PROGRAM_LABELS[programVal] ?? programVal),
           complete,
@@ -305,7 +306,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
                 <span>{card.detail}</span>
-                <Link href="/dashboard/edit" style={smallLink}>Edit details</Link>
+                <span style={{ display: 'flex', gap: '0.875rem' }}>
+                  {!card.complete && <Link href={`/register?student=${card.studentId}`} style={smallLink}>Complete registration →</Link>}
+                  <Link href="/dashboard/edit" style={smallLink}>Edit details</Link>
+                </span>
               </div>
             </div>
           ))}

@@ -10,7 +10,8 @@ function makePaymentRef(first: string, last: string) {
   return `PART-${SEASON.replace('-', '')}-${initials}-${digits}`
 }
 
-export default async function RegisterPage() {
+export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ student?: string }> }) {
+  const { student: studentParam } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -39,7 +40,8 @@ export default async function RegisterPage() {
     redirect('/dashboard?notice=not_cleared')
   }
 
-  // Load the student being registered (first student on the family).
+  // Load the student being registered — a specific one via ?student=<id> so a
+  // multi-student family can register each child; otherwise the first on the family.
   const { data: students } = await supabase
     .from('student')
     .select(
@@ -47,8 +49,8 @@ export default async function RegisterPage() {
     )
     .eq('family_id', familyId)
     .order('created_at', { ascending: true })
-    .limit(1)
-  const student = students?.[0]
+  const list = students ?? []
+  const student = (studentParam ? list.find((s) => s.id === studentParam) : null) ?? list[0]
   if (!student) redirect('/dashboard?notice=not_cleared')
 
   const { data: appn } = await supabase
