@@ -32,6 +32,16 @@ const FUND_METHOD_LABELS: Record<string, string> = {
 }
 const FINANCIAL_AID_URL = 'https://forms.gle/nqjneY9ESyLRdZ8V9'
 const MAIL_ADDRESS = 'Placer Advanced Robotics and Technology, 9182 Cedar Ridge Drive, Granite Bay, CA 95746'
+// Fallback so the Zeffy button always works even if season_config.zeffy_student_url is unset.
+const ZEFFY_REGISTRATION_URL = 'https://www.zeffy.com/en-US/ticketing/2026-27-placer-robotics-mshs-registration'
+
+function ZeffyMethodsNote() {
+  return (
+    <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+      <strong>Zeffy accepts:</strong> credit &amp; debit cards (Visa, Mastercard, Amex) up to $4,999 · Apple&nbsp;Pay &amp; Google&nbsp;Pay on mobile up to $1,000 · ACH bank transfer up to $20,000.
+    </div>
+  )
+}
 // Post-submit message shown on the confirmation screen, keyed by fundraising method.
 const SUBMIT_METHOD_MESSAGE: Record<string, string> = {
   direct_donation: 'To make your full fundraising contribution, select a Standard ($790) or Champion ($1,040) ticket on Zeffy, or return to make an additional contribution at any time.',
@@ -169,6 +179,7 @@ export default function RegisterWizard({
 }: Props) {
   const router = useRouter()
   const alreadySigned = !!signed
+  const signedDateLabel = signed ? new Date(signed.signedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -184,8 +195,12 @@ export default function RegisterWizard({
   const REVIEW_STEP = isIq ? 4 : 5
   const programLabel = PROGRAM_LABELS[program] ?? 'program'
 
-  // Step 4 (non-IQ) — Payment & Fundraising. Prefilled on resume from the saved selection.
-  const [fundMethod, setFundMethod] = useState(fundraising?.method ?? '')
+  // Zeffy is the default payment path. Always have a working URL (config or fallback).
+  const payUrl = zeffyUrl || ZEFFY_REGISTRATION_URL
+
+  // Step 4 (non-IQ) — Payment & Fundraising. Default to Zeffy direct contribution;
+  // prefilled on resume from the saved selection.
+  const [fundMethod, setFundMethod] = useState(fundraising?.method || 'direct_donation')
   const [empCompany, setEmpCompany] = useState(fundraising?.employer_company ?? '')
   const [empPct, setEmpPct] = useState(fundraising?.employer_pct ?? '')
   const [empPortal, setEmpPortal] = useState(fundraising?.employer_portal ?? '')
@@ -364,13 +379,10 @@ export default function RegisterWizard({
                 <Row label="Total due via Zeffy today" value="$40" />
               </div>
             </div>
-            {zeffyUrl ? (
-              <a href={zeffyUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '12px 24px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
-                Pay Registration Fee via Zeffy →
-              </a>
-            ) : (
-              <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>The secure online payment link will be emailed to you.</p>
-            )}
+            <a href={payUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '12px 24px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
+              Pay Registration Fee via Zeffy →
+            </a>
+            <ZeffyMethodsNote />
             <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0.625rem 0 1.25rem', lineHeight: 1.6 }}>
               Select the ticket for {programLabel}. The $40 registration fee ticket is separate from any additional contribution you choose to make.
             </p>
@@ -583,7 +595,7 @@ export default function RegisterWizard({
               label="Student / participant full legal name"
               htmlFor="studentSig"
               required
-              helpText="The student's printed name, as their acknowledgment of the agreements above."
+              helpText={alreadySigned ? `Signed ${signedDateLabel} — view only.` : "The student's printed name, as their acknowledgment of the agreements above."}
             >
               <TextInput
                 id="studentSig"
@@ -597,7 +609,7 @@ export default function RegisterWizard({
               label="Parent / legal guardian full legal name"
               htmlFor="signature"
               required
-              helpText="Your printed name, signing as the parent or legal guardian on the participant's behalf."
+              helpText={alreadySigned ? `Signed ${signedDateLabel} — view only.` : "Your printed name, signing as the parent or legal guardian on the participant's behalf."}
             >
               <TextInput id="signature" value={signature} disabled={alreadySigned} onChange={(e) => setSignature(e.target.value)} placeholder={guardianName} />
             </FormField>
@@ -616,16 +628,11 @@ export default function RegisterWizard({
           <FormSection title="Payment &amp; Fundraising" description="Pay the registration fee and choose how you’ll meet your fundraising commitment.">
             <div style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem 1.25rem', fontSize: '0.9375rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
               <p style={{ margin: '0 0 0.75rem' }}>A <strong>$40 registration fee</strong> is required for all students, paid via Zeffy. This fee is non-refundable and is not tax-deductible.</p>
-              {zeffyUrl ? (
-                <>
-                  <a href={zeffyUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '10px 20px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
-                    Pay the $40 fee via Zeffy →
-                  </a>
-                  <p style={{ margin: '0.625rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>You can pay now or after you submit — your spot is confirmed once we receive it.</p>
-                </>
-              ) : (
-                <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>The secure Zeffy payment link will be shown after you submit.</p>
-              )}
+              <a href={payUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '10px 20px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
+                Pay the $40 fee via Zeffy →
+              </a>
+              <p style={{ margin: '0.625rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>You can pay now or after you submit — your spot is confirmed once we receive it.</p>
+              <ZeffyMethodsNote />
             </div>
           </FormSection>
 

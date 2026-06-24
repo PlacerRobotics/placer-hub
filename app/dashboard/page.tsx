@@ -7,6 +7,8 @@ import { supporterLevel } from '@/lib/supporter'
 
 const ADMIN_EMAIL = 'kevin.miller@placerrobotics.org'
 const SEASON = '2026-27'
+// Fallback so "Pay Now via Zeffy" always works even if season_config is unset.
+const ZEFFY_REGISTRATION_URL = 'https://www.zeffy.com/en-US/ticketing/2026-27-placer-robotics-mshs-registration'
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
@@ -337,9 +339,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <div style={{ marginTop: '0.75rem', backgroundColor: '#FFF8E6', border: '1px solid var(--color-gold)', borderRadius: 8, padding: '0.75rem 0.875rem' }}>
                   <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#8a6d1a' }}>Registration fee not yet received</div>
                   <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>Pay the $40 registration fee via Zeffy to secure {card.name}’s spot.</div>
-                  {zeffyStudentUrl && (
-                    <a href={zeffyStudentUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.5rem', padding: '7px 14px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 6, textDecoration: 'none' }}>Pay Now via Zeffy →</a>
-                  )}
+                  <a href={zeffyStudentUrl || ZEFFY_REGISTRATION_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.5rem', padding: '7px 14px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 6, textDecoration: 'none' }}>Pay Now via Zeffy →</a>
                 </div>
               )}
               {!card.isIqKid && !card.registered && fsStatus === 'cleared_to_register' && (
