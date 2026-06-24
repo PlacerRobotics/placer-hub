@@ -29,6 +29,11 @@ export async function POST(request: NextRequest) {
   })
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
-  await db.from('family_season').update({ fundraising_method: 'sponsored' }).eq('id', familySeasonId)
+  // Reflect the sponsorship in the family's fundraising methods — add 'sponsored'
+  // without clobbering any other methods they selected.
+  const { data: fsRow } = await db.from('family_season').select('fundraising_methods').eq('id', familySeasonId).maybeSingle()
+  const methods = new Set<string>(((fsRow?.fundraising_methods ?? []) as string[]))
+  methods.add('sponsored')
+  await db.from('family_season').update({ fundraising_method: 'sponsored', fundraising_methods: [...methods] }).eq('id', familySeasonId)
   return NextResponse.json({ ok: true })
 }
