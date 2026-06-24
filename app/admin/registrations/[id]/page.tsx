@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
-import RegistrationEdit, { type TeamOpt } from './edit-modal'
+import RegistrationEdit from './edit-modal'
+import TeamAssign, { type AssignTeam } from './team-assign'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', both: 'VEX V5 & Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure' }
@@ -60,8 +61,8 @@ export default async function RegistrationDetailPage({
     if (teamIds.length) {
       teamId = teamIds[0]
       const { data: ts } = await supabase.from('team').select('id, team_number, team_name').in('id', teamIds)
-      const labels = ((ts ?? []) as any[]).map((t) => t.team_number || t.team_name).filter(Boolean)
-      teamLabel = labels.join(', ') || '—'
+      const t0 = ((ts ?? []) as any[])[0]
+      teamLabel = t0 ? (`${t0.team_number ?? ''}${t0.team_name ? ` · ${t0.team_name}` : ''}`.trim() || '—') : '—'
     }
   }
 
@@ -73,10 +74,10 @@ export default async function RegistrationDetailPage({
     : { data: null as any }
   const { data: pay } = await supabase.from('payment_transaction').select('amount, source, matched_status, payment_reference_code').eq('family_id', fs.family_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
   const { data: audit } = await supabase.from('registration_audit_log').select('field_changed, old_value, new_value, changed_at, notes').eq('family_season_id', id).order('changed_at', { ascending: false })
-  const { data: allTeams } = await supabase.from('team').select('id, team_number, team_name, program, division').eq('season', SEASON).order('team_number', { ascending: true })
+  const { data: allTeams } = await supabase.from('team').select('id, team_number, team_name, program, division').eq('season', SEASON).eq('active', true).order('team_number', { ascending: true })
 
   const name = student ? `${student.first_name} ${student.last_name}` : 'Registration'
-  const teamOpts: TeamOpt[] = (allTeams ?? []).map((t: any) => ({ id: t.id, label: `${t.team_number ?? t.team_name ?? t.id} · ${t.program} · ${t.division}` }))
+  const assignTeams: AssignTeam[] = (allTeams ?? []).map((t: any) => ({ id: t.id, number: t.team_number ?? '', name: t.team_name ?? '', program: t.program }))
 
   const studentFields = [
     { label: 'Name', value: name },
@@ -84,7 +85,7 @@ export default async function RegistrationDetailPage({
     { label: 'School', value: student?.school?.name ?? student?.school_raw ?? '—' },
     { label: 'Program', value: PROGRAM_LABELS[programVal] ?? programVal ?? '—' },
     { label: 'Division', value: divisionVal ?? '—' },
-    { label: 'Team', value: teamLabel },
+    { label: 'Team', value: student ? <TeamAssign familySeasonId={fs.id} studentId={student.id} studentProgram={programVal} hasEnrollment={enrList.length > 0} current={teamId ? { id: teamId, label: teamLabel } : null} teams={assignTeams} /> : '—' },
     { label: 'Status', value: <StatusBadge label={STATUS_LABELS[fs.status] ?? fs.status} variant={STATUS_VARIANT[fs.status] ?? 'neutral'} /> },
   ]
   const guardianFields = [
@@ -112,11 +113,10 @@ export default async function RegistrationDetailPage({
           <RegistrationEdit
             familySeasonId={fs.id}
             studentId={student.id}
-            teams={teamOpts}
             current={{
               tshirt_size: student.tshirt_size ?? '',
               program: programVal,
-              team_id: teamId ?? '',
+              division: divisionVal ?? '',
               emergency_name: ec ? `${ec.first_name} ${ec.last_name}` : '',
               emergency_phone: ec?.phone ?? '',
             }}

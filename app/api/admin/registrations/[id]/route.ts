@@ -43,10 +43,36 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // division (enrollment) — required field, so only ever set a valid value.
+  if (body.division !== undefined) {
+    const div = String(body.division || '').trim()
+    if (div && !['ES', 'MS', 'HS'].includes(div)) return NextResponse.json({ error: 'Invalid division (ES/MS/HS).' }, { status: 400 })
+    if (div) {
+      const { data: enrs } = await db.from('enrollment').select('id, division').eq('student_id', studentId).eq('season', SEASON)
+      for (const enr of (enrs ?? []) as any[]) {
+        if (enr.division === div) continue
+        const { error } = await db.from('enrollment').update({ division: div }).eq('id', enr.id)
+        if (error) return NextResponse.json({ error: `Division update failed: ${error.message}` }, { status: 400 })
+        await log('division', enr.division, div)
+      }
+    }
+  }
+
   // team (team_member, one active row per enrollment). Empty team_id = unassign.
+  // A student team_member requires an enrollment (CHECK enrollment_id OR guardian_id),
+  // so assignment is only possible once the student is registered. Audit uses team #s.
   if (body.team_id !== undefined) {
     const newTeamId = String(body.team_id || '')
     const { data: enrs } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON)
+    if (newTeamId && !(enrs ?? []).length) {
+      return NextResponse.json({ error: 'This student isn’t registered yet — a team can be assigned after they complete registration.' }, { status: 400 })
+    }
+    const numOf = async (tid: string | null | undefined) => {
+      if (!tid) return 'unassigned'
+      const { data } = await db.from('team').select('team_number, team_name').eq('id', tid).maybeSingle()
+      return data?.team_number || data?.team_name || tid
+    }
+    const newNum = newTeamId ? await numOf(newTeamId) : 'unassigned'
     for (const enr of (enrs ?? []) as any[]) {
       const { data: existing } = await db.from('team_member')
         .select('id, team_id')
@@ -54,21 +80,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .is('revoked_at', null)
         .maybeSingle()
       if (!newTeamId) {
-        // Unassign: revoke the active membership (team_member.team_id is NOT NULL).
         if (existing) {
           const { error } = await db.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('id', existing.id)
           if (error) return NextResponse.json({ error: `Team unassign failed: ${error.message}` }, { status: 500 })
-          await log('team', existing.team_id, null)
+          await log('team_assignment', await numOf(existing.team_id), 'unassigned')
         }
       } else if (existing) {
         if (existing.team_id === newTeamId) continue
+        const oldNum = await numOf(existing.team_id)
         const { error } = await db.from('team_member').update({ team_id: newTeamId }).eq('id', existing.id)
         if (error) return NextResponse.json({ error: `Team update failed: ${error.message}` }, { status: 500 })
-        await log('team', existing.team_id, newTeamId)
+        await log('team_assignment', oldNum, newNum)
       } else {
         const { error } = await db.from('team_member').insert({ team_id: newTeamId, enrollment_id: enr.id, student_id: studentId, season: SEASON, team_role: 'student', program: enr.program })
         if (error) return NextResponse.json({ error: `Team assign failed: ${error.message}` }, { status: 500 })
-        await log('team', null, newTeamId)
+        await log('team_assignment', 'unassigned', newNum)
       }
     }
   }

@@ -3,8 +3,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-export type TeamOpt = { id: string; label: string }
-
 const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: '0.9375rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--color-text-muted)' }
 const btn: React.CSSProperties = { padding: '8px 16px', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }
@@ -12,13 +10,11 @@ const btn: React.CSSProperties = { padding: '8px 16px', border: 'none', borderRa
 export default function RegistrationEdit({
   familySeasonId,
   studentId,
-  teams,
   current,
 }: {
   familySeasonId: string
   studentId: string
-  teams: TeamOpt[]
-  current: { tshirt_size: string; program: string; team_id: string; emergency_name: string; emergency_phone: string }
+  current: { tshirt_size: string; program: string; division: string; emergency_name: string; emergency_phone: string }
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -70,10 +66,12 @@ export default function RegistrationEdit({
           </select>
         </div>
         <div>
-          <label style={labelStyle}>Team</label>
-          <select style={inputStyle} value={f.team_id} onChange={(e) => set('team_id', e.target.value)}>
-            <option value="">— Unassigned —</option>
-            {teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          <label style={labelStyle}>Division</label>
+          <select style={inputStyle} value={f.division} onChange={(e) => set('division', e.target.value)}>
+            <option value="">—</option>
+            <option value="ES">Elementary</option>
+            <option value="MS">Middle</option>
+            <option value="HS">High</option>
           </select>
         </div>
         <div>
