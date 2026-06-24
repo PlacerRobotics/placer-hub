@@ -32,5 +32,6 @@ export async function POST(req: NextRequest) {
     preheader: 'Your admin sign-in link for the Placer Robotics Hub.',
   })
   if (!r.ok) return NextResponse.json({ error: r.error === 'no_api_key' ? "Email isn't configured yet." : 'Could not send the link.' }, { status: 500 })
+  await db.from('admin_profile').update({ invite_sent_at: new Date().toISOString() }).ilike('email', email)
   return NextResponse.json({ ok: true })
 }

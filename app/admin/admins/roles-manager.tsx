@@ -10,6 +10,20 @@ export type AdminRow = {
   displayName: string
   active: boolean
   roles: { id: string; role: string; program_scope: string | null }[]
+  inviteSentAt: string | null
+  lastSignInAt: string | null
+}
+
+function OnboardStatus({ a }: { a: AdminRow }) {
+  let color = 'var(--color-text-muted)', text = 'Not invited yet'
+  if (a.lastSignInAt) { color = 'var(--color-success)'; text = `Signed in ${new Date(a.lastSignInAt).toLocaleDateString()}` }
+  else if (a.inviteSentAt) { color = 'var(--color-gold)'; text = `Link sent ${new Date(a.inviteSentAt).toLocaleDateString()} · not signed in` }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+      <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: color, display: 'inline-block' }} />
+      {text}
+    </span>
+  )
 }
 
 const card: React.CSSProperties = { backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '1.25rem', marginBottom: '1rem' }
@@ -61,6 +75,7 @@ export default function RolesManager({ admins }: { admins: AdminRow[] }) {
               <span style={{ fontWeight: 600 }}>{a.displayName || a.email}</span>
               {a.displayName && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem', marginLeft: '0.5rem' }}>{a.email}</span>}
               {!a.active && <span style={{ color: 'var(--color-error)', fontSize: '0.75rem', marginLeft: '0.5rem' }}>(inactive)</span>}
+              <div style={{ marginTop: '0.3rem' }}><OnboardStatus a={a} /></div>
             </div>
             <button type="button" disabled={busy} style={{ ...navyBtn, padding: '6px 12px', background: 'var(--color-surface)', color: 'var(--color-navy-deep)', border: '1.5px solid var(--color-navy-deep)' }}
               onClick={async () => { if (await post('/api/admin/admins/send-link', { admin_profile_id: a.id })) setMsg(`Sign-in link sent to ${a.email}`) }}>
