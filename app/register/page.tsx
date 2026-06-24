@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import RegisterWizard from './register-wizard'
 
 const SEASON = '2026-27'
@@ -45,7 +46,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   const { data: students } = await supabase
     .from('student')
     .select(
-      'id, first_name, last_name, preferred_name, birthdate, grade, school_id, school_raw, tshirt_size, fusion_education_email'
+      'id, first_name, last_name, preferred_name, birthdate, grade, school_id, school_raw, tshirt_size, fusion_education_email, communication_email'
     )
     .eq('family_id', familyId)
     .order('created_at', { ascending: true })
@@ -61,12 +62,16 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
     .maybeSingle()
   const program: string = appn?.program_interest ?? 'vex_v5'
 
+  // Primary enrollment (lowest created_at) — for a 'both' student there is no row
+  // with program='both', so don't filter by program; the primary holds the ref code
+  // and the consent flags we prefill on resume.
   const { data: enrollment } = await supabase
     .from('enrollment')
-    .select('payment_reference_code')
+    .select('payment_reference_code, student_slack_consent, parent_email_access_certified')
     .eq('student_id', student.id)
     .eq('season', SEASON)
-    .eq('program', program)
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle()
 
   // Prefill the emergency-contact step from any contact already on file.
@@ -76,6 +81,43 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
     .eq('student_id', student.id)
     .eq('priority', 1)
     .maybeSingle()
+
+  // Already-signed waivers (resume): show them read-only with the original date + names.
+  const { data: sigRows } = await supabase
+    .from('waiver_signature')
+    .select('signed_at, typed_name, participant_typed_name')
+    .eq('student_id', student.id)
+    .eq('season', SEASON)
+    .order('signed_at', { ascending: false })
+  const signed = sigRows && sigRows.length
+    ? { signedAt: sigRows[0].signed_at as string, parentName: (sigRows[0].typed_name as string) ?? '', studentName: (sigRows[0].participant_typed_name as string) ?? '' }
+    : null
+
+  // Already-chosen fundraising (resume): family-level, only meaningful once the family
+  // has registered. employer_match_* / sponsor interest are admin-RLS, so read via the
+  // service-role client (scoped to this family).
+  const alreadyRegistered = fs.status === 'registered'
+  let fundraising: {
+    method: string; employer_company: string; employer_pct: string; employer_portal: string
+    sponsor_business: string; sponsor_contact: string; sponsor_amount: string
+  } | null = null
+  if (alreadyRegistered) {
+    const adb = createAdminClient()
+    const [{ data: famRow }, { data: spRow }] = await Promise.all([
+      adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', familyId).maybeSingle(),
+      adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount').eq('family_id', familyId).eq('season', SEASON).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ])
+    const { data: fsFund } = await supabase.from('family_season').select('fundraising_method').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
+    fundraising = {
+      method: fsFund?.fundraising_method ?? '',
+      employer_company: famRow?.employer_match_company ?? '',
+      employer_pct: famRow?.employer_match_pct != null ? String(famRow.employer_match_pct) : '',
+      employer_portal: famRow?.employer_match_portal ?? '',
+      sponsor_business: spRow?.business_name ?? '',
+      sponsor_contact: spRow?.contact_name ?? '',
+      sponsor_amount: spRow?.estimated_amount != null ? String(spRow.estimated_amount) : '',
+    }
+  }
 
   const { data: schools } = await supabase
     .from('school')
@@ -125,6 +167,9 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       zeffyUrl={config?.zeffy_student_url ?? null}
       fundraisingTarget={config?.one_program_fundraising_target ?? 550}
       emergency={ecRow ? { first_name: ecRow.first_name ?? '', last_name: ecRow.last_name ?? '', relationship: ecRow.relationship ?? '', phone: ecRow.phone ?? '' } : null}
+      consent={enrollment ? { slackConsent: !!enrollment.student_slack_consent, emailCertified: !!enrollment.parent_email_access_certified } : null}
+      signed={signed}
+      fundraising={fundraising}
     />
   )
 }

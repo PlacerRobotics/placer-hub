@@ -237,7 +237,10 @@ export async function POST(request: NextRequest) {
     .eq('active', true)
   const typedName: string = body.signatureName ?? ''
   const participantName: string = body.studentSignatureName ?? ''
-  if (waivers?.length) {
+  // Append-only AND sign-once: if this student already has signatures this season
+  // (a resume), keep the originals — never duplicate or overwrite them.
+  const { data: priorSigs } = await db.from('waiver_signature').select('id').eq('student_id', studentId).eq('season', SEASON).limit(1)
+  if (waivers?.length && !priorSigs?.length) {
     const sigs = waivers.map((w: any) => ({
       waiver_template_id: w.id,
       family_id: familyId,

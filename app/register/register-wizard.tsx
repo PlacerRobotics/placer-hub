@@ -72,6 +72,7 @@ type Props = {
     school_raw: string | null
     tshirt_size: string | null
     fusion_education_email: string | null
+    communication_email: string | null
   }
   schools: { id: string; name: string; grade_min: number | null; grade_max: number | null }[]
   waivers: { id: string; waiver_type: string; version: string; title: string; body_markdown: string; body_hash: string }[]
@@ -80,6 +81,12 @@ type Props = {
   zeffyUrl: string | null
   fundraisingTarget: number
   emergency: { first_name: string; last_name: string; relationship: string; phone: string } | null
+  consent: { slackConsent: boolean; emailCertified: boolean } | null
+  signed: { signedAt: string; parentName: string; studentName: string } | null
+  fundraising: {
+    method: string; employer_company: string; employer_pct: string; employer_portal: string
+    sponsor_business: string; sponsor_contact: string; sponsor_amount: string
+  } | null
 }
 
 const labelStyle: React.CSSProperties = {
@@ -156,8 +163,12 @@ export default function RegisterWizard({
   zeffyUrl,
   fundraisingTarget,
   emergency,
+  consent,
+  signed,
+  fundraising,
 }: Props) {
   const router = useRouter()
+  const alreadySigned = !!signed
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -173,14 +184,14 @@ export default function RegisterWizard({
   const REVIEW_STEP = isIq ? 4 : 5
   const programLabel = PROGRAM_LABELS[program] ?? 'program'
 
-  // Step 4 (non-IQ) — Payment & Fundraising
-  const [fundMethod, setFundMethod] = useState('')
-  const [empCompany, setEmpCompany] = useState('')
-  const [empPct, setEmpPct] = useState('')
-  const [empPortal, setEmpPortal] = useState('')
-  const [spBusiness, setSpBusiness] = useState('')
-  const [spContact, setSpContact] = useState('')
-  const [spAmount, setSpAmount] = useState('')
+  // Step 4 (non-IQ) — Payment & Fundraising. Prefilled on resume from the saved selection.
+  const [fundMethod, setFundMethod] = useState(fundraising?.method ?? '')
+  const [empCompany, setEmpCompany] = useState(fundraising?.employer_company ?? '')
+  const [empPct, setEmpPct] = useState(fundraising?.employer_pct ?? '')
+  const [empPortal, setEmpPortal] = useState(fundraising?.employer_portal ?? '')
+  const [spBusiness, setSpBusiness] = useState(fundraising?.sponsor_business ?? '')
+  const [spContact, setSpContact] = useState(fundraising?.sponsor_contact ?? '')
+  const [spAmount, setSpAmount] = useState(fundraising?.sponsor_amount ?? '')
 
   // Step 1
   const [first, setFirst] = useState(student.first_name ?? '')
@@ -192,10 +203,10 @@ export default function RegisterWizard({
   const [schoolOther, setSchoolOther] = useState(student.school_raw ?? '')
   const [tshirt, setTshirt] = useState(student.tshirt_size ?? '')
   const [fusion, setFusion] = useState(student.fusion_education_email ?? '')
-  const [studentEmail, setStudentEmail] = useState('')
-  const [emailCertified, setEmailCertified] = useState(false)
+  const [studentEmail, setStudentEmail] = useState(student.communication_email ?? '')
+  const [emailCertified, setEmailCertified] = useState(consent?.emailCertified ?? false)
   const [schoolEmailConfirmed, setSchoolEmailConfirmed] = useState(false)
-  const [slackConsent, setSlackConsent] = useState(false)
+  const [slackConsent, setSlackConsent] = useState(consent?.slackConsent ?? false)
   const [coppaConsent, setCoppaConsent] = useState(false)
 
   // Step 2 — prefill from any existing emergency contact on file.
@@ -208,11 +219,13 @@ export default function RegisterWizard({
   const [ec2Rel, setEc2Rel] = useState('')
   const [ec2Phone, setEc2Phone] = useState('')
 
-  // Step 3
-  const [agreed, setAgreed] = useState<Record<string, boolean>>({})
-  const [studentSig, setStudentSig] = useState('')
-  const [signature, setSignature] = useState('')
-  const [electronicConsent, setElectronicConsent] = useState(false)
+  // Step 3 — prefilled + locked on resume when waivers are already signed.
+  const [agreed, setAgreed] = useState<Record<string, boolean>>(
+    alreadySigned ? Object.fromEntries(waivers.map((w) => [w.id, true])) : {}
+  )
+  const [studentSig, setStudentSig] = useState(signed?.studentName ?? '')
+  const [signature, setSignature] = useState(signed?.parentName ?? '')
+  const [electronicConsent, setElectronicConsent] = useState(alreadySigned)
 
   const schoolName = useMemo(() => {
     if (schoolId === OTHER_SCHOOL) return schoolOther
@@ -247,7 +260,7 @@ export default function RegisterWizard({
     (!emailProvided || (emailCertified && (!schoolDomainMatch || schoolEmailConfirmed)))
   const step2Valid = ec1First.trim() && ec1Last.trim() && ec1Rel.trim() && ec1Phone.trim()
   const allWaiversAgreed = waivers.length > 0 ? waivers.every((w) => agreed[w.id]) : true
-  const step3Valid = allWaiversAgreed && electronicConsent && studentSig.trim() && signature.trim()
+  const step3Valid = alreadySigned || (allWaiversAgreed && electronicConsent && !!studentSig.trim() && !!signature.trim())
   const empPctNum = Number(empPct)
   const spAmountNum = Number(spAmount)
   const step4Valid =
@@ -513,6 +526,13 @@ export default function RegisterWizard({
       {step === 3 && (
         <>
           <h2 className="text-section-title" style={{ marginBottom: '1rem' }}>Waivers</h2>
+          {signed && (
+            <div style={{ marginBottom: '1.25rem' }}>
+              <SuccessAlert title="Agreements already signed">
+                You signed these agreements on {new Date(signed.signedAt).toLocaleDateString()}. They’re shown here for your records and can’t be changed.
+              </SuccessAlert>
+            </div>
+          )}
           {waivers.length === 0 && (
             <div style={{ marginBottom: '1.25rem' }}>
               <WarningAlert>No active waivers are configured yet — you can continue.</WarningAlert>
@@ -542,6 +562,7 @@ export default function RegisterWizard({
                 <input
                   type="checkbox"
                   checked={!!agreed[w.id]}
+                  disabled={alreadySigned}
                   onChange={(e) => setAgreed((prev) => ({ ...prev, [w.id]: e.target.checked }))}
                   style={{ marginTop: '0.25rem' }}
                 />
@@ -555,7 +576,7 @@ export default function RegisterWizard({
             description="Both the participant and a parent or legal guardian acknowledge all of the agreements above. Type each full legal name below — today's date is recorded automatically with each signature."
           >
             <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem', fontSize: '0.9375rem', cursor: 'pointer', marginBottom: '0.5rem' }}>
-              <input type="checkbox" checked={electronicConsent} onChange={(e) => setElectronicConsent(e.target.checked)} style={{ marginTop: '0.25rem' }} />
+              <input type="checkbox" checked={electronicConsent} disabled={alreadySigned} onChange={(e) => setElectronicConsent(e.target.checked)} style={{ marginTop: '0.25rem' }} />
               <span>I agree that typing my name below is my electronic signature, that it is the legal equivalent of a handwritten signature, and that it is legally binding. I consent to signing these agreements electronically.</span>
             </label>
             <FormField
@@ -567,6 +588,7 @@ export default function RegisterWizard({
               <TextInput
                 id="studentSig"
                 value={studentSig}
+                disabled={alreadySigned}
                 onChange={(e) => setStudentSig(e.target.value)}
                 placeholder={`${first || student.first_name} ${last || student.last_name}`.trim()}
               />
@@ -577,7 +599,7 @@ export default function RegisterWizard({
               required
               helpText="Your printed name, signing as the parent or legal guardian on the participant's behalf."
             >
-              <TextInput id="signature" value={signature} onChange={(e) => setSignature(e.target.value)} placeholder={guardianName} />
+              <TextInput id="signature" value={signature} disabled={alreadySigned} onChange={(e) => setSignature(e.target.value)} placeholder={guardianName} />
             </FormField>
           </FormSection>
 
