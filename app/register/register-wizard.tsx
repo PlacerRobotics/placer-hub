@@ -613,9 +613,19 @@ export default function RegisterWizard({
       {/* Step 4 — Payment & Fundraising (non-IQ; IQ is team-managed) */}
       {!isIq && step === 4 && (
         <>
-          <FormSection title="Payment &amp; Fundraising" description="Review the registration fee and choose how you’ll meet your fundraising commitment.">
+          <FormSection title="Payment &amp; Fundraising" description="Pay the registration fee and choose how you’ll meet your fundraising commitment.">
             <div style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem 1.25rem', fontSize: '0.9375rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
-              A $40 registration fee is required for all students. You will pay this via Zeffy at the end of registration. This fee is non-refundable and is not tax-deductible.
+              <p style={{ margin: '0 0 0.75rem' }}>A <strong>$40 registration fee</strong> is required for all students, paid via Zeffy. This fee is non-refundable and is not tax-deductible.</p>
+              {zeffyUrl ? (
+                <>
+                  <a href={zeffyUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '10px 20px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
+                    Pay the $40 fee via Zeffy →
+                  </a>
+                  <p style={{ margin: '0.625rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>You can pay now or after you submit — your spot is confirmed once we receive it.</p>
+                </>
+              ) : (
+                <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>The secure Zeffy payment link will be shown after you submit.</p>
+              )}
             </div>
           </FormSection>
 
@@ -744,17 +754,22 @@ function RadioCard({
   label: string
   children?: React.ReactNode
 }) {
+  const [hover, setHover] = useState(false)
   const selected = current === value
   return (
-    <div style={{ border: `1.5px solid ${selected ? 'var(--color-navy-deep)' : 'var(--color-border)'}`, borderRadius: 8, padding: '0.875rem 1rem', marginBottom: '0.75rem', backgroundColor: selected ? 'var(--color-bg-light)' : 'var(--color-surface)' }}>
-      <label style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start', cursor: 'pointer' }}>
-        <input type="radio" name="fundMethod" checked={selected} onChange={() => onSelect(value)} style={{ marginTop: 4 }} />
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ border: `2px solid ${selected || hover ? 'var(--color-navy-deep)' : '#aab3c2'}`, borderRadius: 10, padding: '1rem 1.125rem', marginBottom: '0.75rem', backgroundColor: selected ? 'var(--color-bg-light)' : 'var(--color-surface)', transition: 'border-color 0.12s' }}
+    >
+      <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', cursor: 'pointer' }}>
+        <input type="radio" name="fundMethod" checked={selected} onChange={() => onSelect(value)} style={{ marginTop: 3, width: 18, height: 18, accentColor: 'var(--color-navy-deep)', cursor: 'pointer', flexShrink: 0 }} />
         <span>
           <span style={{ fontWeight: 600, fontSize: '0.9375rem', display: 'block', color: 'var(--color-text-primary)' }}>{title}</span>
           <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{label}</span>
         </span>
       </label>
-      {selected && children && <div style={{ marginTop: '0.875rem', paddingLeft: '1.75rem' }}>{children}</div>}
+      {selected && children && <div style={{ marginTop: '0.875rem', paddingLeft: '1.875rem' }}>{children}</div>}
     </div>
   )
 }

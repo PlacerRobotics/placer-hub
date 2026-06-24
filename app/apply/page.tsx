@@ -404,9 +404,14 @@ export default function ApplyPage() {
                     fontFamily: 'inherit',
                   }}
                 >
-                  <span>
-                    <span className="text-card-title">{p.name}</span>
-                    <span className="text-help" style={{ display: 'block' }}>{p.grades}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+                    <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', border: `2px solid ${selected ? 'var(--color-navy-deep)' : '#aab3c2'}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {selected && <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'var(--color-navy-deep)' }} />}
+                    </span>
+                    <span>
+                      <span className="text-card-title">{p.name}</span>
+                      <span className="text-help" style={{ display: 'block' }}>{p.grades}</span>
+                    </span>
                   </span>
                   {(p.value === 'vex_v5' || p.value === 'combat') && <ProgramBadge program={p.value} />}
                 </button>

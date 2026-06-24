@@ -41,6 +41,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const studentCards: StudentCard[] = []
   const kidTeams: KidTeam[] = []
   let firstUnregisteredName = ''
+  let firstUnregisteredStudentId = ''
   let guardianHasSigned = false
   let hasActiveWaivers = false
   let coachTeams: any[] = []
@@ -150,7 +151,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               { cap: 'Team', val: hasTeam ? (team.team_name || team.team_number || 'Assigned') : 'Pending', state: hasTeam ? 'done' : 'todo' },
             ]
         const complete = isIqKid ? isSigned : (registered && isSigned && paid && hasTeam)
-        if (!isIqKid && !registered && !firstUnregisteredName) firstUnregisteredName = name
+        if (!isIqKid && !registered && !firstUnregisteredName) { firstUnregisteredName = name; firstUnregisteredStudentId = s.id }
         studentCards.push({
           studentId: s.id,
           name,
@@ -251,7 +252,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const kidOnlyTeams = Object.values(teamRowMap).filter((t) => !t.coached)
 
   const nextSteps: { title: string; desc: string; cta: string; href: string }[] = []
-  if (firstUnregisteredName) nextSteps.push({ title: `Complete registration for ${firstUnregisteredName}`, desc: 'Finish the form and submit payment to secure the 2026–27 spot.', cta: 'Continue registration', href: '/register' })
+  if (firstUnregisteredName) nextSteps.push({ title: `Complete registration for ${firstUnregisteredName}`, desc: 'Finish the form and submit payment to secure the 2026–27 spot.', cta: 'Continue registration', href: firstUnregisteredStudentId ? `/register?student=${firstUnregisteredStudentId}` : '/register' })
   if (showSignPrompt) nextSteps.push({ title: 'Sign your agreements', desc: 'Review and sign this season’s participation and policy agreements from your account.', cta: 'Review & sign', href: '/waivers' })
 
   const panel: React.CSSProperties = { backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }
