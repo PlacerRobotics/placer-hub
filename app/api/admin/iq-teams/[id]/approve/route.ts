@@ -29,7 +29,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const { data: apps } = await db.from('student_application').select('family_id').eq('season', SEASON).ilike('triage_notes', `%iq_team:${teamId}%`)
   const familyIds = [...new Set((apps ?? []).map((a: any) => a.family_id))]
   if (familyIds.length) {
-    await db.from('family_season').update({ status: 'cleared_to_register' }).in('family_id', familyIds).eq('season', SEASON).in('status', ['prospect', 'applied', 'accepted', 'needs_follow_up'])
+    // NOTE: 'needs_follow_up' is a student_application status, NOT a family_season_status —
+    // including it made Postgres reject the whole update (invalid enum), so families were
+    // silently never cleared. Only valid family_season_status values here.
+    const { error: clearErr } = await db.from('family_season').update({ status: 'cleared_to_register' }).in('family_id', familyIds).eq('season', SEASON).in('status', ['prospect', 'applied', 'accepted'])
+    if (clearErr) return NextResponse.json({ error: `Could not clear families: ${clearErr.message}` }, { status: 500 })
     await db.from('family_season').update({ magic_link_sent: true }).in('family_id', familyIds).eq('season', SEASON)
   }
 
