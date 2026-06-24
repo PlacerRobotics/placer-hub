@@ -4,6 +4,10 @@ import VolunteersDashboard, { type VolRow } from './volunteers-dashboard'
 import ApsSyncButton from './aps-sync-button'
 import { VOLUNTEER_SEASON as SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
 
+// Reads live data via the service-role client (no cookies), so Next would otherwise
+// prerender this page static and freeze the volunteer list at deploy time.
+export const dynamic = 'force-dynamic'
+
 export default async function AdminVolunteersPage() {
   const db = createAdminClient()
   const today = new Date().toISOString().slice(0, 10)
