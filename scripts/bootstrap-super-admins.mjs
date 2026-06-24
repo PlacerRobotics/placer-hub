@@ -31,12 +31,17 @@ for (const email of emails) {
     let userId = rows[0]?.id
     let created = false
     if (!userId) {
+      // The token columns MUST be '' (not NULL) — GoTrue scans them into non-nullable
+      // Go strings, so NULLs break magic-link generation for the user.
       const ins = await c.query(
         `insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at,
-           raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+           raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+           confirmation_token, recovery_token, email_change_token_new, email_change,
+           email_change_token_current, phone_change, phone_change_token, reauthentication_token)
          values (gen_random_uuid(), '00000000-0000-0000-0000-000000000000', 'authenticated',
            'authenticated', $1, now(), '{"provider":"email","providers":["email"]}'::jsonb,
-           '{}'::jsonb, now(), now())
+           '{}'::jsonb, now(), now(),
+           '', '', '', '', '', '', '', '')
          returning id`,
         [email]
       )
