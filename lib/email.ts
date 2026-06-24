@@ -6,12 +6,33 @@
  * configured yet. Set RESEND_API_KEY (and optionally EMAIL_FROM) in the
  * environment, and verify the sender domain in Resend, to actually deliver.
  *
- * This is separate from Supabase Auth's magic-link email (that uses Supabase's
- * configured SMTP); this is for app-generated mail like registration receipts.
+ * All app mail rides Resend — both notifications (receipts, reminders) and
+ * sign-in / invite magic links (see sendMagicLinkEmail below). Supabase SMTP is
+ * not used.
  */
 import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
+const REPLY_TO = process.env.EMAIL_REPLY_TO || 'registrar@placerrobotics.org'
+
+// A plain-text alternative materially improves deliverability — HTML-only mail is a
+// common spam signal. Derive a readable text part from the HTML, preserving link URLs.
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, href, label) => {
+      const text = String(label).replace(/<[^>]+>/g, '').trim()
+      return text && !href.includes(text) ? `${text} (${href})` : href
+    })
+    .replace(/<\/(p|div|tr|h1|h2|h3|h4|li|td)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&middot;/g, '·').replace(/&rarr;/g, '->').replace(/&mdash;/g, '—').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/[ \t]+/g, ' ')
+    .split('\n').map((l) => l.trim()).join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
 
 export async function sendEmail({
   to,
@@ -34,7 +55,15 @@ export async function sendEmail({
     const res = await fetch(RESEND_ENDPOINT, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: recipients, subject, html }),
+      body: JSON.stringify({
+        from,
+        to: recipients,
+        subject,
+        html,
+        text: htmlToText(html),
+        reply_to: REPLY_TO,
+        headers: { 'List-Unsubscribe': `<mailto:${REPLY_TO}?subject=unsubscribe>` },
+      }),
     })
     if (!res.ok) {
       const detail = await res.text().catch(() => '')
