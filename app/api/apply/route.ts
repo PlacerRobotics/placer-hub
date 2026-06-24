@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { sendEmail, studentApplicationReceivedHtml } from '@/lib/email'
 
 const SEASON = '2026-27'
+const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', both: 'VEX V5 & Combat', not_sure: 'Not sure yet' }
 
 type Guardian = { first_name: string; last_name: string; email: string; phone: string }
 type Guardian1 = Guardian & {
@@ -209,6 +211,20 @@ export async function POST(request: NextRequest) {
       { onConflict: 'student_id,season' }
     )
   if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 })
+
+  // Confirmation to guardian 1 — best-effort; sendEmail no-ops if email isn't configured.
+  try {
+    await sendEmail({
+      to: [g1email],
+      subject: `Application received — ${stu.first_name} ${stu.last_name} (Placer Robotics ${SEASON})`,
+      html: studentApplicationReceivedHtml({
+        guardianName: guardian1.first_name,
+        studentName: `${stu.first_name} ${stu.last_name}`.trim(),
+        programLabel: PROGRAM_LABELS[program] ?? program,
+        season: SEASON,
+      }),
+    })
+  } catch (e) { console.error('[apply] confirmation email failed:', e) }
 
   return NextResponse.json({ ok: true, student_name: `${stu.first_name} ${stu.last_name}` })
 }
