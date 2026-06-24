@@ -4,9 +4,12 @@ import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ROLE_VALUES, isSuperAdmin } from '@/lib/auth/roles'
 
+const nameFromEmail = (e: string) =>
+  e.split('@')[0].split(/[._-]/).filter(Boolean).map((s) => s[0].toUpperCase() + s.slice(1)).join(' ')
+
 // POST /api/admin/admins/grant — super-admin grants a role to an admin (by
-// admin_profile_id, or by email — creating the admin_profile if the person has
-// an auth account). body: { admin_profile_id?, email?, role, program_scope? }
+// admin_profile_id, or by email — creating the auth account + admin_profile if the
+// person doesn't have one yet). body: { admin_profile_id?, email?, role, program_scope? }
 export async function POST(req: NextRequest) {
   const admin = await getAdminProfile()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -27,7 +30,8 @@ export async function POST(req: NextRequest) {
     const { data: existing } = await db.from('admin_profile').select('id').ilike('email', email).maybeSingle()
     if (existing) profileId = existing.id
     else {
-      // Find the auth user (they must have signed in at least once).
+      // Find the auth user; if they've never signed in, create the account so you can
+      // add an admin without waiting for them to log in first.
       let authUserId: string | null = null
       try {
         for (let page = 1; page <= 10; page++) {
@@ -37,11 +41,15 @@ export async function POST(req: NextRequest) {
           if (u) { authUserId = u.id; break }
           if (data.users.length < 1000) break
         }
-      } catch (e: any) { return NextResponse.json({ error: `Auth lookup failed: ${e?.message}` }, { status: 500 }) }
-      if (!authUserId) return NextResponse.json({ error: 'No account for that email yet. Ask them to sign in once, then grant the role.' }, { status: 404 })
-      const { data: created, error: cErr } = await db.from('admin_profile').insert({ auth_user_id: authUserId, email }).select('id').single()
+        if (!authUserId) {
+          const { data: newUser, error: cuErr } = await (db as any).auth.admin.createUser({ email, email_confirm: true })
+          if (cuErr || !newUser?.user) return NextResponse.json({ error: `Could not create account: ${cuErr?.message ?? 'unknown'}` }, { status: 500 })
+          authUserId = newUser.user.id
+        }
+      } catch (e: any) { return NextResponse.json({ error: `Auth lookup/create failed: ${e?.message}` }, { status: 500 }) }
+      const { data: prof, error: cErr } = await db.from('admin_profile').insert({ auth_user_id: authUserId, email, display_name: nameFromEmail(email) }).select('id').single()
       if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
-      profileId = created.id
+      profileId = prof.id
     }
   }
 

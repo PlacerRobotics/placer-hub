@@ -40,7 +40,7 @@ export default function RolesManager({ admins }: { admins: AdminRow[] }) {
       <div style={card}>
         <h3 className="text-card-title" style={{ marginBottom: '0.75rem' }}>Add a role by email</h3>
         <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.875rem' }}>
-          The person must have signed in at least once (so they have an account). Granting a role makes them an admin.
+          Granting a role makes them an admin. If they don’t have an account yet, we’ll create one — they sign in with a magic link. Use their Placer Robotics email for super admins.
         </p>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
           <input style={{ ...input, minWidth: 240 }} type="email" placeholder="person@email.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
