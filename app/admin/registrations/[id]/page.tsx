@@ -24,7 +24,7 @@ export default async function RegistrationDetailPage({
 
   const { data: fs } = await supabase
     .from('family_season')
-    .select('id, family_id, status, magic_link_sent, updated_at, fundraising_method')
+    .select('id, family_id, status, magic_link_sent, updated_at, fundraising_method, fundraising_methods')
     .eq('id', id)
     .maybeSingle()
   if (!fs) {
@@ -83,7 +83,7 @@ export default async function RegistrationDetailPage({
   const adb = createAdminClient()
   const { data: fam } = await adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', fs.family_id).maybeSingle()
   const { data: sponsor } = await adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount, status').eq('family_id', fs.family_id).eq('season', SEASON).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  const fundMethod = fs.fundraising_method ?? ''
+  const fundMethods = (fs.fundraising_methods ?? []) as string[]
 
   const name = student ? `${student.first_name} ${student.last_name}` : 'Registration'
   const assignTeams: AssignTeam[] = (allTeams ?? []).map((t: any) => ({ id: t.id, number: t.team_number ?? '', name: t.team_name ?? '', program: t.program }))
@@ -112,20 +112,21 @@ export default async function RegistrationDetailPage({
     { label: 'T-shirt size', value: student?.tshirt_size ? String(student.tshirt_size).toUpperCase() : '—' },
     { label: 'Payment', value: pay ? `$${pay.amount} · ${pay.source} · ${pay.matched_status}${pay.payment_reference_code ? ` · ${pay.payment_reference_code}` : ''}` : 'No payment on file' },
   ]
-  const fundMethodLabel = fundMethod ? (FUND_LABELS[fundMethod] ?? fundMethod) : '—'
-  const fundraisingFields = [{ label: 'Method', value: fundMethodLabel }]
-  if (fundMethod === 'corporate_match') {
+  const fundMethodLabel = fundMethods.length ? fundMethods.map((m) => FUND_LABELS[m] ?? m).join(', ') : '—'
+  const fundraisingFields = [{ label: 'Method(s)', value: fundMethodLabel }]
+  if (fundMethods.includes('corporate_match')) {
     fundraisingFields.push(
       { label: 'Employer', value: fam?.employer_match_company ?? '—' },
       { label: 'Match %', value: fam?.employer_match_pct != null ? `${fam.employer_match_pct}%` : '—' },
       { label: 'Submitted via', value: fam?.employer_match_portal ?? '—' },
     )
-  } else if (fundMethod === 'sponsored') {
+  }
+  if (fundMethods.includes('sponsored')) {
     fundraisingFields.push(
       { label: 'Business', value: sponsor?.business_name ?? '—' },
       { label: 'Contact', value: sponsor?.contact_name ?? '—' },
       { label: 'Estimated amount', value: sponsor?.estimated_amount != null ? `$${sponsor.estimated_amount}` : '—' },
-      { label: 'Status', value: sponsor?.status ?? '—' },
+      { label: 'Sponsor status', value: sponsor?.status ?? '—' },
     )
   }
 
@@ -144,7 +145,7 @@ export default async function RegistrationDetailPage({
               division: divisionVal ?? '',
               emergency_name: ec ? `${ec.first_name} ${ec.last_name}` : '',
               emergency_phone: ec?.phone ?? '',
-              fundraising_method: fundMethod,
+              fundraising_methods: fundMethods,
               employer_company: fam?.employer_match_company ?? '',
               employer_pct: fam?.employer_match_pct != null ? String(fam.employer_match_pct) : '',
               employer_portal: fam?.employer_match_portal ?? '',

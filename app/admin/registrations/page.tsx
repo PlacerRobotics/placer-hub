@@ -11,7 +11,7 @@ export default async function AdminRegistrationsPage() {
   // Family-season lifecycle rows for the season.
   const { data: fseasons } = await supabase
     .from('family_season')
-    .select('id, family_id, status, magic_link_sent, updated_at, fundraising_method')
+    .select('id, family_id, status, magic_link_sent, updated_at, fundraising_method, fundraising_methods')
     .eq('season', SEASON)
     .in('status', ['cleared_to_register', 'registered', 'cancelled'])
   const fsList = (fseasons ?? []) as any[]
@@ -97,6 +97,7 @@ export default async function AdminRegistrationsPage() {
       magicLinkSent: !!fs.magic_link_sent,
       lastUpdated: fs.updated_at ?? null,
       fundraisingMethod: fs.fundraising_method ?? null,
+      fundraisingMethods: (fs.fundraising_methods ?? []) as string[],
     }
   })
 

@@ -98,7 +98,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   // service-role client (scoped to this family).
   const alreadyRegistered = fs.status === 'registered'
   let fundraising: {
-    method: string; employer_company: string; employer_pct: string; employer_portal: string
+    methods: string[]; employer_company: string; employer_pct: string; employer_portal: string
     sponsor_business: string; sponsor_contact: string; sponsor_amount: string
   } | null = null
   if (alreadyRegistered) {
@@ -107,9 +107,9 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', familyId).maybeSingle(),
       adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount').eq('family_id', familyId).eq('season', SEASON).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
-    const { data: fsFund } = await supabase.from('family_season').select('fundraising_method').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
+    const { data: fsFund } = await supabase.from('family_season').select('fundraising_methods').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
     fundraising = {
-      method: fsFund?.fundraising_method ?? '',
+      methods: (fsFund?.fundraising_methods ?? []) as string[],
       employer_company: famRow?.employer_match_company ?? '',
       employer_pct: famRow?.employer_match_pct != null ? String(famRow.employer_match_pct) : '',
       employer_portal: famRow?.employer_match_portal ?? '',

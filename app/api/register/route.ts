@@ -277,14 +277,19 @@ export async function POST(request: NextRequest) {
   // team-managed and sends fundraising = null). Best-effort: registration is already
   // committed above, so a write hiccup here must not roll it back.
   try {
-    const FUND_METHODS = new Set(['direct_donation', 'corporate_match', 'sponsored', 'paper_check', 'pending'])
+    // Multi-select: families can pick more than one method (e.g. donate AND sponsor).
+    const FUND_METHODS = ['direct_donation', 'corporate_match', 'sponsored', 'paper_check', 'pending']
     const fr = body.fundraising
-    if (fr && FUND_METHODS.has(fr.method)) {
-      await db.from('family_season').update({ fundraising_method: fr.method }).eq('family_id', familyId).eq('season', SEASON)
+    const methods: string[] = Array.isArray(fr?.methods) ? fr.methods.filter((m: string) => FUND_METHODS.includes(m)) : []
+    if (methods.length) {
+      // fundraising_methods = full set; fundraising_method = primary (first in canonical
+      // order) for backward-compatible badges/filters.
+      const primary = FUND_METHODS.find((m) => methods.includes(m)) ?? methods[0]
+      await db.from('family_season').update({ fundraising_methods: methods, fundraising_method: primary }).eq('family_id', familyId).eq('season', SEASON)
 
-      // Employer-match details live on the family record. Set them for corporate_match,
-      // clear them otherwise so the record matches the current selection.
-      if (fr.method === 'corporate_match') {
+      // Employer-match details live on the family record. Set when corporate_match is
+      // selected, clear otherwise so the record matches the current selection.
+      if (methods.includes('corporate_match')) {
         await db.from('family').update({
           employer_match_company: fr.employer_company ?? null,
           employer_match_pct: fr.employer_pct ?? null,
@@ -298,7 +303,7 @@ export async function POST(request: NextRequest) {
       // the admin sponsor CRM, keyed to a sponsor entity — it can't hold this). Replace
       // any prior registration-wizard row for this season to avoid duplicates on re-submit.
       await db.from('family_sponsor_interest').delete().eq('family_id', familyId).eq('season', SEASON).eq('source', 'registration_wizard')
-      if (fr.method === 'sponsored') {
+      if (methods.includes('sponsored')) {
         await db.from('family_sponsor_interest').insert({
           family_id: familyId,
           season: SEASON,

@@ -50,16 +50,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const teamCount: Record<string, number> = {}
   let zeffyIqUrl: string | null = null
   let zeffyStudentUrl: string | null = null
-  let fundraisingMethod = ''
+  let fundraisingMethods: string[] = []
   let employerCompany = ''
   let volunteer: { label: string; variant: Variant } | null = null
 
   if (guardian) {
     const familyId = guardian.family_id
 
-    const { data: fs } = await supabase.from('family_season').select('status, fundraising_method').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
+    const { data: fs } = await supabase.from('family_season').select('status, fundraising_methods').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
     fsStatus = fs?.status ?? ''
-    fundraisingMethod = fs?.fundraising_method ?? ''
+    fundraisingMethods = (fs?.fundraising_methods ?? []) as string[]
 
     const { data: aid } = await supabase.from('financial_aid').select('status').eq('family_id', familyId).eq('season', SEASON).order('requested_at', { ascending: false }).limit(1).maybeSingle()
     if (aid) aidStatus = aid.status
@@ -230,14 +230,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const showSignPrompt = !!guardian && !guardianHasSigned && anyRegistered && hasActiveWaivers
   const readyCount = studentCards.filter((c) => c.complete).length
 
-  // Fundraising display (Part 4) — family-level method, shown on each registered card.
-  let fundraisingDisplay = 'Not selected'
-  let fundraisingNotSelected = true
-  if (fundraisingMethod === 'direct_donation') { fundraisingDisplay = 'Via Zeffy contribution'; fundraisingNotSelected = false }
-  else if (fundraisingMethod === 'corporate_match') { fundraisingDisplay = `Employer match${employerCompany ? ` — ${employerCompany}` : ''}`; fundraisingNotSelected = false }
-  else if (fundraisingMethod === 'sponsored') { fundraisingDisplay = 'Business sponsorship — pending'; fundraisingNotSelected = false }
-  else if (fundraisingMethod === 'paper_check') { fundraisingDisplay = 'Paper check'; fundraisingNotSelected = false }
-  else if (fundraisingMethod === 'pending') { fundraisingDisplay = 'Financial aid — pending review'; fundraisingNotSelected = false }
+  // Fundraising display (Part 4) — family-level method(s), shown on each registered card.
+  const fundLabel = (m: string) => {
+    switch (m) {
+      case 'direct_donation': return 'Via Zeffy contribution'
+      case 'corporate_match': return `Employer match${employerCompany ? ` — ${employerCompany}` : ''}`
+      case 'sponsored': return 'Business sponsorship — pending'
+      case 'paper_check': return 'Paper check'
+      case 'pending': return 'Financial aid — pending review'
+      default: return m
+    }
+  }
+  const fundraisingNotSelected = fundraisingMethods.length === 0
+  const fundraisingDisplay = fundraisingNotSelected ? 'Not selected' : fundraisingMethods.map(fundLabel).join(', ')
 
   // Team-centric "My teams": one row per team, grouping my kids onto their team and
   // merging with any team I coach (a team can be both).

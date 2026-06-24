@@ -19,6 +19,7 @@ export type RegRow = {
   magicLinkSent: boolean
   lastUpdated: string | null
   fundraisingMethod: string | null
+  fundraisingMethods: string[]
 }
 export type TeamOpt = { id: string; label: string }
 
@@ -31,10 +32,14 @@ const FUND_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
   paper_check: { label: 'Check', bg: '#ECECEC', fg: '#555555' },
   pending: { label: 'Aid', bg: '#FFF8E6', fg: '#8A6D1A' },
 }
-function fundBadge(m: string | null) {
-  const b = m ? FUND_BADGE[m] : null
+function fundBadge(m: string) {
+  const b = FUND_BADGE[m]
   if (!b) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
   return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: '0.6875rem', fontWeight: 700, backgroundColor: b.bg, color: b.fg }}>{b.label}</span>
+}
+function fundBadges(methods: string[]) {
+  if (!methods.length) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+  return <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>{methods.map((m) => <span key={m}>{fundBadge(m)}</span>)}</span>
 }
 const FUND_FILTERS: [string, string][] = [
   ['all', 'Fundraising: all'], ['direct_donation', 'Direct'], ['corporate_match', 'Match'],
@@ -84,8 +89,8 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
         if (fMagic === 'not_sent' && r.magicLinkSent) return false
         if (fLogin === 'logged_in' && !r.guardianLoggedIn) return false
         if (fLogin === 'never' && r.guardianLoggedIn) return false
-        if (fFund === 'not_selected' && r.fundraisingMethod) return false
-        if (fFund !== 'all' && fFund !== 'not_selected' && r.fundraisingMethod !== fFund) return false
+        if (fFund === 'not_selected' && r.fundraisingMethods.length) return false
+        if (fFund !== 'all' && fFund !== 'not_selected' && !r.fundraisingMethods.includes(fFund)) return false
         if (search.trim()) {
           const q = search.toLowerCase()
           if (!r.name.toLowerCase().includes(q) && !r.guardianEmail.toLowerCase().includes(q)) return false
@@ -144,7 +149,7 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
     for (const r of filtered) {
       const vals = [
         r.name, PROGRAM_LABELS[r.program] ?? r.program, r.division, r.teamLabel, r.school, r.guardianEmail,
-        STATUS_LABELS[r.status] ?? r.status, (r.fundraisingMethod && FUND_BADGE[r.fundraisingMethod]?.label) || 'Not selected',
+        STATUS_LABELS[r.status] ?? r.status, r.fundraisingMethods.length ? r.fundraisingMethods.map((m) => FUND_BADGE[m]?.label ?? m).join(' + ') : 'Not selected',
         r.magicLinkSent ? 'Sent' : 'Not sent',
         r.guardianLoggedIn ? 'Logged in' : r.magicLinkSent ? 'Invited' : 'Not invited',
         r.lastUpdated ? new Date(r.lastUpdated).toLocaleDateString() : '',
@@ -218,7 +223,7 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
                 <td style={cell}>{r.school}</td>
                 <td style={cell}>{r.guardianEmail}</td>
                 <td style={cell}><StatusBadge label={STATUS_LABELS[r.status] ?? r.status} variant={STATUS_VARIANT[r.status] ?? 'neutral'} /></td>
-                <td style={cell}>{fundBadge(r.fundraisingMethod)}</td>
+                <td style={cell}>{fundBadges(r.fundraisingMethods)}</td>
                 <td style={cell}>{r.magicLinkSent ? 'Sent' : 'Not sent'}</td>
                 <td style={cell}>{dot(r)}</td>
                 <td style={cell}>{r.lastUpdated ? new Date(r.lastUpdated).toLocaleDateString() : '—'}</td>

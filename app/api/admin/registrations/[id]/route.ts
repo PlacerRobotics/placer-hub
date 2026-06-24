@@ -116,23 +116,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await log('emergency_contact', ec ? `${ec.first_name} ${ec.last_name} ${ec.phone}` : null, `${name} ${phone}`.trim())
   }
 
-  // fundraising — family_season.fundraising_method + family employer-match columns +
-  // family_sponsor_interest (the spec's family-level sponsorship table; sponsor_commitment
-  // is the admin sponsor CRM and can't hold this).
-  if (body.fundraising_method !== undefined) {
-    const FUND = new Set(['direct_donation', 'corporate_match', 'sponsored', 'paper_check', 'pending'])
-    const m = String(body.fundraising_method || '')
-    if (m && !FUND.has(m)) return NextResponse.json({ error: 'Invalid fundraising method.' }, { status: 400 })
+  // fundraising — family_season.fundraising_methods (multi) + derived primary
+  // fundraising_method + family employer-match columns + family_sponsor_interest (the
+  // spec's family-level sponsorship table; sponsor_commitment is the admin sponsor CRM).
+  if (body.fundraising_methods !== undefined) {
+    const FUND = ['direct_donation', 'corporate_match', 'sponsored', 'paper_check', 'pending']
+    const methods: string[] = Array.isArray(body.fundraising_methods) ? body.fundraising_methods.filter((x: string) => FUND.includes(x)) : []
     const { data: stu } = await db.from('student').select('family_id').eq('id', studentId).maybeSingle()
     const famId = stu?.family_id
-    if (m && famId) {
-      const { data: fsRow } = await db.from('family_season').select('fundraising_method').eq('id', id).maybeSingle()
-      if (m !== (fsRow?.fundraising_method ?? '')) {
-        await db.from('family_season').update({ fundraising_method: m }).eq('id', id)
-        await log('fundraising_method', fsRow?.fundraising_method, m)
+    if (famId) {
+      const primary = FUND.find((m) => methods.includes(m)) ?? null
+      const { data: fsRow } = await db.from('family_season').select('fundraising_methods').eq('id', id).maybeSingle()
+      const before = ((fsRow?.fundraising_methods ?? []) as string[]).join(', ')
+      const after = methods.join(', ')
+      if (before !== after) {
+        await db.from('family_season').update({ fundraising_methods: methods, fundraising_method: primary }).eq('id', id)
+        await log('fundraising_methods', before || null, after || null)
       }
       // Employer match lives on family — set for corporate_match, clear otherwise.
-      if (m === 'corporate_match') {
+      if (methods.includes('corporate_match')) {
         await db.from('family').update({
           employer_match_company: body.employer_company || null,
           employer_match_pct: body.employer_pct ? Number(body.employer_pct) : null,
@@ -142,8 +144,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         await db.from('family').update({ employer_match_company: null, employer_match_pct: null, employer_match_portal: null }).eq('id', famId)
       }
       // Sponsorship interest — update the existing wizard row if present (preserves any
-      // admin-set status), else insert. Left in place when the method changes away.
-      if (m === 'sponsored') {
+      // admin-set status), else insert. Left in place when sponsorship is removed.
+      if (methods.includes('sponsored')) {
         const vals = {
           business_name: body.sponsor_business || null,
           contact_name: body.sponsor_contact || null,

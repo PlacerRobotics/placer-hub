@@ -94,7 +94,7 @@ type Props = {
   consent: { slackConsent: boolean; emailCertified: boolean } | null
   signed: { signedAt: string; parentName: string; studentName: string } | null
   fundraising: {
-    method: string; employer_company: string; employer_pct: string; employer_portal: string
+    methods: string[]; employer_company: string; employer_pct: string; employer_portal: string
     sponsor_business: string; sponsor_contact: string; sponsor_amount: string
   } | null
 }
@@ -198,9 +198,14 @@ export default function RegisterWizard({
   // Zeffy is the default payment path. Always have a working URL (config or fallback).
   const payUrl = zeffyUrl || ZEFFY_REGISTRATION_URL
 
-  // Step 4 (non-IQ) — Payment & Fundraising. Default to Zeffy direct contribution;
-  // prefilled on resume from the saved selection.
-  const [fundMethod, setFundMethod] = useState(fundraising?.method || 'direct_donation')
+  // Step 4 (non-IQ) — Payment & Fundraising. Multi-select ("select all that apply"):
+  // families can combine methods (e.g. donate AND have a sponsor). Defaults to the
+  // Zeffy direct contribution; prefilled on resume from the saved selection.
+  const [fundMethods, setFundMethods] = useState<string[]>(
+    fundraising?.methods?.length ? fundraising.methods : ['direct_donation']
+  )
+  const toggleFundMethod = (v: string) =>
+    setFundMethods((s) => (s.includes(v) ? s.filter((x) => x !== v) : [...s, v]))
   const [empCompany, setEmpCompany] = useState(fundraising?.employer_company ?? '')
   const [empPct, setEmpPct] = useState(fundraising?.employer_pct ?? '')
   const [empPortal, setEmpPortal] = useState(fundraising?.employer_portal ?? '')
@@ -278,10 +283,12 @@ export default function RegisterWizard({
   const step3Valid = alreadySigned || (allWaiversAgreed && electronicConsent && !!studentSig.trim() && !!signature.trim())
   const empPctNum = Number(empPct)
   const spAmountNum = Number(spAmount)
+  const hasMatch = fundMethods.includes('corporate_match')
+  const hasSponsor = fundMethods.includes('sponsored')
   const step4Valid =
-    !!fundMethod &&
-    (fundMethod !== 'corporate_match' || (!!empCompany.trim() && !!empPct.trim() && empPctNum >= 1 && empPctNum <= 100 && !!empPortal)) &&
-    (fundMethod !== 'sponsored' || (!!spBusiness.trim() && !!spContact.trim() && !!spAmount.trim() && spAmountNum > 0))
+    fundMethods.length > 0 &&
+    (!hasMatch || (!!empCompany.trim() && !!empPct.trim() && empPctNum >= 1 && empPctNum <= 100 && !!empPortal)) &&
+    (!hasSponsor || (!!spBusiness.trim() && !!spContact.trim() && !!spAmount.trim() && spAmountNum > 0))
 
   async function handleSubmit() {
     if (submitting) return
@@ -322,7 +329,7 @@ export default function RegisterWizard({
       fundraising: isIq
         ? null
         : {
-            method: fundMethod,
+            methods: fundMethods,
             employer_company: empCompany.trim() || null,
             employer_pct: empPct.trim() ? empPctNum : null,
             employer_portal: empPortal || null,
@@ -375,7 +382,7 @@ export default function RegisterWizard({
               <p style={{ fontWeight: 700, fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Payment summary</p>
               <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.9375rem' }}>
                 <Row label="Registration fee" value="$40 (required, non-deductible)" />
-                <Row label="Fundraising commitment" value={`$${fundraisingTarget} via ${FUND_METHOD_LABELS[fundMethod] ?? '—'}`} />
+                <Row label="Fundraising commitment" value={`$${fundraisingTarget} via ${fundMethods.map((m) => FUND_METHOD_LABELS[m] ?? m).join(', ') || '—'}`} />
                 <Row label="Total due via Zeffy today" value="$40" />
               </div>
             </div>
@@ -386,11 +393,12 @@ export default function RegisterWizard({
             <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0.625rem 0 1.25rem', lineHeight: 1.6 }}>
               Select the ticket for {programLabel}. The $40 registration fee ticket is separate from any additional contribution you choose to make.
             </p>
-            {fundMethod && SUBMIT_METHOD_MESSAGE[fundMethod] && (
-              <div style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.875rem 1rem', marginBottom: '1.25rem', fontSize: '0.875rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
-                {SUBMIT_METHOD_MESSAGE[fundMethod]}
+            {fundMethods.filter((m) => SUBMIT_METHOD_MESSAGE[m]).map((m) => (
+              <div key={m} style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.875rem 1rem', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
+                {SUBMIT_METHOD_MESSAGE[m]}
               </div>
-            )}
+            ))}
+            <div style={{ height: '0.5rem' }} />
             <div><PrimaryButton onClick={() => router.push('/dashboard?notice=registered')}>Go to my dashboard →</PrimaryButton></div>
           </>
         )}
@@ -625,9 +633,10 @@ export default function RegisterWizard({
       {/* Step 4 — Payment & Fundraising (non-IQ; IQ is team-managed) */}
       {!isIq && step === 4 && (
         <>
-          <FormSection title="Payment &amp; Fundraising" description="Pay the registration fee and choose how you’ll meet your fundraising commitment.">
+          <FormSection title="Payment &amp; Fundraising" description="Two separate parts: the required $40 registration fee (always paid via Zeffy), and how you’ll meet your fundraising commitment.">
+            <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', fontWeight: 700, margin: '0 0 0.5rem' }}>1 · Registration fee (required)</div>
             <div style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem 1.25rem', fontSize: '0.9375rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
-              <p style={{ margin: '0 0 0.75rem' }}>A <strong>$40 registration fee</strong> is required for all students, paid via Zeffy. This fee is non-refundable and is not tax-deductible.</p>
+              <p style={{ margin: '0 0 0.75rem' }}>A <strong>$40 registration fee</strong> is required for every student and <strong>must be paid via Zeffy</strong>. It is non-refundable and not tax-deductible.</p>
               <a href={payUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '10px 20px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
                 Pay the $40 fee via Zeffy →
               </a>
@@ -637,14 +646,17 @@ export default function RegisterWizard({
           </FormSection>
 
           <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', fontWeight: 700, margin: '0 0 0.5rem' }}>2 · Fundraising commitment</div>
             <h2 className="text-section-title" style={{ margin: '0 0 0.375rem' }}>How will you fulfill your fundraising commitment?</h2>
             <p style={{ fontSize: '0.9375rem', color: 'var(--color-text-muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
-              Your {programLabel} participation includes a fundraising commitment of ${fundraisingTarget} (in addition to the $40 fee). Select how you plan to fulfill it.
+              Separately from the $40 fee, your {programLabel} participation includes a <strong>${fundraisingTarget} fundraising commitment</strong>. <strong>Select all that apply</strong> — you can combine options (for example, donate part and also have a business sponsor).
             </p>
 
-            <RadioCard value="direct_donation" current={fundMethod} onSelect={setFundMethod} title="Direct contribution via Zeffy" label="I’ll make a contribution when I pay the registration fee" />
+            <CheckCard checked={fundMethods.includes('direct_donation')} onToggle={() => toggleFundMethod('direct_donation')} title="Direct contribution via Zeffy" label="I’ll donate toward the $550 online">
+              <p style={helpTextStyle}>Pay your contribution through the same Zeffy campaign — choose a Standard ($790) or Champion ($1,040) ticket (each includes the $40 fee), or make a separate donation anytime.</p>
+            </CheckCard>
 
-            <RadioCard value="corporate_match" current={fundMethod} onSelect={setFundMethod} title="Employer / corporate match" label="My employer matches charitable donations">
+            <CheckCard checked={fundMethods.includes('corporate_match')} onToggle={() => toggleFundMethod('corporate_match')} title="Employer / corporate match" label="My employer matches charitable donations">
               <FormField label="Employer name" htmlFor="empCompany" required>
                 <TextInput id="empCompany" value={empCompany} onChange={(e) => setEmpCompany(e.target.value)} />
               </FormField>
@@ -662,9 +674,9 @@ export default function RegisterWizard({
                 </select>
               </div>
               <p style={helpTextStyle}>We’ll follow up to confirm your match submission.</p>
-            </RadioCard>
+            </CheckCard>
 
-            <RadioCard value="sponsored" current={fundMethod} onSelect={setFundMethod} title="Business sponsorship" label="A business is sponsoring my student">
+            <CheckCard checked={fundMethods.includes('sponsored')} onToggle={() => toggleFundMethod('sponsored')} title="Business sponsorship" label="A business is sponsoring my student">
               <FormField label="Business name" htmlFor="spBusiness" required>
                 <TextInput id="spBusiness" value={spBusiness} onChange={(e) => setSpBusiness(e.target.value)} />
               </FormField>
@@ -674,19 +686,19 @@ export default function RegisterWizard({
               <FormField label="Estimated sponsorship amount" htmlFor="spAmount" required>
                 <TextInput id="spAmount" type="number" min={0} value={spAmount} onChange={(e) => setSpAmount(e.target.value)} />
               </FormField>
-              <p style={helpTextStyle}>Sponsorship arrangements will be confirmed separately with PART staff. You will still pay the $40 registration fee via Zeffy.</p>
-            </RadioCard>
+              <p style={helpTextStyle}>Sponsorship arrangements will be confirmed separately with PART staff. You’ll still pay the $40 registration fee via Zeffy.</p>
+            </CheckCard>
 
-            <RadioCard value="paper_check" current={fundMethod} onSelect={setFundMethod} title="Paper check" label="I’ll submit a paper check">
+            <CheckCard checked={fundMethods.includes('paper_check')} onToggle={() => toggleFundMethod('paper_check')} title="Paper check" label="I’ll submit a paper check">
               <p style={helpTextStyle}>Bring your check to the next team meeting or mail to: {MAIL_ADDRESS}. Make payable to PART.</p>
-            </RadioCard>
+            </CheckCard>
 
-            <RadioCard value="pending" current={fundMethod} onSelect={setFundMethod} title="Financial assistance" label="I’d like to apply for financial assistance">
+            <CheckCard checked={fundMethods.includes('pending')} onToggle={() => toggleFundMethod('pending')} title="Financial assistance" label="I’d like to apply for financial assistance">
               <a href={FINANCIAL_AID_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '9px 16px', backgroundColor: 'var(--color-navy-deep)', color: '#fff', fontWeight: 600, fontSize: '0.875rem', borderRadius: 6, textDecoration: 'none', marginBottom: '0.625rem' }}>
                 Complete Financial Aid Request →
               </a>
               <p style={helpTextStyle}>Submit your request, then continue registration. Aid decisions are made separately and do not affect your registration status.</p>
-            </RadioCard>
+            </CheckCard>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
@@ -709,7 +721,7 @@ export default function RegisterWizard({
               <Row label="Emergency contact" value={`${ec1First} ${ec1Last} · ${ec1Rel} · ${ec1Phone}`} />
               <Row label="Student signature" value={studentSig || '—'} />
               <Row label="Parent/guardian signature" value={signature || '—'} />
-              {!isIq && <Row label="Fundraising" value={FUND_METHOD_LABELS[fundMethod] ?? '—'} />}
+              {!isIq && <Row label="Fundraising" value={fundMethods.map((m) => FUND_METHOD_LABELS[m] ?? m).join(', ') || '—'} />}
             </div>
             <div style={{ marginTop: '0.75rem' }}>
               <div className="text-label" style={{ color: 'var(--color-text-muted)', marginBottom: '0.375rem' }}>Program</div>
@@ -746,37 +758,34 @@ function Row({ label, value }: { label: string; value: string }) {
   )
 }
 
-function RadioCard({
-  value,
-  current,
-  onSelect,
+function CheckCard({
+  checked,
+  onToggle,
   title,
   label,
   children,
 }: {
-  value: string
-  current: string
-  onSelect: (v: string) => void
+  checked: boolean
+  onToggle: () => void
   title: string
   label: string
   children?: React.ReactNode
 }) {
   const [hover, setHover] = useState(false)
-  const selected = current === value
   return (
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ border: `2px solid ${selected || hover ? 'var(--color-navy-deep)' : '#aab3c2'}`, borderRadius: 10, padding: '1rem 1.125rem', marginBottom: '0.75rem', backgroundColor: selected ? 'var(--color-bg-light)' : 'var(--color-surface)', transition: 'border-color 0.12s' }}
+      style={{ border: `2px solid ${checked || hover ? 'var(--color-navy-deep)' : '#aab3c2'}`, borderRadius: 10, padding: '1rem 1.125rem', marginBottom: '0.75rem', backgroundColor: checked ? 'var(--color-bg-light)' : 'var(--color-surface)', transition: 'border-color 0.12s' }}
     >
       <label style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', cursor: 'pointer' }}>
-        <input type="radio" name="fundMethod" checked={selected} onChange={() => onSelect(value)} style={{ marginTop: 3, width: 18, height: 18, accentColor: 'var(--color-navy-deep)', cursor: 'pointer', flexShrink: 0 }} />
+        <input type="checkbox" checked={checked} onChange={onToggle} style={{ marginTop: 3, width: 18, height: 18, accentColor: 'var(--color-navy-deep)', cursor: 'pointer', flexShrink: 0 }} />
         <span>
           <span style={{ fontWeight: 600, fontSize: '0.9375rem', display: 'block', color: 'var(--color-text-primary)' }}>{title}</span>
           <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{label}</span>
         </span>
       </label>
-      {selected && children && <div style={{ marginTop: '0.875rem', paddingLeft: '1.875rem' }}>{children}</div>}
+      {checked && children && <div style={{ marginTop: '0.875rem', paddingLeft: '1.875rem' }}>{children}</div>}
     </div>
   )
 }

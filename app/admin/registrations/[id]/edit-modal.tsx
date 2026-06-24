@@ -16,7 +16,7 @@ export default function RegistrationEdit({
   studentId: string
   current: {
     tshirt_size: string; program: string; division: string; emergency_name: string; emergency_phone: string
-    fundraising_method: string; employer_company: string; employer_pct: string; employer_portal: string
+    fundraising_methods: string[]; employer_company: string; employer_pct: string; employer_portal: string
     sponsor_business: string; sponsor_contact: string; sponsor_amount: string
   }
 }) {
@@ -26,7 +26,10 @@ export default function RegistrationEdit({
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
-  function set<K extends keyof typeof f>(k: K, v: string) { setF((s) => ({ ...s, [k]: v })) }
+  function set<K extends keyof typeof f>(k: K, v: typeof f[K]) { setF((s) => ({ ...s, [k]: v })) }
+  function toggleMethod(v: string) {
+    setF((s) => ({ ...s, fundraising_methods: s.fundraising_methods.includes(v) ? s.fundraising_methods.filter((x) => x !== v) : [...s.fundraising_methods, v] }))
+  }
 
   async function save() {
     setBusy(true); setErr('')
@@ -91,18 +94,18 @@ export default function RegistrationEdit({
       <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
         <div style={{ fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--color-text-primary)' }}>Fundraising</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.875rem' }}>
-          <div>
-            <label style={labelStyle}>Method</label>
-            <select style={inputStyle} value={f.fundraising_method} onChange={(e) => set('fundraising_method', e.target.value)}>
-              <option value="">—</option>
-              <option value="direct_donation">Direct contribution</option>
-              <option value="corporate_match">Employer / corporate match</option>
-              <option value="sponsored">Business sponsorship</option>
-              <option value="paper_check">Paper check</option>
-              <option value="pending">Financial assistance</option>
-            </select>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label style={labelStyle}>Methods (select all that apply)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem' }}>
+              {([['direct_donation', 'Direct contribution'], ['corporate_match', 'Employer match'], ['sponsored', 'Business sponsorship'], ['paper_check', 'Paper check'], ['pending', 'Financial assistance']] as [string, string][]).map(([v, lbl]) => (
+                <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={f.fundraising_methods.includes(v)} onChange={() => toggleMethod(v)} />
+                  {lbl}
+                </label>
+              ))}
+            </div>
           </div>
-          {f.fundraising_method === 'corporate_match' && (
+          {f.fundraising_methods.includes('corporate_match') && (
             <>
               <div><label style={labelStyle}>Employer</label><input style={inputStyle} value={f.employer_company} onChange={(e) => set('employer_company', e.target.value)} /></div>
               <div><label style={labelStyle}>Match %</label><input style={inputStyle} type="number" min={1} max={100} value={f.employer_pct} onChange={(e) => set('employer_pct', e.target.value)} /></div>
@@ -114,7 +117,7 @@ export default function RegistrationEdit({
               </div>
             </>
           )}
-          {f.fundraising_method === 'sponsored' && (
+          {f.fundraising_methods.includes('sponsored') && (
             <>
               <div><label style={labelStyle}>Business</label><input style={inputStyle} value={f.sponsor_business} onChange={(e) => set('sponsor_business', e.target.value)} /></div>
               <div><label style={labelStyle}>Contact</label><input style={inputStyle} value={f.sponsor_contact} onChange={(e) => set('sponsor_contact', e.target.value)} /></div>
