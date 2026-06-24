@@ -69,6 +69,14 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
     .eq('program', program)
     .maybeSingle()
 
+  // Prefill the emergency-contact step from any contact already on file.
+  const { data: ecRow } = await supabase
+    .from('emergency_contact')
+    .select('first_name, last_name, relationship, phone')
+    .eq('student_id', student.id)
+    .eq('priority', 1)
+    .maybeSingle()
+
   const { data: schools } = await supabase
     .from('school')
     .select('id, name, grade_min, grade_max')
@@ -115,6 +123,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       paymentReferenceCode={paymentRef}
       guardianName={`${guardian.first_name} ${guardian.last_name}`}
       zeffyUrl={config?.zeffy_student_url ?? null}
+      emergency={ecRow ? { first_name: ecRow.first_name ?? '', last_name: ecRow.last_name ?? '', relationship: ecRow.relationship ?? '', phone: ecRow.phone ?? '' } : null}
     />
   )
 }

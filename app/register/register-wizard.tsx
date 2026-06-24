@@ -59,6 +59,7 @@ type Props = {
   paymentReferenceCode: string
   guardianName: string
   zeffyUrl: string | null
+  emergency: { first_name: string; last_name: string; relationship: string; phone: string } | null
 }
 
 const labelStyle: React.CSSProperties = {
@@ -132,6 +133,7 @@ export default function RegisterWizard({
   paymentReferenceCode,
   guardianName,
   zeffyUrl,
+  emergency,
 }: Props) {
   const router = useRouter()
   const [step, setStep] = useState(1)
@@ -154,11 +156,11 @@ export default function RegisterWizard({
   const [slackConsent, setSlackConsent] = useState(false)
   const [coppaConsent, setCoppaConsent] = useState(false)
 
-  // Step 2
-  const [ec1First, setEc1First] = useState('')
-  const [ec1Last, setEc1Last] = useState('')
-  const [ec1Rel, setEc1Rel] = useState('')
-  const [ec1Phone, setEc1Phone] = useState('')
+  // Step 2 — prefill from any existing emergency contact on file.
+  const [ec1First, setEc1First] = useState(emergency?.first_name ?? '')
+  const [ec1Last, setEc1Last] = useState(emergency?.last_name ?? '')
+  const [ec1Rel, setEc1Rel] = useState(emergency?.relationship ?? '')
+  const [ec1Phone, setEc1Phone] = useState(emergency?.phone ?? '')
   const [ec2First, setEc2First] = useState('')
   const [ec2Last, setEc2Last] = useState('')
   const [ec2Rel, setEc2Rel] = useState('')
