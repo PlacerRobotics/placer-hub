@@ -320,33 +320,38 @@ export default function RegisterWizard({
                 ))}
               </select>
             </div>
-            <FormField label="Fusion Education email" htmlFor="fusion" helpText="Use your student Fusion account email if you have one.">
-              <TextInput id="fusion" type="email" value={fusion} onChange={(e) => setFusion(e.target.value)} />
-            </FormField>
+            {/* Email + Slack are V5/Combat only — IQ is an elementary, team-managed flow. */}
+            {program !== 'vex_iq' && (
+              <>
+                <FormField label="Fusion Education email" htmlFor="fusion" helpText="Use your student Fusion account email if you have one.">
+                  <TextInput id="fusion" type="email" value={fusion} onChange={(e) => setFusion(e.target.value)} />
+                </FormField>
 
-            <FormField label="Student email (optional)" htmlFor="studentEmail" helpText="A personal email your student checks regularly.">
-              <TextInput id="studentEmail" type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} />
-            </FormField>
-            {schoolDomainMatch && (
-              <div>
-                <WarningAlert>School email addresses are often blocked or monitored — we recommend a personal email your student checks regularly.</WarningAlert>
-                <label style={consentLabel}>
-                  <input type="checkbox" checked={schoolEmailConfirmed} onChange={(e) => setSchoolEmailConfirmed(e.target.checked)} />
-                  <span>I understand and want to use this school email address anyway.</span>
-                </label>
-              </div>
-            )}
-            {emailProvided && (
-              <label style={consentLabel}>
-                <input type="checkbox" checked={emailCertified} onChange={(e) => setEmailCertified(e.target.checked)} />
-                <span>I certify that I have access to this email and consent to Placer Robotics using it to communicate with my student.</span>
-              </label>
-            )}
-            {!isUnder13 && (
-              <label style={consentLabel}>
-                <input type="checkbox" checked={slackConsent} onChange={(e) => setSlackConsent(e.target.checked)} />
-                <span>I consent to my student&apos;s email being used to invite them to the Placer Robotics Slack workspace. I understand Slack requires users to be 13 or older.</span>
-              </label>
+                <FormField label="Student email (optional)" htmlFor="studentEmail" helpText="A personal email your student checks regularly.">
+                  <TextInput id="studentEmail" type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} />
+                </FormField>
+                {schoolDomainMatch && (
+                  <div>
+                    <WarningAlert>School email addresses are often blocked or monitored — we recommend a personal email your student checks regularly.</WarningAlert>
+                    <label style={consentLabel}>
+                      <input type="checkbox" checked={schoolEmailConfirmed} onChange={(e) => setSchoolEmailConfirmed(e.target.checked)} />
+                      <span>I understand and want to use this school email address anyway.</span>
+                    </label>
+                  </div>
+                )}
+                {emailProvided && (
+                  <label style={consentLabel}>
+                    <input type="checkbox" checked={emailCertified} onChange={(e) => setEmailCertified(e.target.checked)} />
+                    <span>I certify that I have access to this email and consent to Placer Robotics using it to communicate with my student.</span>
+                  </label>
+                )}
+                {!isUnder13 && (
+                  <label style={consentLabel}>
+                    <input type="checkbox" checked={slackConsent} onChange={(e) => setSlackConsent(e.target.checked)} />
+                    <span>I consent to my student&apos;s email being used to invite them to the Placer Robotics Slack workspace. I understand Slack requires users to be 13 or older.</span>
+                  </label>
+                )}
+              </>
             )}
             {needsCoppa && (
               <label style={consentLabel}>
@@ -517,6 +522,12 @@ export default function RegisterWizard({
             </div>
           </FormSection>
 
+          {program === 'vex_iq' ? (
+            <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '1.25rem', marginBottom: '1.5rem', fontSize: '0.9375rem', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+              No payment is needed here — your VEX IQ team’s fee (paid by the coach) covers registration.
+            </div>
+          ) : (
+          <>
           <h2 className="text-section-title" style={{ margin: '0 0 1rem' }}>Payment</h2>
           <PaymentReferenceCard code={paymentReferenceCode} studentName={`${first} ${last}`} />
           <div
@@ -579,6 +590,8 @@ export default function RegisterWizard({
               </div>
             </details>
           </div>
+          </>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
             <SecondaryButton onClick={() => setStep(3)}>Back</SecondaryButton>
