@@ -94,11 +94,17 @@ export async function POST(req: NextRequest) {
       // 5. APS cert (existing youth_protection_cert). issued_date is a placeholder.
       if (apsExpiry) {
         const existingCert = (await db.from('youth_protection_cert').select('id').eq('volunteer_id', vp.id).eq('expiration_date', apsExpiry).maybeSingle()).data
-        if (!existingCert) await db.from('youth_protection_cert').insert({ volunteer_id: vp.id, expiration_date: apsExpiry, issued_date: apsExpiry, cert_url: String(r.aps_cert_url ?? '').trim() || null })
+        if (!existingCert) {
+          const { error: ae } = await db.from('youth_protection_cert').insert({ volunteer_id: vp.id, expiration_date: apsExpiry, issued_date: apsExpiry, cert_url: String(r.aps_cert_url ?? '').trim() || null })
+          if (ae) throw new Error(ae.message)
+        }
       }
 
       // 6. DOJ → background_check step complete.
-      if (doj) await db.from('volunteer_step').upsert({ volunteer_id: vp.id, step: 'background_check', status: 'complete', completed_at: new Date().toISOString() }, { onConflict: 'volunteer_id,step' })
+      if (doj) {
+        const { error: de } = await db.from('volunteer_step').upsert({ volunteer_id: vp.id, step: 'background_check', status: 'complete', completed_at: new Date().toISOString() }, { onConflict: 'volunteer_id,step' })
+        if (de) throw new Error(de.message)
+      }
 
       summary.clearances++
       if (created) summary.volunteersCreated++; else summary.volunteersUpdated++

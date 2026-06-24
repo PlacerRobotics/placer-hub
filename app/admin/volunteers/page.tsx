@@ -14,14 +14,18 @@ export default async function AdminVolunteersPage() {
     .order('created_at', { ascending: false })
   const ids = (profiles ?? []).map((p: any) => p.id)
 
+  // Load all clearance/cert/DOJ rows for the season and join in memory. We
+  // deliberately do NOT filter with .in('volunteer_id', ids): with 100+ volunteers
+  // that array blows past PostgREST's URL-length limit and the request silently
+  // returns nothing (which made every field read as ✗ on the dashboard).
   const { data: clears } = ids.length
-    ? await db.from('volunteer_clearance').select('volunteer_id, status, rc_quiz_passed, yp_quiz_passed, waiver_signed_date').eq('season', SEASON).in('volunteer_id', ids)
+    ? await db.from('volunteer_clearance').select('volunteer_id, status, rc_quiz_passed, yp_quiz_passed, waiver_signed_date').eq('season', SEASON)
     : { data: [] as any[] }
   const { data: certs } = ids.length
-    ? await db.from('youth_protection_cert').select('volunteer_id, expiration_date').in('volunteer_id', ids).order('expiration_date', { ascending: false })
+    ? await db.from('youth_protection_cert').select('volunteer_id, expiration_date').order('expiration_date', { ascending: false })
     : { data: [] as any[] }
   const { data: steps } = ids.length
-    ? await db.from('volunteer_step').select('volunteer_id, status').eq('step', 'background_check').in('volunteer_id', ids)
+    ? await db.from('volunteer_step').select('volunteer_id, status').eq('step', 'background_check')
     : { data: [] as any[] }
 
   const clearByVol: Record<string, any> = {}
