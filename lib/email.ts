@@ -128,6 +128,23 @@ export function studentApplicationReceivedHtml({ guardianName, studentName, prog
     `We received ${studentName}'s application for the ${season} season.`)
 }
 
+export function applicationAcceptedHtml({ guardianName, studentName, season }: { guardianName: string; studentName: string; season: string }): string {
+  return emailShell('Application accepted', `
+    <p style="${P}">Hi ${guardianName || 'there'}, great news — <strong>${studentName}</strong>'s application to Placer Robotics for the ${season} season has been accepted.</p>
+    <p style="${P}">Your next step is registration. Watch for a follow-up email with your sign-in link once you're cleared to register.</p>
+    <p style="margin:0;color:#7a879c;font-size:13px;">Questions? Contact registrar@placerrobotics.org.</p>`,
+    `${studentName}'s application has been accepted for the ${season} season.`)
+}
+
+export function clearedToRegisterHtml({ guardianName, season, loginUrl }: { guardianName: string; season: string; loginUrl: string }): string {
+  return emailShell('You’re cleared to register', `
+    <p style="${P}">Hi ${guardianName || 'there'}, you're cleared to register for the ${season} Placer Robotics season. Sign in to complete your student's registration — details, waivers, and payment.</p>
+    ${emailButton(loginUrl, 'Sign in to register →')}
+    <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">Sign in with the email on your account — we'll send a one-time sign-in link.</p>
+    <p style="margin:8px 0 0;color:#7a879c;font-size:13px;">Questions? Contact registrar@placerrobotics.org.</p>`,
+    `You're cleared to register for the ${season} season — sign in to complete it.`)
+}
+
 export function volunteerApplicationReceivedHtml({ name, season }: { name: string; season: string }): string {
   return emailShell('Volunteer application received', `
     <p style="${P}">Thank you ${name || 'volunteer'} for submitting your volunteer application for the ${season} season.</p>

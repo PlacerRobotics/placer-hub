@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { sendEmail, applicationAcceptedHtml, clearedToRegisterHtml } from '@/lib/email'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 
 const SEASON = '2026-27'
@@ -98,6 +100,20 @@ export default async function ApplicationDetailPage({
     await db
       .from('family_season')
       .upsert({ family_id: familyId, season: SEASON, status: 'accepted' }, { onConflict: 'family_id,season' })
+    // Notify the family (best-effort; no-ops if email isn't configured).
+    try {
+      const adb = createAdminClient()
+      const { data: g } = await adb.from('guardian').select('first_name, login_email').eq('family_id', familyId).eq('role', 'primary').maybeSingle()
+      const { data: a } = await adb.from('student_application').select('student:student_id ( first_name, last_name )').eq('id', id).maybeSingle()
+      const s: any = a?.student ? (Array.isArray(a.student) ? a.student[0] : a.student) : null
+      if (g?.login_email) {
+        await sendEmail({
+          to: [g.login_email],
+          subject: `Application accepted — Placer Robotics ${SEASON}`,
+          html: applicationAcceptedHtml({ guardianName: g.first_name ?? '', studentName: s ? `${s.first_name} ${s.last_name}`.trim() : 'your student', season: SEASON }),
+        })
+      }
+    } catch (e) { console.error('[accept] email failed:', e) }
     redirect(`/admin/applications/${id}`)
   }
 
@@ -122,6 +138,20 @@ export default async function ApplicationDetailPage({
         { family_id: familyId, season: SEASON, status: 'cleared_to_register' },
         { onConflict: 'family_id,season' }
       )
+    // Notify the family with a sign-in link (best-effort).
+    try {
+      const adb = createAdminClient()
+      const { data: g } = await adb.from('guardian').select('first_name, login_email').eq('family_id', familyId).eq('role', 'primary').maybeSingle()
+      if (g?.login_email) {
+        const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+        await sendEmail({
+          to: [g.login_email],
+          subject: `You're cleared to register — Placer Robotics ${SEASON}`,
+          html: clearedToRegisterHtml({ guardianName: g.first_name ?? '', season: SEASON, loginUrl: `${site}/login` }),
+        })
+        await adb.from('family_season').update({ magic_link_sent: true }).eq('family_id', familyId).eq('season', SEASON)
+      }
+    } catch (e) { console.error('[clear] email failed:', e) }
     redirect(`/admin/applications/${id}`)
   }
 
