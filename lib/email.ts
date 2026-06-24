@@ -9,6 +9,8 @@
  * This is separate from Supabase Auth's magic-link email (that uses Supabase's
  * configured SMTP); this is for app-generated mail like registration receipts.
  */
+import { createClient as createSupabaseAdmin } from '@supabase/supabase-js'
+
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
 
 export async function sendEmail({
@@ -84,6 +86,42 @@ export function emailButton(href: string, label: string): string {
 }
 
 const P = 'margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.65;'
+
+/**
+ * Generate a Supabase magic link server-side and deliver it via Resend (branded),
+ * so sign-in / invite email never depends on Supabase's own SMTP. The link lands on
+ * /login, which consumes the implicit-flow tokens (hash) and forwards to redirectPath.
+ * Creates the auth user if needed (magiclink requires an existing user).
+ */
+export async function sendMagicLinkEmail({ email, redirectPath, subject, heading, intro, buttonLabel, preheader }: {
+  email: string
+  redirectPath: string
+  subject: string
+  heading: string
+  intro: string
+  buttonLabel: string
+  preheader?: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
+  const to = email.trim().toLowerCase()
+  if (!url || !serviceKey || !to.includes('@')) return { ok: false, error: 'config' }
+  const admin = createSupabaseAdmin(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+  // magiclink requires an existing auth user — create one (ignore "already registered").
+  try { await admin.auth.admin.createUser({ email: to, email_confirm: true }) } catch { /* user already exists */ }
+  const landing = `${site}/login?redirectTo=${encodeURIComponent(redirectPath)}`
+  const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email: to, options: { redirectTo: landing } })
+  const link = (data as { properties?: { action_link?: string } } | null)?.properties?.action_link
+  if (error || !link) return { ok: false, error: error?.message ?? 'no_link' }
+  const html = emailShell(heading, `
+    <p style="${P}">${intro}</p>
+    ${emailButton(link, buttonLabel)}
+    <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">This link signs you in automatically and can be used once. If the button doesn't work, copy this address into your browser:</p>
+    <p style="margin:6px 0 0;font-size:12px;line-height:1.5;word-break:break-all;"><a href="${link}" style="color:#0E2558;">${link}</a></p>`,
+    preheader ?? intro)
+  return sendEmail({ to: [to], subject, html })
+}
 
 export function iqTeamSubmittedHtml({ coachName, teamName, season, paymentRef, zeffyUrl, fee }: { coachName: string; teamName: string | null; season: string; paymentRef: string; zeffyUrl: string | null; fee: number }): string {
   const team = teamName ? ` <strong>${teamName}</strong>` : ''

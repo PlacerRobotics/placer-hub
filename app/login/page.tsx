@@ -63,19 +63,23 @@ export default function LoginPage() {
     setStatus('sending')
     setErrorMessage('')
 
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: process.env.NEXT_PUBLIC_SITE_URL + '/api/auth/callback' + (redirectTo ? `?redirectTo=${encodeURIComponent(redirectTo)}` : ''),
-      },
-    })
-
-    if (error) {
+    // Branded magic link via Resend (server-side), not Supabase SMTP.
+    try {
+      const res = await fetch('/api/auth/magic-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, redirectTo: redirectTo || '/dashboard' }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setStatus('error')
+        setErrorMessage(d.error || 'Something went wrong. Please try again.')
+      } else {
+        setStatus('sent')
+      }
+    } catch {
       setStatus('error')
-      setErrorMessage(error.message)
-    } else {
-      setStatus('sent')
+      setErrorMessage('Network error — please try again.')
     }
   }
 

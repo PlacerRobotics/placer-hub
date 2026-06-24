@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendEmail, applicationAcceptedHtml, clearedToRegisterHtml } from '@/lib/email'
+import { sendEmail, applicationAcceptedHtml, sendMagicLinkEmail } from '@/lib/email'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 
 const SEASON = '2026-27'
@@ -143,11 +143,14 @@ export default async function ApplicationDetailPage({
       const adb = createAdminClient()
       const { data: g } = await adb.from('guardian').select('first_name, login_email').eq('family_id', familyId).eq('role', 'primary').maybeSingle()
       if (g?.login_email) {
-        const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
-        await sendEmail({
-          to: [g.login_email],
+        await sendMagicLinkEmail({
+          email: g.login_email,
+          redirectPath: '/register',
           subject: `You're cleared to register — Placer Robotics ${SEASON}`,
-          html: clearedToRegisterHtml({ guardianName: g.first_name ?? '', season: SEASON, loginUrl: `${site}/login` }),
+          heading: 'You’re cleared to register',
+          intro: `Hi ${g.first_name ?? 'there'}, you're cleared to register for the ${SEASON} Placer Robotics season. Click below to sign in and complete your student's registration — details, waivers, and payment.`,
+          buttonLabel: 'Sign in to register →',
+          preheader: `You're cleared to register for the ${SEASON} season.`,
         })
         await adb.from('family_season').update({ magic_link_sent: true }).eq('family_id', familyId).eq('season', SEASON)
       }
