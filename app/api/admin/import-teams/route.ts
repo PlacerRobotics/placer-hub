@@ -58,15 +58,16 @@ export async function POST(request: NextRequest) {
     try {
       const program = normProgram(g(r, 'program'))
       const division = normDivision(g(r, 'division'))
-      const schoolOrg = g(r, 'school_org')
+      const schoolOrg = g(r, 'school_org') || g(r, 'org')
       if (!teamNumber && !teamName) throw new Error('missing team_number/team_name')
       if (!program) throw new Error('missing/invalid program (V5/IQ/Combat)')
-      if (!division) throw new Error('missing/invalid division (MS/HS)')
-      if (!schoolOrg) throw new Error('missing school_org')
+      if (!division) throw new Error('missing/invalid division (ES/MS/HS)')
+      if (!schoolOrg) throw new Error('missing org / school_org')
 
       const fields: Record<string, unknown> = {
         season: SEASON, program, division, school_org: schoolOrg,
         team_number: teamNumber || null, team_name: teamName || null,
+        notes: g(r, 'notes') || null,
       }
       const fee = numOrNull(g(r, 'team_fee_amount'))
       if (fee != null) fields.team_fee_amount = fee
@@ -75,17 +76,36 @@ export async function POST(request: NextRequest) {
       if (teamNumber) {
         existing = (await db.from('team').select('id').eq('season', SEASON).eq('program', program).eq('team_number', teamNumber).maybeSingle()).data
       }
+      let teamId: string
       if (existing) {
         const { error } = await db.from('team').update(fields).eq('id', existing.id)
         if (error) throw new Error(error.message)
+        teamId = existing.id
         updated++
         results.push({ row: rowNo, team: label, action: 'update', status: 'updated' })
       } else {
-        // Imported teams are existing/returning teams — create them live.
-        const { error } = await db.from('team').insert({ ...fields, active: true })
+        // Imported teams are established/returning — create them live + active.
+        const { data: ins, error } = await db.from('team').insert({ ...fields, active: true, status: 'active' }).select('id').single()
         if (error) throw new Error(error.message)
+        teamId = ins.id
         created++
         results.push({ row: rowNo, team: label, action: 'create', status: 'created' })
+      }
+
+      // Assign the coach when an email is given: find/create the guardian, then add a
+      // (non-duplicate) coach team_member. Coach assignment is identity-only here.
+      const coachEmail = g(r, 'coach_email').toLowerCase()
+      if (coachEmail) {
+        let guardian = (await db.from('guardian').select('id').ilike('login_email', coachEmail).maybeSingle()).data
+        if (!guardian) {
+          const cFirst = g(r, 'coach_first_name'), cLast = g(r, 'coach_last_name')
+          const { data: fam } = await db.from('family').insert({ primary_email: coachEmail, display_name: cLast || null }).select('id').single()
+          guardian = (await db.from('guardian').insert({ family_id: fam!.id, first_name: cFirst || cLast || 'Coach', last_name: cLast || '', login_email: coachEmail, phone: g(r, 'coach_phone') || '', role: 'primary' }).select('id').single()).data
+        }
+        if (guardian) {
+          const existingCoach = (await db.from('team_member').select('id').eq('team_id', teamId).eq('guardian_id', guardian.id).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()).data
+          if (!existingCoach) await db.from('team_member').insert({ team_id: teamId, guardian_id: guardian.id, season: SEASON, team_role: 'coach', program })
+        }
       }
     } catch (exc: any) {
       errors.push({ row: rowNo, message: exc?.message ?? 'unknown' })

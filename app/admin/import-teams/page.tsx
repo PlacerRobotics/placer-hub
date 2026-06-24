@@ -83,7 +83,7 @@ export default function ImportTeamsPage() {
 
       <div style={{ marginBottom: '1.25rem' }}>
         <InfoAlert title="Expected columns">
-          team_number, team_name, program (V5/IQ/Combat), division (MS/HS), school_org, team_fee_amount (optional). Season is 2026–27. Rows match existing teams on team number + program (update), otherwise create.
+          team_number, team_name, program (V5/IQ/Combat), division (ES/MS/HS), org (or school_org), and optional coach_first_name / coach_last_name / coach_email / coach_phone / notes. Season is 2026–27. Rows match existing teams on team number + program (update), otherwise create active. A coach_email assigns that coach to the team.
         </InfoAlert>
       </div>
 
@@ -100,7 +100,7 @@ export default function ImportTeamsPage() {
           <p style={{ fontSize: '0.9375rem', fontWeight: 600, marginBottom: '0.875rem' }}>{rows.length} team row(s)</p>
           <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: '10px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--color-surface)' }}>
-              <thead><tr><th style={th}>Team Number</th><th style={th}>Team Name</th><th style={th}>Program</th><th style={th}>Division</th><th style={th}>School / Org</th></tr></thead>
+              <thead><tr><th style={th}>Team Number</th><th style={th}>Team Name</th><th style={th}>Program</th><th style={th}>Division</th><th style={th}>School / Org</th><th style={th}>Coach</th></tr></thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i}>
@@ -108,7 +108,8 @@ export default function ImportTeamsPage() {
                     <td style={cell}>{r['team_name'] || '—'}</td>
                     <td style={cell}>{progOf(r['program'])}</td>
                     <td style={cell}>{divOf(r['division'])}</td>
-                    <td style={cell}>{r['school_org'] || '—'}</td>
+                    <td style={cell}>{r['school_org'] || r['org'] || '—'}</td>
+                    <td style={cell}>{[r['coach_first_name'], r['coach_last_name']].filter(Boolean).join(' ') || (r['coach_email'] || '—')}</td>
                   </tr>
                 ))}
               </tbody>
