@@ -122,6 +122,14 @@ export function apsReminderHtml({ name, expiry, days }: { name: string; expiry: 
     <p style="${P}">Renew the free course at <a href="https://abusepreventionsystems.com" style="color:#0E2558;font-weight:700;">abusepreventionsystems.com</a> to stay cleared to volunteer.</p>`)
 }
 
+export function volunteerWaiverReminderHtml({ name, season, waiverUrl }: { name: string; season: string; waiverUrl: string }): string {
+  return emailShell(`Sign your ${season} volunteer agreement`, `
+    <p style="${P}">Hi ${name || 'volunteer'}, please review and sign the ${season} Youth Protection &amp; Abuse Prevention policy agreement to complete your Registered Volunteer clearance.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F2C352;border-radius:8px;">
+      <a href="${waiverUrl}" style="display:inline-block;padding:13px 28px;color:#0E2558;font-size:15px;font-weight:700;text-decoration:none;">Review &amp; sign &rarr;</a></td></tr></table>
+    <p style="margin:18px 0 0;color:#7a879c;font-size:13px;">Questions? Contact registrar@placerrobotics.org</p>`)
+}
+
 export function volunteerRenewalReminderHtml({ name, season, statusLines, renewUrl }: { name: string; season: string; statusLines: string[]; renewUrl: string }): string {
   const items = statusLines.map((l) => `<li style="margin-bottom:4px;color:#3a4a63;font-size:14px;">${l}</li>`).join('')
   return emailShell(`${season} volunteer renewal`, `
