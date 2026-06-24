@@ -381,17 +381,16 @@ export default function RegisterWizard({
             <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '1.25rem', marginBottom: '1.25rem' }}>
               <p style={{ fontWeight: 700, fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Payment summary</p>
               <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.9375rem' }}>
-                <Row label="Registration fee" value="$40 (required, non-deductible)" />
-                <Row label="Fundraising commitment" value={`$${fundraisingTarget} via ${fundMethods.map((m) => FUND_METHOD_LABELS[m] ?? m).join(', ') || '—'}`} />
-                <Row label="Total due via Zeffy today" value="$40" />
+                <Row label="Registration fee" value="$40 — required, paid via Zeffy (non-deductible)" />
+                <Row label="Fundraising commitment" value={`$${fundraisingTarget} — ${fundMethods.map((m) => FUND_METHOD_LABELS[m] ?? m).join(', ') || '—'}`} />
               </div>
             </div>
             <a href={payUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '12px 24px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
-              Pay Registration Fee via Zeffy →
+              Pay via Zeffy →
             </a>
             <ZeffyMethodsNote />
             <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0.625rem 0 1.25rem', lineHeight: 1.6 }}>
-              Select the ticket for {programLabel}. The $40 registration fee ticket is separate from any additional contribution you choose to make.
+              On Zeffy, choose the ticket for {programLabel}. You can pay just the $40 registration fee, or pick a higher ticket (e.g. Standard or Champion) to put money toward your ${fundraisingTarget} fundraising commitment too — and you can always give more later.
             </p>
             {fundMethods.filter((m) => SUBMIT_METHOD_MESSAGE[m]).map((m) => (
               <div key={m} style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.875rem 1rem', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
