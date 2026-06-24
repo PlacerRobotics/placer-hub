@@ -8,7 +8,7 @@ export default async function AdminHomePage() {
   const supabase = await createClient()
   const n = async (q: any) => ((await q).count ?? 0) as number
 
-  const [apps, aid, unpaid, payments, syncFailures] = await Promise.all([
+  const [apps, aid, toSend, unpaid, payments, syncFailures] = await Promise.all([
     n(
       supabase
         .from('student_application')
@@ -22,6 +22,14 @@ export default async function AdminHomePage() {
         .select('*', { count: 'exact', head: true })
         .eq('season', SEASON)
         .eq('status', 'pending')
+    ),
+    n(
+      supabase
+        .from('family_season')
+        .select('*', { count: 'exact', head: true })
+        .eq('season', SEASON)
+        .eq('status', 'cleared_to_register')
+        .eq('magic_link_sent', false)
     ),
     n(
       supabase
@@ -43,6 +51,7 @@ export default async function AdminHomePage() {
   const items: Queue[] = [
     { id: 'applications', primary: 'Applications to review', secondary: 'New applicants awaiting a decision', count: apps, href: '/admin/applications', variant: 'info' },
     { id: 'aid', primary: 'Financial aid requests', secondary: 'Need approval before registration', count: aid, href: '/admin/financial-aid', variant: 'warning' },
+    { id: 'tosend', primary: `Registrations to send (${SEASON})`, secondary: 'Cleared families not yet invited to register', count: toSend, href: '/admin/registrations', variant: 'info' },
     { id: 'unpaid', primary: 'Registrations unpaid', secondary: 'Spots not yet secured by payment', count: unpaid, href: '/admin/registrations', variant: 'warning' },
     { id: 'payments', primary: 'Unmatched payments', secondary: 'Payments without a matching enrollment', count: payments, href: '/admin/payments', variant: 'error' },
     { id: 'sync', primary: 'Sync failures', secondary: 'Records out of sync with the source system', count: syncFailures, href: '/admin/sync', variant: 'error' },
