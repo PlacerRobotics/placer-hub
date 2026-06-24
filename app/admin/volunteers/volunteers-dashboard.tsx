@@ -40,6 +40,7 @@ const card = (active: boolean, accent: string): React.CSSProperties => ({ border
 const flag = (ok: boolean) => <span style={{ color: ok ? GREEN : RED, fontWeight: 700 }}>{ok ? '✓' : '✗'}</span>
 const primaryBtn: React.CSSProperties = { padding: '6px 12px', backgroundColor: 'var(--color-navy-deep)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 const outlineBtn: React.CSSProperties = { padding: '6px 12px', background: 'none', border: '1px solid var(--color-border)', borderRadius: 6, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
+const dangerBtn: React.CSSProperties = { ...outlineBtn, border: '1px solid var(--color-error)', color: 'var(--color-error)' }
 
 export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
   const router = useRouter()
@@ -60,13 +61,14 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
   function toggleAll() { setSel((p) => { const n = new Set(p); if (allSelected) filteredIds.forEach((id) => n.delete(id)); else filteredIds.forEach((id) => n.add(id)); return n }) }
   async function runBulk(action: string, label: string) {
     if (!sel.size || busy) return
-    if (action === 'doj_complete' && !confirm(`Mark DOJ background check complete for ${sel.size} volunteer(s)?`)) return
+    const confirmActions = ['doj_complete', 'mark_cleared', 'suspend', 'orientation_done']
+    if (confirmActions.includes(action) && !confirm(`Apply “${label}” to ${sel.size} volunteer(s)?`)) return
     setBusy(true); setMsg('')
     try {
       const res = await fetch('/api/admin/volunteers/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ volunteerIds: [...sel], action }) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setMsg(d.error || 'Action failed.'); setBusy(false); return }
-      if (action === 'doj_complete') setMsg(`DOJ marked complete for ${d.processed} volunteer(s).`)
+      if (typeof d.processed === 'number') setMsg(`${label}: ${d.processed} volunteer(s) updated.`)
       else if (d.emailDisabled) setMsg(`Email isn’t configured yet (RESEND_API_KEY) — ${d.failed} would have been notified (${label}).`)
       else setMsg(`${label}: ${d.emailed} emailed${d.skipped ? `, ${d.skipped} skipped` : ''}${d.failed ? `, ${d.failed} failed` : ''}.`)
       setSel(new Set()); router.refresh()
@@ -117,8 +119,11 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexWrap: 'wrap', marginBottom: '0.75rem', padding: '0.625rem 0.875rem', background: 'var(--color-surface)', border: '1px solid var(--color-navy-deep)', borderRadius: 8 }}>
           <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>{sel.size} selected</span>
           <button type="button" onClick={() => runBulk('doj_complete', 'DOJ complete')} disabled={busy} style={primaryBtn}>Mark DOJ complete</button>
+          <button type="button" onClick={() => runBulk('mark_cleared', 'Mark cleared')} disabled={busy} style={primaryBtn}>Mark cleared</button>
+          <button type="button" onClick={() => runBulk('orientation_done', 'Orientation done')} disabled={busy} style={outlineBtn}>Orientation done</button>
           <button type="button" onClick={() => runBulk('notify_waiver', 'Waiver reminder')} disabled={busy} style={outlineBtn}>Notify: sign waiver</button>
           <button type="button" onClick={() => runBulk('notify_aps', 'APS reminder')} disabled={busy} style={outlineBtn}>Notify: APS expiring</button>
+          <button type="button" onClick={() => runBulk('suspend', 'Suspend')} disabled={busy} style={dangerBtn}>Suspend</button>
           <button type="button" onClick={() => setSel(new Set())} disabled={busy} style={{ ...outlineBtn, marginLeft: 'auto' }}>Clear</button>
         </div>
       )}

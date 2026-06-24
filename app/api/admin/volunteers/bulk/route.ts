@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, apsReminderHtml, volunteerWaiverReminderHtml } from '@/lib/email'
 import { VOLUNTEER_SEASON as SEASON } from '@/lib/volunteer'
 
+const chunk = <T,>(a: T[], n: number): T[][] => { const o: T[][] = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o }
+
 // POST /api/admin/volunteers/bulk — coordinator bulk actions on selected volunteers.
 // action: 'doj_complete' | 'notify_waiver' | 'notify_aps'. volunteerIds = profile ids.
 export async function POST(req: NextRequest) {
@@ -60,6 +62,27 @@ export async function POST(req: NextRequest) {
       else { failed++; if (r.error === 'no_api_key') emailDisabled = true }
     }
     return NextResponse.json({ ok: true, action, emailed, skipped, failed, emailDisabled })
+  }
+
+  if (action === 'mark_cleared' || action === 'suspend' || action === 'orientation_done') {
+    const today = now.slice(0, 10)
+    // Updates put the id filter in the URL too, so chunk to stay under the limit.
+    for (const batch of chunk(ids, 50)) {
+      if (action === 'orientation_done') {
+        const { error } = await db.from('volunteer_clearance').update({ orientation_completed: true, orientation_completed_date: today }).in('volunteer_id', batch).eq('season', SEASON)
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      } else {
+        const status = action === 'mark_cleared' ? 'cleared' : 'suspended'
+        const clearancePatch: Record<string, unknown> = { status }
+        const profilePatch: Record<string, unknown> = { status }
+        if (action === 'mark_cleared') { clearancePatch.approved_by = admin.id; clearancePatch.approved_at = now; profilePatch.cleared_at = now }
+        const { error: e1 } = await db.from('volunteer_clearance').update(clearancePatch).in('volunteer_id', batch).eq('season', SEASON)
+        if (e1) return NextResponse.json({ error: e1.message }, { status: 500 })
+        const { error: e2 } = await db.from('volunteer_profile').update(profilePatch).in('id', batch)
+        if (e2) return NextResponse.json({ error: e2.message }, { status: 500 })
+      }
+    }
+    return NextResponse.json({ ok: true, action, processed: ids.length })
   }
 
   return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
