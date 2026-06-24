@@ -56,12 +56,16 @@ export default function RolesManager({ admins }: { admins: AdminRow[] }) {
 
       {admins.map((a) => (
         <div key={a.id} style={card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div>
               <span style={{ fontWeight: 600 }}>{a.displayName || a.email}</span>
               {a.displayName && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem', marginLeft: '0.5rem' }}>{a.email}</span>}
               {!a.active && <span style={{ color: 'var(--color-error)', fontSize: '0.75rem', marginLeft: '0.5rem' }}>(inactive)</span>}
             </div>
+            <button type="button" disabled={busy} style={{ ...navyBtn, padding: '6px 12px', background: 'var(--color-surface)', color: 'var(--color-navy-deep)', border: '1.5px solid var(--color-navy-deep)' }}
+              onClick={async () => { if (await post('/api/admin/admins/send-link', { admin_profile_id: a.id })) setMsg(`Sign-in link sent to ${a.email}`) }}>
+              Send sign-in link
+            </button>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', margin: '0.75rem 0' }}>
             {a.roles.length === 0 ? <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>No roles.</span> :
