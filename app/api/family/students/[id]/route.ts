@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: guardian } = await db.from('guardian').select('family_id').ilike('login_email', user.email).maybeSingle()
   if (!guardian) return NextResponse.json({ error: 'No family found.' }, { status: 403 })
 
-  const { data: student } = await db.from('student').select('id, family_id').eq('id', studentId).maybeSingle()
+  const { data: student } = await db.from('student').select('id, family_id, slack_email').eq('id', studentId).maybeSingle()
   if (!student || student.family_id !== guardian.family_id) {
     return NextResponse.json({ error: 'Student not found for this family.' }, { status: 403 })
   }
@@ -32,6 +32,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (v && !TSHIRT.has(v)) return NextResponse.json({ error: 'Invalid t-shirt size.' }, { status: 400 })
     const { error } = await db.from('student').update({ tshirt_size: v || null }).eq('id', studentId)
     if (error) return NextResponse.json({ error: `Could not save t-shirt size: ${error.message}` }, { status: 500 })
+  }
+
+  // Emails. Google Workspace (communication) + Fusion are freely editable; Slack email
+  // is settable once, then needs an admin to change (Slack can't rename/merge).
+  const emailUpd: Record<string, unknown> = {}
+  if (body.communication_email !== undefined) emailUpd.communication_email = String(body.communication_email).trim().toLowerCase() || null
+  if (body.fusion_education_email !== undefined) emailUpd.fusion_education_email = String(body.fusion_education_email).trim().toLowerCase() || null
+  if (body.slack_email !== undefined) {
+    const newVal = String(body.slack_email).trim().toLowerCase() || null
+    const current = (student as any).slack_email ?? null
+    if (newVal !== current) {
+      if (current) return NextResponse.json({ error: 'Changing the Slack email requires an admin — contact info@placerrobotics.org.' }, { status: 400 })
+      emailUpd.slack_email = newVal
+    }
+  }
+  if (Object.keys(emailUpd).length) {
+    const { error } = await db.from('student').update(emailUpd).eq('id', studentId)
+    if (error) return NextResponse.json({ error: `Could not save emails: ${error.message}` }, { status: 500 })
   }
 
   // Priority-1 emergency contact (own table). first_name/last_name/phone are NOT NULL.

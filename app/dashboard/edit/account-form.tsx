@@ -10,9 +10,28 @@ const TSHIRT_OPTIONS: [string, string][] = [
 ]
 
 export type AccountData = {
-  guardian1: { name: string; email: string; street_address: string; city: string; state: string; zip_code: string; phone: string }
-  students: { id: string; name: string; tshirt_size: string; ec_first: string; ec_last: string; ec_phone: string; ec_relationship: string }[]
+  guardian1: { name: string; email: string; communication_email: string; slack_email: string; street_address: string; city: string; state: string; zip_code: string; phone: string }
+  students: { id: string; name: string; tshirt_size: string; communication_email: string; fusion_education_email: string; slack_email: string; ec_first: string; ec_last: string; ec_phone: string; ec_relationship: string }[]
   guardian2: { first_name: string; last_name: string; email: string; phone: string } | null
+}
+
+const WORKSPACE_HELP = 'Google Workspace email — used for Google Drive access and all communications.'
+
+// Slack email: free to set the first time, but once set it can only be changed by an
+// admin (Slack can't rename or merge accounts), so we lock it and point to support.
+function SlackField({ id, value, onChange, locked }: { id: string; value: string; onChange: (v: string) => void; locked: boolean }) {
+  if (locked) {
+    return (
+      <FormField label="Slack email" helpText="To change your Slack email, contact info@placerrobotics.org — Slack accounts are updated manually.">
+        <div style={{ fontSize: '0.9375rem' }}>{value}</div>
+      </FormField>
+    )
+  }
+  return (
+    <FormField label="Slack email" htmlFor={id} helpText="Only if your Slack uses a different email than your login. Once set, changing it later needs an admin.">
+      <TextInput id={id} type="email" value={value} onChange={(e) => onChange(e.target.value)} />
+    </FormField>
+  )
 }
 
 const selectStyle: React.CSSProperties = {
@@ -45,6 +64,10 @@ export default function AccountForm({ data }: { data: AccountData }) {
 
 function StudentSection({ student, onSaved }: { student: AccountData['students'][number]; onSaved: () => void }) {
   const [tshirt, setTshirt] = useState(student.tshirt_size)
+  const [commEmail, setCommEmail] = useState(student.communication_email)
+  const [fusion, setFusion] = useState(student.fusion_education_email)
+  const [slack, setSlack] = useState(student.slack_email)
+  const slackLocked = !!student.slack_email
   const [ecFirst, setEcFirst] = useState(student.ec_first)
   const [ecLast, setEcLast] = useState(student.ec_last)
   const [ecPhone, setEcPhone] = useState(student.ec_phone)
@@ -57,7 +80,11 @@ function StudentSection({ student, onSaved }: { student: AccountData['students']
     try {
       const res = await fetch(`/api/family/students/${student.id}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tshirt_size: tshirt, ec_first: ecFirst, ec_last: ecLast, ec_phone: ecPhone, ec_relationship: ecRel }),
+        body: JSON.stringify({
+          tshirt_size: tshirt, ec_first: ecFirst, ec_last: ecLast, ec_phone: ecPhone, ec_relationship: ecRel,
+          communication_email: commEmail, fusion_education_email: fusion,
+          ...(slackLocked ? {} : { slack_email: slack }),
+        }),
       })
       const d = await res.json().catch(() => ({}))
       setState(res.ok ? 'saved' : (d.error || 'Save failed.'))
@@ -66,7 +93,7 @@ function StudentSection({ student, onSaved }: { student: AccountData['students']
   }
 
   return (
-    <FormSection title={student.name} description="T-shirt size and emergency contact.">
+    <FormSection title={student.name} description="T-shirt size, emails, and emergency contact.">
       <div>
         <label htmlFor={`ts-${student.id}`} style={{ display: 'block', fontSize: '0.9375rem', fontWeight: 500, marginBottom: '0.375rem' }}>T-shirt size</label>
         <select id={`ts-${student.id}`} value={tshirt} onChange={(e) => setTshirt(e.target.value)} style={selectStyle}>
@@ -74,6 +101,9 @@ function StudentSection({ student, onSaved }: { student: AccountData['students']
           {TSHIRT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </div>
+      <FormField label="Google Workspace email" htmlFor={`comm-${student.id}`} helpText={WORKSPACE_HELP}><TextInput id={`comm-${student.id}`} type="email" value={commEmail} onChange={(e) => setCommEmail(e.target.value)} /></FormField>
+      <FormField label="Fusion Education email" htmlFor={`fus-${student.id}`} helpText="Your student's Fusion account email, if they have one."><TextInput id={`fus-${student.id}`} type="email" value={fusion} onChange={(e) => setFusion(e.target.value)} /></FormField>
+      <SlackField id={`slack-${student.id}`} value={slack} onChange={setSlack} locked={slackLocked} />
       <FormField label="Emergency contact first name" htmlFor={`ecf-${student.id}`}><TextInput id={`ecf-${student.id}`} value={ecFirst} onChange={(e) => setEcFirst(e.target.value)} /></FormField>
       <FormField label="Emergency contact last name" htmlFor={`ecl-${student.id}`}><TextInput id={`ecl-${student.id}`} value={ecLast} onChange={(e) => setEcLast(e.target.value)} /></FormField>
       <FormField label="Emergency contact phone" htmlFor={`ecp-${student.id}`}><TextInput id={`ecp-${student.id}`} type="tel" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></FormField>
@@ -84,6 +114,9 @@ function StudentSection({ student, onSaved }: { student: AccountData['students']
 }
 
 function FamilySection({ g1, onSaved }: { g1: AccountData['guardian1']; onSaved: () => void }) {
+  const [commEmail, setCommEmail] = useState(g1.communication_email)
+  const [slack, setSlack] = useState(g1.slack_email)
+  const slackLocked = !!g1.slack_email
   const [street, setStreet] = useState(g1.street_address)
   const [city, setCity] = useState(g1.city)
   const [stateField, setStateField] = useState(g1.state)
@@ -97,7 +130,11 @@ function FamilySection({ g1, onSaved }: { g1: AccountData['guardian1']; onSaved:
     try {
       const res = await fetch('/api/family/profile', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ street_address: street, city, state: stateField, zip_code: zip, phone }),
+        body: JSON.stringify({
+          street_address: street, city, state: stateField, zip_code: zip, phone,
+          communication_email: commEmail,
+          ...(slackLocked ? {} : { slack_email: slack }),
+        }),
       })
       const d = await res.json().catch(() => ({}))
       setState(res.ok ? 'saved' : (d.error || 'Save failed.'))
@@ -106,7 +143,9 @@ function FamilySection({ g1, onSaved }: { g1: AccountData['guardian1']; onSaved:
   }
 
   return (
-    <FormSection title="Family contact info" description="Home address and primary phone.">
+    <FormSection title="Your contact info & emails" description="Home address, phone, and the emails we use to reach you.">
+      <FormField label="Google Workspace email" htmlFor="g1comm" helpText={WORKSPACE_HELP}><TextInput id="g1comm" type="email" value={commEmail} onChange={(e) => setCommEmail(e.target.value)} /></FormField>
+      <SlackField id="g1slack" value={slack} onChange={setSlack} locked={slackLocked} />
       <FormField label="Street address" htmlFor="street"><TextInput id="street" value={street} onChange={(e) => setStreet(e.target.value)} /></FormField>
       <FormField label="City" htmlFor="city"><TextInput id="city" value={city} onChange={(e) => setCity(e.target.value)} /></FormField>
       <FormField label="State" htmlFor="state"><TextInput id="state" value={stateField} onChange={(e) => setStateField(e.target.value)} /></FormField>

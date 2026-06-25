@@ -10,7 +10,7 @@ export default async function AccountPage() {
 
   const { data: guardian } = await supabase
     .from('guardian')
-    .select('id, family_id, first_name, last_name, login_email, street_address, city, state, zip_code, phone')
+    .select('id, family_id, first_name, last_name, login_email, communication_email, slack_email, street_address, city, state, zip_code, phone')
     .ilike('login_email', user.email ?? '')
     .maybeSingle()
   if (!guardian) redirect('/dashboard')
@@ -18,7 +18,7 @@ export default async function AccountPage() {
 
   const { data: studs } = await supabase
     .from('student')
-    .select('id, first_name, last_name, tshirt_size')
+    .select('id, first_name, last_name, tshirt_size, communication_email, fusion_education_email, slack_email')
     .eq('family_id', familyId)
     .order('created_at', { ascending: true })
   const students = studs ?? []
@@ -40,6 +40,8 @@ export default async function AccountPage() {
     guardian1: {
       name: `${guardian.first_name} ${guardian.last_name}`.trim(),
       email: guardian.login_email,
+      communication_email: guardian.communication_email ?? '',
+      slack_email: guardian.slack_email ?? '',
       street_address: guardian.street_address ?? '',
       city: guardian.city ?? '',
       state: guardian.state ?? '',
@@ -52,6 +54,9 @@ export default async function AccountPage() {
         id: s.id,
         name: `${s.first_name} ${s.last_name}`.trim(),
         tshirt_size: s.tshirt_size ?? '',
+        communication_email: s.communication_email ?? '',
+        fusion_education_email: s.fusion_education_email ?? '',
+        slack_email: s.slack_email ?? '',
         ec_first: ec?.first_name ?? '',
         ec_last: ec?.last_name ?? '',
         ec_phone: ec?.phone ?? '',

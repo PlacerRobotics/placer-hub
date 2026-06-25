@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest) {
   if (!user?.email) return NextResponse.json({ error: 'Not authenticated.' }, { status: 401 })
 
   const db = createAdminClient()
-  const { data: guardian } = await db.from('guardian').select('id, phone').ilike('login_email', user.email).maybeSingle()
+  const { data: guardian } = await db.from('guardian').select('id, phone, slack_email').ilike('login_email', user.email).maybeSingle()
   if (!guardian) return NextResponse.json({ error: 'No family found.' }, { status: 403 })
 
   let body: any
@@ -24,6 +24,17 @@ export async function PATCH(req: NextRequest) {
   if (body.state !== undefined) upd.state = String(body.state).trim() || null
   if (body.zip_code !== undefined) upd.zip_code = String(body.zip_code).trim() || null
   if (body.phone !== undefined) upd.phone = String(body.phone).trim() || guardian.phone // phone is NOT NULL
+  // Google Workspace / communication email — freely editable.
+  if (body.communication_email !== undefined) upd.communication_email = String(body.communication_email).trim().toLowerCase() || null
+  // Slack email — settable once; changing it later needs an admin (Slack can't rename/merge).
+  if (body.slack_email !== undefined) {
+    const newVal = String(body.slack_email).trim().toLowerCase() || null
+    const current = (guardian as any).slack_email ?? null
+    if (newVal !== current) {
+      if (current) return NextResponse.json({ error: 'Changing your Slack email requires an admin — contact info@placerrobotics.org.' }, { status: 400 })
+      upd.slack_email = newVal
+    }
+  }
 
   if (Object.keys(upd).length === 0) return NextResponse.json({ ok: true })
   const { error } = await db.from('guardian').update(upd).eq('id', guardian.id)
