@@ -12,7 +12,7 @@ const TSHIRT_OPTIONS: [string, string][] = [
 export type AccountData = {
   guardian1: { name: string; email: string; communication_email: string; slack_email: string; street_address: string; city: string; state: string; zip_code: string; phone: string }
   students: { id: string; name: string; tshirt_size: string; communication_email: string; fusion_education_email: string; slack_email: string; ec_first: string; ec_last: string; ec_phone: string; ec_relationship: string }[]
-  guardian2: { first_name: string; last_name: string; email: string; phone: string } | null
+  guardian2: { first_name: string; last_name: string; email: string; communication_email: string; slack_email: string; street_address: string; city: string; state: string; zip_code: string; phone: string } | null
 }
 
 const WORKSPACE_HELP = 'Google Workspace email — used for Google Drive access and all communications.'
@@ -160,6 +160,13 @@ function Guardian2Section({ g2, onSaved }: { g2: AccountData['guardian2']; onSav
   const [first, setFirst] = useState(g2?.first_name ?? '')
   const [last, setLast] = useState(g2?.last_name ?? '')
   const [email, setEmail] = useState(g2?.email ?? '')
+  const [commEmail, setCommEmail] = useState(g2?.communication_email ?? '')
+  const [slack, setSlack] = useState(g2?.slack_email ?? '')
+  const slackLocked = !!g2?.slack_email
+  const [street, setStreet] = useState(g2?.street_address ?? '')
+  const [city, setCity] = useState(g2?.city ?? '')
+  const [stateField, setStateField] = useState(g2?.state ?? '')
+  const [zip, setZip] = useState(g2?.zip_code ?? '')
   const [phone, setPhone] = useState(g2?.phone ?? '')
   const [state, setState] = useState('')
   const [busy, setBusy] = useState(false)
@@ -169,7 +176,12 @@ function Guardian2Section({ g2, onSaved }: { g2: AccountData['guardian2']; onSav
     try {
       const res = await fetch('/api/family/guardian2', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ first_name: first, last_name: last, email, phone }),
+        body: JSON.stringify({
+          first_name: first, last_name: last, email, phone,
+          communication_email: commEmail,
+          street_address: street, city, state: stateField, zip_code: zip,
+          ...(slackLocked ? {} : { slack_email: slack }),
+        }),
       })
       const d = await res.json().catch(() => ({}))
       setState(res.ok ? 'saved' : (d.error || 'Save failed.'))
@@ -178,10 +190,16 @@ function Guardian2Section({ g2, onSaved }: { g2: AccountData['guardian2']; onSav
   }
 
   return (
-    <FormSection title={g2 ? 'Guardian 2' : 'Add guardian 2'} description="A second parent or guardian (contact info; not a login).">
+    <FormSection title={g2 ? 'Guardian 2' : 'Add guardian 2'} description="A second parent or guardian — same details as guardian 1 (contact only; not a login).">
       <FormField label="First name" htmlFor="g2f"><TextInput id="g2f" value={first} onChange={(e) => setFirst(e.target.value)} /></FormField>
       <FormField label="Last name" htmlFor="g2l"><TextInput id="g2l" value={last} onChange={(e) => setLast(e.target.value)} /></FormField>
-      <FormField label="Email" htmlFor="g2e"><TextInput id="g2e" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></FormField>
+      <FormField label="Email" htmlFor="g2e" helpText="Primary email for this guardian."><TextInput id="g2e" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></FormField>
+      <FormField label="Google Workspace email" htmlFor="g2comm" helpText={WORKSPACE_HELP}><TextInput id="g2comm" type="email" value={commEmail} onChange={(e) => setCommEmail(e.target.value)} /></FormField>
+      <SlackField id="g2slack" value={slack} onChange={setSlack} locked={slackLocked} />
+      <FormField label="Street address" htmlFor="g2street"><TextInput id="g2street" value={street} onChange={(e) => setStreet(e.target.value)} /></FormField>
+      <FormField label="City" htmlFor="g2city"><TextInput id="g2city" value={city} onChange={(e) => setCity(e.target.value)} /></FormField>
+      <FormField label="State" htmlFor="g2state"><TextInput id="g2state" value={stateField} onChange={(e) => setStateField(e.target.value)} /></FormField>
+      <FormField label="ZIP" htmlFor="g2zip"><TextInput id="g2zip" value={zip} onChange={(e) => setZip(e.target.value)} /></FormField>
       <FormField label="Phone" htmlFor="g2p"><TextInput id="g2p" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></FormField>
       <div><PrimaryButton loading={busy} onClick={save}>{g2 ? 'Save guardian 2' : 'Add guardian 2'}</PrimaryButton><Saved state={state} /></div>
     </FormSection>

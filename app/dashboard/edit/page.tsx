@@ -31,7 +31,7 @@ export default async function AccountPage() {
 
   const { data: gAll } = await supabase
     .from('guardian')
-    .select('id, first_name, last_name, login_email, communication_email, phone')
+    .select('id, first_name, last_name, login_email, communication_email, slack_email, street_address, city, state, zip_code, phone')
     .eq('family_id', familyId)
     .order('created_at', { ascending: true })
   const g2 = (gAll ?? []).find((g: any) => g.id !== guardian.id)
@@ -67,7 +67,13 @@ export default async function AccountPage() {
       ? {
           first_name: g2.first_name ?? '',
           last_name: g2.last_name ?? '',
-          email: g2.communication_email || g2.login_email || '',
+          email: g2.login_email ?? '',
+          communication_email: g2.communication_email ?? '',
+          slack_email: g2.slack_email ?? '',
+          street_address: g2.street_address ?? '',
+          city: g2.city ?? '',
+          state: g2.state ?? '',
+          zip_code: g2.zip_code ?? '',
           phone: g2.phone ?? '',
         }
       : null,
