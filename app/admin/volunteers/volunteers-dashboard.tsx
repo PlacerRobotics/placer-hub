@@ -3,23 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { StatusBadge } from '@/components/ui'
+import { type VolunteerBucket, VOLUNTEER_BUCKET_META as BUCKET_META } from '@/lib/volunteer-buckets'
 
-export type Bucket = 'cleared' | 'renewal_pending' | 'in_progress' | 'denied' | 'deactivated'
 export type VolRow = {
-  id: string; name: string; email: string; status: string; bucket: Bucket
+  id: string; name: string; email: string; status: string; bucket: VolunteerBucket
   doj: boolean; aps: 'valid' | 'expiring' | 'expired' | 'none'; apsExpiry: string | null
   rc: boolean; yp: boolean; waiver: boolean
 }
 
 const GREEN = 'var(--color-success)', RED = 'var(--color-error)', YELLOW = '#C9971B', BLUE = 'var(--color-info)', GREY = 'var(--color-text-muted)'
-type Variant = 'success' | 'warning' | 'info' | 'error' | 'neutral'
-const BUCKET_META: Record<Bucket, { label: string; variant: Variant; color: string }> = {
-  cleared: { label: 'Cleared', variant: 'success', color: GREEN },
-  renewal_pending: { label: 'Renewal pending', variant: 'info', color: BLUE },
-  in_progress: { label: 'In progress', variant: 'warning', color: YELLOW },
-  denied: { label: 'Denied', variant: 'error', color: RED },
-  deactivated: { label: 'Deactivated', variant: 'neutral', color: GREY },
-}
 const matchTab = (r: VolRow, t: string) => t === 'all' || r.bucket === t
 
 const cell: React.CSSProperties = { padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left', whiteSpace: 'nowrap' }

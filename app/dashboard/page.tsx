@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader, StatusBadge, WarningAlert, SuccessAlert } from '@/components/ui'
 import { supporterLevel } from '@/lib/supporter'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
+import { volunteerBucket, VOLUNTEER_BUCKET_META } from '@/lib/volunteer-buckets'
 import { fundraisingDeadline } from '@/lib/fundraising'
 
 const ADMIN_EMAIL = 'kevin.miller@placerrobotics.org'
@@ -30,7 +31,6 @@ const DIVISION_LABELS: Record<string, string> = { ES: 'Elementary', MS: 'Middle 
 const TSHIRT_LABELS: Record<string, string> = { ym: 'Youth Medium', yl: 'Youth Large', xs: 'Adult XS', s: 'Adult Small', m: 'Adult Medium', l: 'Adult Large', xl: 'Adult XL', xxl: 'Adult 2XL', xxxl: 'Adult 3XL' }
 const AID_DISPLAY: Record<string, [string, Variant]> = { not_requested: ['Not requested', 'neutral'], pending: ['Requested', 'info'], approved: ['Approved', 'success'], denied: ['Denied', 'error'], withdrawn: ['Withdrawn', 'neutral'] }
 const IQ_STATUS: Record<string, [string, Variant]> = { pending_payment: ['Awaiting payment', 'warning'], pending_admin_confirmation: ['Under review', 'info'], active: ['Active', 'success'], suspended: ['Suspended', 'error'], pending: ['Pending', 'warning'] }
-const VOL_STATUS: Record<string, [string, Variant]> = { pending: ['Pending', 'warning'], in_progress: ['In progress', 'info'], cleared: ['Cleared', 'success'], expired: ['Expired', 'error'], suspended: ['Suspended', 'error'], withdrawn: ['Withdrawn', 'neutral'] }
 
 const CHECK_COLOR: Record<CheckState, string> = { done: 'var(--color-success)', todo: '#C9971B', na: 'var(--color-text-muted)' }
 const CHECK_GLYPH: Record<CheckState, string> = { done: '✓', todo: '✗', na: '–' }
@@ -213,15 +213,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const { data: vp } = await supabase.from('volunteer_profile').select('id, status').eq('guardian_id', guardian.id).maybeSingle()
     if (vp) {
       // Read clearance/cert/step via service role (some are admin-RLS) scoped to this volunteer.
-      const { data: vc } = await adb.from('volunteer_clearance').select('status, waiver_signed_date').eq('volunteer_id', vp.id).eq('season', SEASON).maybeSingle()
+      const { data: vc } = await adb.from('volunteer_clearance').select('status, waiver_signed_date, rc_quiz_passed, yp_quiz_passed').eq('volunteer_id', vp.id).eq('season', SEASON).maybeSingle()
       const { data: cert } = await adb.from('youth_protection_cert').select('expiration_date').eq('volunteer_id', vp.id).order('expiration_date', { ascending: false }).limit(1).maybeSingle()
       const { data: bg } = await adb.from('volunteer_step').select('status').eq('volunteer_id', vp.id).eq('step', 'background_check').maybeSingle()
-      const st = vc?.status ?? vp.status
-      const [label, variant] = VOL_STATUS[st] ?? [st, 'neutral']
       const exp = cert?.expiration_date ?? null
       const today = new Date().toISOString().slice(0, 10)
       const apsState: 'valid' | 'expiring' | 'expired' | 'none' = exp ? (exp >= APS_VALID_THROUGH ? 'valid' : exp >= today ? 'expiring' : 'expired') : 'none'
-      volunteer = { label, variant, apsExpiry: exp, apsState, bgCheck: bg?.status === 'complete', waiver: !!vc?.waiver_signed_date }
+      const bgCheck = bg?.status === 'complete'
+      const waiver = !!vc?.waiver_signed_date
+      // Show the same bucket the admin dashboard uses, not the raw clearance status.
+      const bucket = volunteerBucket({ profileStatus: vp.status, doj: bgCheck, apsState, rc: !!vc?.rc_quiz_passed, yp: !!vc?.yp_quiz_passed, waiver })
+      const meta = VOLUNTEER_BUCKET_META[bucket]
+      volunteer = { label: meta.label, variant: meta.variant, apsExpiry: exp, apsState, bgCheck, waiver }
     }
   }
 

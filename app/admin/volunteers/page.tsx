@@ -3,6 +3,7 @@ import { AdminShell, PageHeader } from '@/components/ui'
 import VolunteersDashboard, { type VolRow } from './volunteers-dashboard'
 import ApsSyncButton from './aps-sync-button'
 import { VOLUNTEER_SEASON as SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
+import { volunteerBucket } from '@/lib/volunteer-buckets'
 
 // Reads live data via the service-role client (no cookies), so Next would otherwise
 // prerender this page static and freeze the volunteer list at deploy time.
@@ -50,22 +51,7 @@ export default async function AdminVolunteersPage() {
     const yp = !!c?.yp_quiz_passed
     const waiver = !!c?.waiver_signed_date
 
-    // Buckets. Admin-set states come from the profile; the rest is derived from
-    // this season's clearance.
-    //  · Cleared        = everything done for the season (incl. APS valid + agreements)
-    //  · Renewal pending = a RETURNING volunteer (has had an APS cert) with a season
-    //                      renewal outstanding — APS expiring/expired, quizzes, or agreements
-    //  · In progress     = new volunteer still in initial setup. No APS cert ever → here.
-    const ps = p.status as string
-    let bucket: VolRow['bucket']
-    if (ps === 'denied') bucket = 'denied'
-    else if (ps === 'deactivated' || ps === 'suspended' || ps === 'withdrawn') bucket = 'deactivated'
-    else {
-      const core = doj && aps === 'valid' && rc && yp
-      if (core && waiver) bucket = 'cleared'
-      else if (aps !== 'none') bucket = 'renewal_pending' // has/had an APS cert → renewal, not initial setup
-      else bucket = 'in_progress'
-    }
+    const bucket = volunteerBucket({ profileStatus: p.status, doj, apsState: aps, rc, yp, waiver })
 
     return {
       id: p.id,
