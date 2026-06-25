@@ -5,6 +5,11 @@ export const VOLUNTEER_SEASON = '2026-27'
 // APS certificates must be valid through the end of the season.
 export const APS_VALID_THROUGH = '2027-05-31'
 
+// Volunteers sign two documents each season, in this order:
+//  1. the same Release of Liability the guardians sign (student_participation), and
+//  2. the Registered Volunteer policy acknowledgment (volunteer).
+export const VOLUNTEER_WAIVER_TYPES = ['student_participation', 'volunteer'] as const
+
 export type CurrentVolunteer = {
   profileId: string
   status: string

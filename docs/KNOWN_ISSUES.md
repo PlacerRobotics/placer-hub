@@ -63,17 +63,22 @@ Severity: **[BLOCKER]** = needed before launch · **[FIX]** = real bug, should f
 - **[LATER] "Default to prior team"** not wired (prior team only in `triage_notes`).
 
 ### Volunteers
-- **[RESOLVED] Volunteer waiver is now the real, versioned waiver** (mig 0043 seeds the
-  `volunteer` `waiver_template`). `/volunteer/waiver` renders the actual body and records a
-  `waiver_signature` (version, body_hash snapshot, first+last typed name, acceptance date,
-  email, IP/UA). Renew now routes through the same page (no more bypass server action).
-- **[RESOLVED] APS on the portal** — real APS links (safetysystem sign-in + CA Mandated
-  Reporter training), the certificate expiry is shown, and volunteers can self-record
-  their cert (expiry + link) via `POST /api/volunteer/aps`. Admin can still verify/override
-  from the volunteer detail page.
-- **[LATER]** Self-reported APS certs have no `verified` flag — admin entry and volunteer
-  self-report write the same `youth_protection_cert` row; add a trust/verification flag if
-  compliance requires distinguishing them.
+- **[RESOLVED] Volunteers sign TWO real, versioned agreements** each season at
+  `/volunteer/waiver`: the Release of Liability (`student_participation`, same as guardians)
+  + the Registered Volunteer policy acknowledgment (`volunteer`, mig 0043). Each is recorded
+  as its own `waiver_signature` (version, body_hash snapshot, first+last typed name,
+  acceptance date, email, IP/UA); the clearance signal flips only when both are signed.
+  `VOLUNTEER_WAIVER_TYPES` in `lib/volunteer.ts` is the source of truth. The apply route no
+  longer pre-sets `waiver_signed_date` (it would skip the real signing); renew links to the
+  same page (bypass server action removed).
+- **[RESOLVED] APS certs are read-only to volunteers** — expiry is synced automatically from
+  APS (`lib/aps.ts`; daily cron `/api/cron/volunteer-reminders` calls `syncApsForAll` when
+  `APS_API_KEY` is set). The portal shows the expiry + real APS links (safetysystem sign-in
+  + CA Mandated Reporter training); the self-report form/route and the apply-time cert-date
+  entry were removed. Admin can still set/override expiry from the volunteer detail page.
+- **[CONFIG]** APS auto-sync only runs when `APS_API_KEY` (+ optional `APS_SURVEY_CODE`) is
+  set in Vercel AND volunteers have an `aps_user_id` (from import). Until then, expiry stays
+  blank unless an admin sets it.
 - **[LATER]** RC/YP quiz are self-service; DOJ background check is still manual.
 
 ### Data / schema

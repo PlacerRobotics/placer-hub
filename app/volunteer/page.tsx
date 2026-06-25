@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader, EmptyState, InfoAlert } from '@/components/ui'
 import { getCurrentVolunteer, VOLUNTEER_SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
-import ApsCertForm from './aps-cert-form'
 
 type Tone = 'complete' | 'warn' | 'pending'
 const DOT: Record<Tone, string> = { complete: 'var(--color-success)', warn: '#C9971B', pending: 'var(--color-error)' }
@@ -85,7 +84,7 @@ export default async function VolunteerPortal() {
         <Row tone={apsTone} label="APS Mandated Reporter Training" detail={apsDetail} />
         <Row tone={rc ? 'complete' : 'pending'} label="Robotics Center Use Quiz" detail={rc ? `Passed ${clearance?.rc_quiz_passed_date ?? ''} · ${clearance?.rc_quiz_score ?? ''}%` : 'Not passed this season (90% to pass).'} action={rc ? undefined : { label: 'Take Quiz', href: '/volunteer/quiz/rc' }} />
         <Row tone={yp ? 'complete' : 'pending'} label="Youth Protection Quiz" detail={yp ? `Passed ${clearance?.yp_quiz_passed_date ?? ''} · ${clearance?.yp_quiz_score ?? ''}%` : 'Not passed this season (90% to pass).'} action={yp ? undefined : { label: 'Take Quiz', href: '/volunteer/quiz/yp' }} />
-        <Row tone={waiver ? 'complete' : 'pending'} label="Annual Waiver" detail={waiver ? `Signed ${new Date(clearance!.waiver_signed_date).toLocaleDateString()} — ${clearance?.waiver_signature_text ?? ''}` : 'Not signed this season.'} action={waiver ? undefined : { label: 'Sign Waiver', href: '/volunteer/waiver' }} />
+        <Row tone={waiver ? 'complete' : 'pending'} label="Annual Agreements" detail={waiver ? `Signed ${new Date(clearance!.waiver_signed_date).toLocaleDateString()} — ${clearance?.waiver_signature_text ?? ''}` : 'Release of Liability + volunteer policy — not signed this season.'} action={waiver ? undefined : { label: 'Sign', href: '/volunteer/waiver' }} />
         <Row tone={clearance?.key_access_granted ? 'complete' : 'warn'} label="Key Access" detail={clearance?.key_access_granted ? `Granted (${clearance.key_access_type ?? 'card'})` : clearance?.key_access_requested && clearance.key_access_requested !== 'none' ? `Requested (${clearance.key_access_requested}) — pending admin approval.` : 'No access requested.'} />
       </div>
 
@@ -94,12 +93,18 @@ export default async function VolunteerPortal() {
           <h3 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.5rem' }}>APS certificate</h3>
           <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
             CA Mandated Reporter (AB 506) training is required and must stay valid through {APS_VALID_THROUGH}.
+            {cert?.expiration_date
+              ? <> Your certificate is on file (expires {cert.expiration_date}).</>
+              : <> No certificate on file yet.</>}
+          </div>
+          <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            Your expiry is synced automatically from APS — no need to enter it here.
           </div>
           <div style={{ marginTop: '0.625rem', fontSize: '0.8125rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <a href={APS_SIGN_IN} target="_blank" rel="noopener noreferrer" style={extLink}>Sign in to APS — view my certificates →</a>
             <a href={APS_TRAINING} target="_blank" rel="noopener noreferrer" style={extLink}>Start the CA Mandated Reporter training →</a>
+            {cert?.cert_url && <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={extLink}>View my certificate →</a>}
           </div>
-          <ApsCertForm expiration={cert?.expiration_date ?? ''} certUrl={cert?.cert_url ?? ''} />
         </div>
         <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '1rem 1.25rem' }}>
           <h3 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.5rem' }}>My Teams</h3>

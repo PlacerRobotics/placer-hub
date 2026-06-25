@@ -62,25 +62,24 @@ export async function POST(request: NextRequest) {
     programs.length ? `Programs: ${programs.join(', ')}` : '',
     b.primary_role ? `Role: ${b.primary_role}` : '',
     b.is_returning ? 'Returning volunteer' : '',
+    b.aps_choice === 'have' ? 'APS: has a current certificate (verify via APS sync)' : b.aps_choice === 'enroll' ? 'APS: needs enrollment' : '',
     (b.street_address || b.city) ? `Address: ${[b.street_address, b.city, b.state, b.zip].filter(Boolean).join(', ')}` : '',
     b.has_door_access ? `Has door access: ${b.door_access_type ?? 'yes'}` : '',
   ].filter(Boolean).join(' · ') || null
+  // NOTE: the application's policy acknowledgment + signature gate the application
+  // (recorded as the policy_acknowledgment step above). The annual signed agreements
+  // (Release of Liability + Registered Volunteer policy) are a separate, legally
+  // recorded step the volunteer completes in the portal (/volunteer/waiver) — do NOT
+  // pre-set waiver_signed_date here, or the portal would skip the real signing.
   await db.from('volunteer_clearance').upsert({
     volunteer_id: profileId, season: SEASON, status: 'pending',
     application_submitted_at: new Date().toISOString(), application_source: 'hub',
     key_access_requested: keyReq,
-    waiver_signed_date: new Date().toISOString(), waiver_signature_text: signature, waiver_signed_by_ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown',
     notes,
   }, { onConflict: 'volunteer_id,season' })
 
-  // 5. APS self-reported certificate (admin verifies).
-  const apsExpiry = String(b.aps_expiry ?? '').trim()
-  if (b.aps_choice === 'have' && apsExpiry) {
-    const exists = (await db.from('youth_protection_cert').select('id').eq('volunteer_id', profileId).eq('expiration_date', apsExpiry).maybeSingle()).data
-    if (!exists) await db.from('youth_protection_cert').insert({ volunteer_id: profileId, expiration_date: apsExpiry, issued_date: apsExpiry, cert_url: String(b.aps_cert_url ?? '').trim() || null })
-  }
-
-  // 6. Emails (best-effort).
+  // 5. Emails (best-effort). APS certificate dates are NOT collected here — they are
+  // pulled automatically from APS (see lib/aps.ts, synced by the daily cron).
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? ''
   try {
     await sendEmail({ to: [email], subject: 'Placer Robotics Volunteer Application Received', html: volunteerApplicationReceivedHtml({ name: `${first} ${last}`, season: SEASON }) })

@@ -24,8 +24,6 @@ export default function VolunteerApplyPage() {
   const [programs, setPrograms] = useState<Record<string, boolean>>({})
   const [role, setRole] = useState('general')
   const [apsChoice, setApsChoice] = useState('enroll')
-  const [apsExpiry, setApsExpiry] = useState('')
-  const [apsUrl, setApsUrl] = useState('')
   const [keyReq, setKeyReq] = useState('none')
   const [signature, setSignature] = useState('')
   const [agreeYp, setAgreeYp] = useState(false)
@@ -48,7 +46,7 @@ export default function VolunteerApplyPage() {
           street_address: f.street, city: f.city, state: f.state, zip: f.zip,
           is_returning: isReturning === 'yes', has_door_access: hasDoor === 'yes', door_access_type: hasDoor === 'yes' ? doorType : 'none',
           programs: Object.keys(programs).filter((k) => programs[k]), primary_role: role,
-          aps_choice: apsChoice, aps_expiry: apsExpiry, aps_cert_url: apsUrl, key_access_request: keyReq,
+          aps_choice: apsChoice, key_access_request: keyReq,
           signature, agreed_yp: agreeYp, agreed_rc: agreeRc,
         }),
       })
@@ -108,10 +106,8 @@ export default function VolunteerApplyPage() {
             <Radio name="aps" value="enroll" cur={apsChoice} onChange={setApsChoice} label="Enroll me in the free APS course" />
             <Radio name="aps" value="have" cur={apsChoice} onChange={setApsChoice} label="I already have a current certificate" />
           </div>
-            {apsChoice === 'have' && <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div><label style={lbl}>Certificate expiry date</label><input type="date" style={sel} value={apsExpiry} onChange={(e) => setApsExpiry(e.target.value)} /></div>
-              <div><label style={lbl}>Certificate link (optional)</label><TextInput value={apsUrl} onChange={(e) => setApsUrl(e.target.value)} placeholder="https://…" /></div>
-              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>An admin verifies your certificate.</span>
+            {apsChoice === 'have' && <div style={{ marginTop: '0.5rem' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Your certificate details (including expiry) are synced automatically from APS — no need to enter them here.</span>
             </div>}
           </div>
           <div><div style={lbl}>Key access request</div><div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
