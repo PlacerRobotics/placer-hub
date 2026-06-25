@@ -4,15 +4,24 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader, ActionCard, StatusBadge, WarningAlert, SuccessAlert } from '@/components/ui'
 import { supporterLevel } from '@/lib/supporter'
+import { APS_VALID_THROUGH } from '@/lib/volunteer'
 
 const ADMIN_EMAIL = 'kevin.miller@placerrobotics.org'
 const SEASON = '2026-27'
+
+const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+function apsDisplay(state: string, expiry: string | null): { color: string; text: string } {
+  if (state === 'valid') return { color: 'var(--color-success)', text: `Valid${expiry ? ` · expires ${fmtDate(expiry)}` : ''}` }
+  if (state === 'expiring') return { color: '#C9971B', text: `Expires ${expiry ? fmtDate(expiry) : 'soon'} — renew soon` }
+  if (state === 'expired') return { color: 'var(--color-error)', text: `Expired${expiry ? ` ${fmtDate(expiry)}` : ''} — renew` }
+  return { color: 'var(--color-text-muted)', text: 'Not on file' }
+}
 // Fallback so "Pay Now via Zeffy" always works even if season_config is unset.
 const ZEFFY_REGISTRATION_URL = 'https://www.zeffy.com/en-US/ticketing/2026-27-placer-robotics-mshs-registration'
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
-type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean }
+type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean }
 type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; division: string; isIq: boolean; studentId: string; dropRequested: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
@@ -52,7 +61,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let zeffyStudentUrl: string | null = null
   let fundraisingMethods: string[] = []
   let employerCompany = ''
-  let volunteer: { label: string; variant: Variant } | null = null
+  let volunteer: { label: string; variant: Variant; apsExpiry: string | null; apsState: 'valid' | 'expiring' | 'expired' | 'none'; bgCheck: boolean; waiver: boolean } | null = null
 
   if (guardian) {
     const familyId = guardian.family_id
@@ -164,6 +173,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           isIqKid,
           registered,
           paid,
+          // Wizard still has something for the family to do: register (non-IQ) or sign waivers (IQ).
+          needsWizard: isIqKid ? !isSigned : !registered,
         })
 
         if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
@@ -199,10 +210,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // Volunteer clearance for the logged-in guardian.
     const { data: vp } = await supabase.from('volunteer_profile').select('id, status').eq('guardian_id', guardian.id).maybeSingle()
     if (vp) {
-      const { data: vc } = await supabase.from('volunteer_clearance').select('status').eq('volunteer_id', vp.id).eq('season', SEASON).maybeSingle()
+      // Read clearance/cert/step via service role (some are admin-RLS) scoped to this volunteer.
+      const { data: vc } = await adb.from('volunteer_clearance').select('status, waiver_signed_date').eq('volunteer_id', vp.id).eq('season', SEASON).maybeSingle()
+      const { data: cert } = await adb.from('youth_protection_cert').select('expiration_date').eq('volunteer_id', vp.id).order('expiration_date', { ascending: false }).limit(1).maybeSingle()
+      const { data: bg } = await adb.from('volunteer_step').select('status').eq('volunteer_id', vp.id).eq('step', 'background_check').maybeSingle()
       const st = vc?.status ?? vp.status
       const [label, variant] = VOL_STATUS[st] ?? [st, 'neutral']
-      volunteer = { label, variant }
+      const exp = cert?.expiration_date ?? null
+      const today = new Date().toISOString().slice(0, 10)
+      const apsState: 'valid' | 'expiring' | 'expired' | 'none' = exp ? (exp >= APS_VALID_THROUGH ? 'valid' : exp >= today ? 'expiring' : 'expired') : 'none'
+      volunteer = { label, variant, apsExpiry: exp, apsState, bgCheck: bg?.status === 'complete', waiver: !!vc?.waiver_signed_date }
     }
   }
 
@@ -323,10 +340,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <div style={{ fontSize: '1.0625rem', fontWeight: 700 }}>{card.name} <span style={{ fontSize: '0.8125rem', fontWeight: 400, color: 'var(--color-text-muted)' }}>· {card.program}</span></div>
                 <StatusBadge label={card.complete ? 'Ready' : 'In progress'} variant={card.complete ? 'success' : 'warning'} />
               </div>
+              {card.needsWizard && (
+                <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.625rem' }}>
+                  {card.isIqKid ? `Sign the waivers to finish ${card.name.split(' ')[0]}’s setup.` : `Complete these steps to secure ${card.name.split(' ')[0]}’s spot:`}
+                </p>
+              )}
               <div className="student-checks" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
-                {card.checks.map((c) => (
+                {card.checks.map((c, i) => (
                   <div key={c.cap} style={{ textAlign: 'center', padding: '0.5rem 0.375rem', border: '1px solid var(--color-border)', borderRadius: 8 }}>
-                    <div style={{ fontSize: '0.625rem', textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--color-text-muted)', marginBottom: 3 }}>{c.cap}</div>
+                    <div style={{ fontSize: '0.625rem', textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--color-text-muted)', marginBottom: 3 }}>{i + 1} · {c.cap}</div>
                     <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: CHECK_COLOR[c.state] }}>{CHECK_GLYPH[c.state]} {c.val}</div>
                   </div>
                 ))}
@@ -334,7 +356,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
                 <span>{card.detail}</span>
                 <span style={{ display: 'flex', gap: '0.875rem' }}>
-                  {!card.complete && <Link href={`/register?student=${card.studentId}`} style={smallLink}>Complete registration →</Link>}
+                  {card.needsWizard && <Link href={`/register?student=${card.studentId}`} style={{ ...smallLink, color: 'var(--color-gold-dark)' }}>Continue registration →</Link>}
                   <Link href="/dashboard/edit" style={smallLink}>Edit details</Link>
                 </span>
               </div>
@@ -347,13 +369,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <a href={zeffyStudentUrl || ZEFFY_REGISTRATION_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.5rem', padding: '7px 14px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 6, textDecoration: 'none' }}>Pay Now via Zeffy →</a>
                 </div>
               )}
-              {!card.isIqKid && !card.registered && fsStatus === 'cleared_to_register' && (
-                <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
-                  <span style={{ color: 'var(--color-text-muted)' }}>Complete registration to pay</span>
-                  <Link href={`/register?student=${card.studentId}`} style={smallLink}>Complete Registration →</Link>
-                </div>
-              )}
-
               {/* Fundraising row (non-IQ, registered) — family-level method (Part 4). */}
               {!card.isIqKid && fsStatus === 'registered' && (
                 <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
@@ -445,12 +460,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <section style={section}>
           <h2 className="text-section-title" style={sectionTitle}>My volunteer info</h2>
           <div style={panel}>
-            <div style={rowFlex}>
+            <div style={{ ...rowFlex, borderBottom: volunteer ? '1px solid var(--color-border)' : 'none' }}>
               <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Registered Volunteer status</span>
               {volunteer
                 ? <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><StatusBadge label={volunteer.label} variant={volunteer.variant} /><Link href="/volunteer" style={smallLink}>View →</Link></span>
                 : <Link href="/volunteer/apply" style={smallLink}>Become a Registered Volunteer →</Link>}
             </div>
+            {volunteer && (() => {
+              const aps = apsDisplay(volunteer.apsState, volunteer.apsExpiry)
+              return (
+                <>
+                  <div style={{ ...rowFlex, borderBottom: '1px solid var(--color-border)' }}>
+                    <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Abuse Prevention (APS)</span>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: aps.color }}>{aps.text}</span>
+                  </div>
+                  <div style={{ ...rowFlex, borderBottom: '1px solid var(--color-border)' }}>
+                    <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Background check</span>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: volunteer.bgCheck ? 'var(--color-success)' : '#C9971B' }}>{volunteer.bgCheck ? '✓ Complete' : '✗ Not complete'}</span>
+                  </div>
+                  <div style={rowFlex}>
+                    <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Volunteer waiver</span>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: volunteer.waiver ? 'var(--color-success)' : '#C9971B' }}>{volunteer.waiver ? '✓ Signed' : '✗ Not signed'}</span>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </section>
       )}
