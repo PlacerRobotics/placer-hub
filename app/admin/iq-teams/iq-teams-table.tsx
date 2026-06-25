@@ -8,8 +8,15 @@ import { StatusBadge } from '@/components/ui'
 type Variant = 'success' | 'warning' | 'info' | 'error' | 'neutral'
 export type IqRow = {
   id: string; label: string; teamNumber: string; kit: string; coach: string; students: number; waivers: string
-  status: string; statusLabel: string; statusVariant: Variant; fee: string; feeAmount: number; feeSource: string
+  status: string; statusLabel: string; statusVariant: Variant; fee: string; feeState: string; feeAmount: number; feeTotal: number; feeSource: string
   events: boolean; created: string; createdRaw: string
+}
+
+const FEE_BADGE: Record<string, { label: string; variant: Variant }> = {
+  paid: { label: 'paid', variant: 'success' },
+  partial: { label: 'partial', variant: 'info' },
+  unpaid: { label: 'unpaid', variant: 'warning' },
+  not_applicable: { label: 'n/a', variant: 'neutral' },
 }
 
 const STATUS_FILTERS: { key: string; label: string }[] = [
@@ -33,7 +40,7 @@ const COLS: Col[] = [
   { key: 'students', label: 'Students', get: (r) => r.students, sortable: true },
   { key: 'waivers', label: 'Waivers', get: (r) => r.waivers, sortable: false },
   { key: 'statusLabel', label: 'Status', get: (r) => r.statusLabel, sortable: true },
-  { key: 'fee', label: 'Fee', get: (r) => r.fee, sortable: true },
+  { key: 'fee', label: 'Fee', get: (r) => r.feeState, sortable: true },
   { key: 'events', label: 'events.vex', get: (r) => (r.events ? 1 : 0), sortable: true },
 ]
 
@@ -104,10 +111,15 @@ export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: 
                 <td style={cell}>{r.waivers}</td>
                 <td style={cell}><StatusBadge label={r.statusLabel} variant={r.statusVariant} /></td>
                 <td style={cell}>
-                  <StatusBadge label={r.fee} variant={r.fee === 'paid' ? 'success' : 'warning'} />
-                  {r.fee === 'paid' && (r.feeAmount > 0 || r.feeSource) && (
+                  {(() => { const b = FEE_BADGE[r.feeState] ?? FEE_BADGE.unpaid; return <StatusBadge label={b.label} variant={b.variant} /> })()}
+                  {r.feeState === 'paid' && (r.feeAmount > 0 || r.feeSource) && (
                     <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
                       {r.feeAmount > 0 ? `$${r.feeAmount.toLocaleString()}` : ''}{r.feeAmount > 0 && r.feeSource ? ' · ' : ''}{r.feeSource ? feeSourceLabel(r.feeSource) : ''}
+                    </div>
+                  )}
+                  {r.feeState === 'partial' && (
+                    <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                      ${r.feeAmount.toLocaleString()} of ${r.feeTotal.toLocaleString()}{r.feeSource ? ` · ${feeSourceLabel(r.feeSource)}` : ''}
                     </div>
                   )}
                 </td>
