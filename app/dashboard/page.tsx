@@ -196,7 +196,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const adb = createAdminClient()
     const { data: famRow } = await adb.from('family').select('employer_match_company').eq('id', familyId).maybeSingle()
     employerCompany = famRow?.employer_match_company ?? ''
-    const { data: coachTms } = await adb.from('team_member').select('team:team_id ( id, team_name, team_number, program, division, status )').eq('guardian_id', guardian.id).eq('season', SEASON).eq('team_role', 'coach').is('revoked_at', null)
+    const { data: coachTms } = await adb.from('team_member').select('team:team_id ( id, team_name, team_number, program, division, status, team_fee_status, team_fee_amount, team_payment_reference_code )').eq('guardian_id', guardian.id).eq('season', SEASON).eq('team_role', 'coach').is('revoked_at', null)
     coachTeams = (coachTms ?? []).map((c: any) => (Array.isArray(c.team) ? c.team[0] : c.team)).filter(Boolean)
     if (coachTeams.length) {
       const ids = coachTeams.map((t: any) => t.id)
@@ -263,10 +263,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   // Team-centric "My teams": one row per team, grouping my kids onto their team and
   // merging with any team I coach (a team can be both).
-  type TeamRow = { id: string; label: string; programLabel: string; divisionLabel: string; isIq: boolean; coached: boolean; status?: string; count: number; kids: { studentId: string; name: string; dropRequested: boolean }[] }
+  type TeamRow = { id: string; label: string; programLabel: string; divisionLabel: string; isIq: boolean; coached: boolean; status?: string; feeStatus?: string; feeAmount?: number; payRef?: string; count: number; kids: { studentId: string; name: string; dropRequested: boolean }[] }
   const teamRowMap: Record<string, TeamRow> = {}
   for (const t of coachTeams) {
-    teamRowMap[t.id] = { id: t.id, label: t.team_name || t.team_number || 'Team', programLabel: PROGRAM_LABELS[t.program] ?? t.program, divisionLabel: DIVISION_LABELS[t.division] ?? t.division, isIq: t.program === 'vex_iq', coached: true, status: t.status, count: teamCount[t.id] ?? 0, kids: [] }
+    teamRowMap[t.id] = { id: t.id, label: t.team_name || t.team_number || 'Team', programLabel: PROGRAM_LABELS[t.program] ?? t.program, divisionLabel: DIVISION_LABELS[t.division] ?? t.division, isIq: t.program === 'vex_iq', coached: true, status: t.status, feeStatus: t.team_fee_status ?? undefined, feeAmount: t.team_fee_amount != null ? Number(t.team_fee_amount) : undefined, payRef: t.team_payment_reference_code ?? undefined, count: teamCount[t.id] ?? 0, kids: [] }
   }
   for (const k of kidTeams) {
     const row = (teamRowMap[k.teamId] ??= { id: k.teamId, label: k.teamLabel, programLabel: k.program, divisionLabel: DIVISION_LABELS[k.division] ?? k.division, isIq: k.isIq, coached: false, count: 0, kids: [] })
@@ -282,6 +282,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const fn = c.name.split(' ')[0]
     if (c.needsWizard) todos.push({ label: `Finish registration for ${fn}`, cta: 'Continue', href: `/register?student=${c.studentId}` })
     else if (!c.isIqKid && !c.paid) todos.push({ label: c.fundReceivedAt ? `Pay ${fn}’s $40 registration fee` : `Pay ${fn}’s $40 fee + $${c.fundTarget || 550} fundraising commitment (due ${c.fundDeadline})`, cta: 'Pay via Zeffy', external: zeffyStudentUrl || ZEFFY_REGISTRATION_URL })
+  }
+  // IQ coach team fee — outstanding until the $1,200 fee is paid, even after the
+  // coordinator has approved the team.
+  for (const t of coachedTeams) {
+    if (t.isIq && t.feeStatus !== 'paid' && t.feeStatus !== 'not_applicable') {
+      todos.push({ label: `Pay your VEX IQ team fee — $${(t.feeAmount || 1200).toLocaleString()}${t.payRef ? ` (ref ${t.payRef})` : ''}`, cta: 'Pay via Zeffy', external: zeffyIqUrl ?? undefined, href: zeffyIqUrl ? undefined : '/dashboard' })
+    }
   }
   if (showSignPrompt) todos.push({ label: 'Sign your family agreements', cta: 'Review & sign', href: '/waivers' })
   if (volunteer && (volunteer.apsState === 'expired' || volunteer.apsState === 'expiring')) {
@@ -425,7 +432,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                           </div>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             {tm.status ? <StatusBadge label={lbl} variant={variant} /> : null}
-                            {tm.isIq && tm.status === 'pending_payment' && zeffyIqUrl && <Link href={zeffyIqUrl} target="_blank" style={smallLink}>Pay $1,200 →</Link>}
+                            {tm.isIq && tm.feeStatus !== 'paid' && tm.feeStatus !== 'not_applicable' && zeffyIqUrl && <Link href={zeffyIqUrl} target="_blank" style={smallLink}>Pay ${(tm.feeAmount || 1200).toLocaleString()} →</Link>}
                             {tm.isIq && <Link href={`/iq/team/${tm.id}`} style={smallLink}>Manage →</Link>}
                           </span>
                         </div>
