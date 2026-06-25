@@ -11,19 +11,31 @@ const ICON: Record<Tone, string> = { complete: '✓', warn: '!', pending: '○' 
 
 const APS_SIGN_IN = 'https://safetysystem.abusepreventionsystems.com/auth/sign_in'
 const APS_TRAINING = 'https://safetysystem.abusepreventionsystems.com/training_assignments/overview/california'
-const extLink: React.CSSProperties = { color: 'var(--color-navy-deep)', fontWeight: 600 }
 
-function Row({ tone, label, detail, action }: { tone: Tone; label: string; detail: React.ReactNode; action?: { label: string; href: string } }) {
+type Action = { label: string; href: string; external?: boolean; variant?: 'primary' | 'link' }
+
+function ActionEl({ a }: { a: Action }) {
+  const style: React.CSSProperties = a.variant === 'link'
+    ? { fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)', textDecoration: 'none', whiteSpace: 'nowrap' }
+    : { fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-navy-deep)', background: 'var(--color-gold)', padding: '7px 14px', borderRadius: 6, textDecoration: 'none', whiteSpace: 'nowrap' }
+  return a.external
+    ? <a href={a.href} target="_blank" rel="noopener noreferrer" style={style}>{a.label}</a>
+    : <Link href={a.href} style={style}>{a.label}</Link>
+}
+
+function Row({ tone, label, detail, actions }: { tone: Tone; label: string; detail: React.ReactNode; actions?: Action[] }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.875rem', padding: '0.875rem 0', borderBottom: '1px solid var(--color-border)' }}>
       <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: DOT[tone], color: '#fff', fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>{ICON[tone]}</span>
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{label}</div>
         <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>{detail}</div>
       </div>
-      {action && (
-        <Link href={action.href} style={{ flexShrink: 0, fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-navy-deep)', background: 'var(--color-gold)', padding: '7px 14px', borderRadius: 6, textDecoration: 'none' }}>{action.label}</Link>
-      )}
+      {actions?.length ? (
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          {actions.map((a, i) => <ActionEl key={i} a={a} />)}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -46,23 +58,31 @@ export default async function VolunteerPortal() {
   const db = createAdminClient()
   const [{ data: clearance }, { data: cert }, { data: bgStep }, { data: teamRows }] = await Promise.all([
     db.from('volunteer_clearance').select('*').eq('volunteer_id', vol.profileId).eq('season', VOLUNTEER_SEASON).maybeSingle(),
-    db.from('youth_protection_cert').select('expiration_date, cert_url, aps_cert_id').eq('volunteer_id', vol.profileId).order('expiration_date', { ascending: false }).limit(1).maybeSingle(),
+    db.from('youth_protection_cert').select('issued_date, expiration_date, cert_url, aps_cert_id').eq('volunteer_id', vol.profileId).order('expiration_date', { ascending: false }).limit(1).maybeSingle(),
     db.from('volunteer_step').select('status').eq('volunteer_id', vol.profileId).eq('step', 'background_check').maybeSingle(),
     db.from('team_member').select('team_role, team:team_id(team_name, team_number, program)').eq('guardian_id', vol.guardianId).is('revoked_at', null),
   ])
 
-  // APS status. The certificate expiry (when on file) is shown here; volunteers can
-  // record/update it themselves in the "APS certificate" card below.
-  // Show the APS certificate number as a link straight to the APS certificate view.
-  const certLabel = cert?.aps_cert_id ? `Cert #${cert.aps_cert_id}` : 'View certificate'
-  const certLink = cert?.cert_url
-    ? <> · <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={extLink}>{certLabel}</a></>
-    : cert?.aps_cert_id ? <> · Cert #{cert.aps_cert_id}</> : null
+  // APS: completed date + expiry + a link to the cert and the APS system. Expiry syncs
+  // automatically from APS, so there's no manual entry here.
   let apsTone: Tone = 'pending'
-  let apsDetail: React.ReactNode = <>Required — complete CA Mandated Reporter training, then record your certificate below.</>
+  let apsDetail: React.ReactNode
+  const apsActions: Action[] = []
   if (cert?.expiration_date) {
-    if (cert.expiration_date >= APS_VALID_THROUGH) { apsTone = 'complete'; apsDetail = <>Valid through {cert.expiration_date}.{certLink}</> }
-    else { apsTone = 'warn'; apsDetail = <>Renewal required — expires {cert.expiration_date} (must be valid through {APS_VALID_THROUGH}).{certLink}</> }
+    const completed = cert.issued_date ? `Completed ${cert.issued_date} · ` : ''
+    if (cert.expiration_date >= APS_VALID_THROUGH) {
+      apsTone = 'complete'
+      apsDetail = `${completed}Valid through ${cert.expiration_date}.`
+    } else {
+      apsTone = 'warn'
+      apsDetail = `${completed}Expires ${cert.expiration_date} — renewal required (must be valid through ${APS_VALID_THROUGH}).`
+    }
+    if (cert.cert_url) apsActions.push({ label: cert.aps_cert_id ? `Cert #${cert.aps_cert_id}` : 'View certificate', href: cert.cert_url, external: true })
+    apsActions.push({ label: 'APS system', href: APS_SIGN_IN, external: true, variant: 'link' })
+  } else {
+    apsDetail = 'Required — complete CA Mandated Reporter (AB 506) training. Your expiry syncs automatically from APS once complete.'
+    apsActions.push({ label: 'Start training', href: APS_TRAINING, external: true })
+    apsActions.push({ label: 'APS system', href: APS_SIGN_IN, external: true, variant: 'link' })
   }
 
   const dojDone = bgStep?.status === 'complete'
@@ -77,7 +97,7 @@ export default async function VolunteerPortal() {
 
       <div style={{ marginBottom: '1.5rem' }}>
         <InfoAlert title={`Status: ${(clearance?.status ?? vol.status).replace(/_/g, ' ')}`}>
-          Complete each step below to be cleared for the season. Both quizzes and the annual waiver must be renewed each season.
+          Complete each step below to be cleared for the season. Both quizzes and the annual agreements must be renewed each season.
         </InfoAlert>
       </div>
 
@@ -85,31 +105,19 @@ export default async function VolunteerPortal() {
         <h3 style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)', margin: '1rem 0 0.25rem' }}>Clearance checklist</h3>
         <Row tone={'complete'} label="Application" detail={clearance?.application_submitted_at ? `Submitted ${new Date(clearance.application_submitted_at).toLocaleDateString()}` : 'On file'} />
         <Row tone={dojDone ? 'complete' : 'pending'} label="DOJ Background Check" detail={dojDone ? 'Cleared' : 'Required (one-time) — coordinated with the registrar.'} />
-        <Row tone={apsTone} label="APS Mandated Reporter Training" detail={apsDetail} />
-        <Row tone={rc ? 'complete' : 'pending'} label="Robotics Center Use Quiz" detail={rc ? `Passed ${clearance?.rc_quiz_passed_date ?? ''} · ${clearance?.rc_quiz_score ?? ''}%` : 'Not passed this season (90% to pass).'} action={rc ? undefined : { label: 'Take Quiz', href: '/volunteer/quiz/rc' }} />
-        <Row tone={yp ? 'complete' : 'pending'} label="Youth Protection Quiz" detail={yp ? `Passed ${clearance?.yp_quiz_passed_date ?? ''} · ${clearance?.yp_quiz_score ?? ''}%` : 'Not passed this season (90% to pass).'} action={yp ? undefined : { label: 'Take Quiz', href: '/volunteer/quiz/yp' }} />
-        <Row tone={waiver ? 'complete' : 'pending'} label="Annual Agreements" detail={waiver ? `Signed ${new Date(clearance!.waiver_signed_date).toLocaleDateString()} — ${clearance?.waiver_signature_text ?? ''}` : 'Release of Liability, Center Use, Youth Protection + volunteer policy — not signed this season.'} action={waiver ? undefined : { label: 'Sign', href: '/volunteer/waiver' }} />
+        <Row tone={apsTone} label="APS Mandated Reporter Training" detail={apsDetail} actions={apsActions} />
+        <Row tone={rc ? 'complete' : 'pending'} label="Robotics Center Use Quiz" detail={rc ? `Passed ${clearance?.rc_quiz_passed_date ?? ''} · ${clearance?.rc_quiz_score ?? ''}%` : 'Not passed this season (90% to pass).'} actions={rc ? undefined : [{ label: 'Take Quiz', href: '/volunteer/quiz/rc' }]} />
+        <Row tone={yp ? 'complete' : 'pending'} label="Youth Protection Quiz" detail={yp ? `Passed ${clearance?.yp_quiz_passed_date ?? ''} · ${clearance?.yp_quiz_score ?? ''}%` : 'Not passed this season (90% to pass).'} actions={yp ? undefined : [{ label: 'Take Quiz', href: '/volunteer/quiz/yp' }]} />
+        <Row
+          tone={waiver ? 'complete' : 'pending'}
+          label="Annual Agreements"
+          detail={waiver ? `Signed ${new Date(clearance!.waiver_signed_date).toLocaleDateString()} — ${clearance?.waiver_signature_text ?? ''}` : 'Release of Liability, Center Use, Youth Protection + volunteer policy — not signed this season.'}
+          actions={waiver ? [{ label: 'View signed', href: '/volunteer/agreements' }] : [{ label: 'Sign', href: '/volunteer/waiver' }]}
+        />
         <Row tone={clearance?.key_access_granted ? 'complete' : 'warn'} label="Key Access" detail={clearance?.key_access_granted ? `Granted (${clearance.key_access_type ?? 'card'})` : clearance?.key_access_requested && clearance.key_access_requested !== 'none' ? `Requested (${clearance.key_access_requested}) — pending admin approval.` : 'No access requested.'} />
       </div>
 
       <div style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-        <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '1rem 1.25rem' }}>
-          <h3 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.5rem' }}>APS certificate</h3>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
-            CA Mandated Reporter (AB 506) training is required and must stay valid through {APS_VALID_THROUGH}.
-            {cert?.expiration_date
-              ? <> Your certificate is on file (expires {cert.expiration_date}).</>
-              : <> No certificate on file yet.</>}
-          </div>
-          <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
-            Your expiry is synced automatically from APS — no need to enter it here.
-          </div>
-          <div style={{ marginTop: '0.625rem', fontSize: '0.8125rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <a href={APS_SIGN_IN} target="_blank" rel="noopener noreferrer" style={extLink}>Sign in to APS — view my certificates →</a>
-            <a href={APS_TRAINING} target="_blank" rel="noopener noreferrer" style={extLink}>Start the CA Mandated Reporter training →</a>
-            {cert?.cert_url && <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={extLink}>{cert.aps_cert_id ? `View my certificate (Cert #${cert.aps_cert_id}) →` : 'View my certificate →'}</a>}
-          </div>
-        </div>
         <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '1rem 1.25rem' }}>
           <h3 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.5rem' }}>My Teams</h3>
           {teams.length ? teams.map((t: any, i: number) => (
