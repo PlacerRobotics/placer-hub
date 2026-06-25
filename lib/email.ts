@@ -122,7 +122,7 @@ const P = 'margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.65;'
  * /login, which consumes the implicit-flow tokens (hash) and forwards to redirectPath.
  * Creates the auth user if needed (magiclink requires an existing user).
  */
-export async function sendMagicLinkEmail({ email, redirectPath, subject, heading, intro, buttonLabel, preheader }: {
+export async function sendMagicLinkEmail({ email, redirectPath, subject, heading, intro, buttonLabel, preheader, details }: {
   email: string
   redirectPath: string
   subject: string
@@ -130,6 +130,7 @@ export async function sendMagicLinkEmail({ email, redirectPath, subject, heading
   intro: string
   buttonLabel: string
   preheader?: string
+  details?: { label: string; value: string }[]
 }): Promise<{ ok: boolean; error?: string }> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -143,14 +144,25 @@ export async function sendMagicLinkEmail({ email, redirectPath, subject, heading
   const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email: to, options: { redirectTo: landing } })
   const link = (data as { properties?: { action_link?: string } } | null)?.properties?.action_link
   if (error || !link) return { ok: false, error: error?.message ?? 'no_link' }
-  return sendEmail({ to: [to], subject, html: magicLinkHtml({ heading, intro, buttonLabel, link, preheader }) })
+  return sendEmail({ to: [to], subject, html: magicLinkHtml({ heading, intro, buttonLabel, link, preheader, details }) })
+}
+
+// A styled "key: value" details block (Student / Parent(s) / Program / Team, etc.).
+// Blank values are dropped; returns '' if nothing to show.
+export function emailKeyValues(items: { label: string; value: string }[]): string {
+  const rows = items
+    .filter((i) => i.value && i.value.trim())
+    .map((i) => `<div style="margin:3px 0;color:#3a4a63;font-size:14px;line-height:1.6;"><span style="color:#7a879c;">${i.label}:</span> <strong style="color:#0E2558;">${i.value}</strong></div>`)
+    .join('')
+  return rows ? `<div style="margin:0 0 18px;background-color:#f7f9fc;border:1px solid #e6eaf1;border-radius:8px;padding:12px 16px;">${rows}</div>` : ''
 }
 
 // The branded magic-link / invite email body. Extracted so it can be previewed
-// without generating a live sign-in link.
-export function magicLinkHtml({ heading, intro, buttonLabel, link, preheader }: { heading: string; intro: string; buttonLabel: string; link: string; preheader?: string }): string {
+// without generating a live sign-in link. Optional `details` renders a context block.
+export function magicLinkHtml({ heading, intro, buttonLabel, link, preheader, details }: { heading: string; intro: string; buttonLabel: string; link: string; preheader?: string; details?: { label: string; value: string }[] }): string {
   return emailShell(heading, `
     <p style="${P}">${intro}</p>
+    ${details?.length ? emailKeyValues(details) : ''}
     ${emailButton(link, buttonLabel)}
     <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">This link signs you in automatically and can be used once. If the button doesn't work, copy this address into your browser:</p>
     <p style="margin:6px 0 0;font-size:12px;line-height:1.5;word-break:break-all;"><a href="${link}" style="color:#0E2558;">${link}</a></p>`,
@@ -262,13 +274,23 @@ export function registrationConfirmationHtml({
   paymentRef,
   zeffyUrl,
   season,
+  guardianNames,
+  teamNumber,
 }: {
   studentName: string
   programLabel: string
   paymentRef: string
   zeffyUrl: string | null
   season: string
+  guardianNames?: string
+  teamNumber?: string | null
 }): string {
+  const details = emailKeyValues([
+    { label: 'Student', value: studentName },
+    { label: 'Program', value: programLabel },
+    { label: 'Parent(s)', value: guardianNames ?? '' },
+    { label: 'Team', value: teamNumber ?? '' },
+  ])
   const payBlock = zeffyUrl
     ? `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="background-color:#F2C352;border-radius:8px;">
          <a href="${zeffyUrl}" style="display:inline-block;padding:13px 28px;color:#0E2558;font-size:15px;font-weight:700;text-decoration:none;">Pay online via Zeffy &rarr;</a>
@@ -283,7 +305,8 @@ export function registrationConfirmationHtml({
       </td></tr>
       <tr><td style="padding:32px;">
         <h1 style="margin:0 0 12px;color:#0E2558;font-size:20px;font-weight:700;">Registration received</h1>
-        <p style="margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.6;">We've received the ${season} registration for <strong>${studentName}</strong> (${programLabel}). Thank you!</p>
+        <p style="margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.6;">We've received the ${season} registration. Thank you!</p>
+        ${details}
         <p style="margin:0 0 8px;color:#3a4a63;font-size:15px;line-height:1.6;">Your spot is secured once payment is received. Include this payment reference with your payment:</p>
         <p style="margin:0 0 20px;"><span style="display:inline-block;background-color:#f4f6fb;border:1px solid #e6eaf1;border-radius:6px;padding:8px 14px;color:#0E2558;font-size:16px;font-weight:700;letter-spacing:0.04em;">${paymentRef}</span></p>
         ${payBlock}

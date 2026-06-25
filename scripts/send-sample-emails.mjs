@@ -33,8 +33,8 @@ const SAMPLE_LINK = `${SITE}/login?redirectTo=/register#access_token=SAMPLE`
 
 // [subject, html] for each real template, with representative sample data.
 const samples = [
-  ['Magic link — register invite', magicLinkHtml({ heading: 'You’re invited to register', intro: "You're cleared to register for the 2026-27 Placer Robotics season. Click below to sign in and complete your student's registration.", buttonLabel: 'Sign in to register →', link: SAMPLE_LINK, preheader: 'Sign in to complete your Placer Robotics registration.' })],
-  ['Registration confirmation', registrationConfirmationHtml({ studentName: 'Sally Sample', programLabel: 'VEX V5', paymentRef: 'REG-1A2B3C4D', zeffyUrl: ZEFFY, season: SEASON })],
+  ['Magic link — register invite', magicLinkHtml({ heading: 'You’re invited to register', intro: "You're cleared to register for the 2026-27 Placer Robotics season. Click below to sign in and complete your student's registration.", buttonLabel: 'Sign in to register →', link: SAMPLE_LINK, preheader: 'Sign in to complete your Placer Robotics registration.', details: [{ label: 'Parents', value: 'Jordan Sample, Alex Sample' }, { label: 'Students', value: 'Sally Sample — VEX V5 (Team 12345A); Kyle Sample — Combat' }] })],
+  ['Registration confirmation', registrationConfirmationHtml({ studentName: 'Sally Sample', programLabel: 'VEX V5', paymentRef: 'REG-1A2B3C4D', zeffyUrl: ZEFFY, season: SEASON, guardianNames: 'Jordan Sample, Alex Sample', teamNumber: '12345A' })],
   ['Application received', studentApplicationReceivedHtml({ guardianName: 'Jordan Sample', studentName: 'Sally Sample', programLabel: 'VEX V5', season: SEASON })],
   ['Application accepted', applicationAcceptedHtml({ guardianName: 'Jordan Sample', studentName: 'Sally Sample', season: SEASON })],
   ['Cleared to register', clearedToRegisterHtml({ guardianName: 'Jordan Sample', season: SEASON, loginUrl: `${SITE}/login` })],

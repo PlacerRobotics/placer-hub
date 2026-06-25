@@ -4,6 +4,7 @@ import { sendMagicLinkEmail } from '@/lib/email'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
+import { familyInviteDetails } from '@/lib/invite-summary'
 
 const SEASON = '2026-27'
 
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     // Only cleared_to_register + not yet invited. One email per unique guardian.
     const { data: rows } = await db
       .from('family_season')
-      .select('id, magic_link_sent, status, family:family_id ( primary_email )')
+      .select('id, family_id, magic_link_sent, status, family:family_id ( primary_email )')
       .in('id', ids)
       .eq('status', 'cleared_to_register')
       .eq('magic_link_sent', false)
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
       const email = fs.family?.primary_email
       if (!email) continue
       if (!sentEmails.has(email)) {
+        const details = await familyInviteDetails(db, fs.family_id, SEASON)
         const r = await sendMagicLinkEmail({
           email,
           redirectPath: '/register',
@@ -60,6 +62,7 @@ export async function POST(req: NextRequest) {
           intro: "You're cleared to register for the 2026-27 Placer Robotics season. Click below to sign in and complete your student's registration.",
           buttonLabel: 'Sign in to register →',
           preheader: 'Sign in to complete your Placer Robotics registration.',
+          details,
         })
         if (!r.ok) { failures.push(`${email}: ${r.error ?? 'failed'}`); continue }
         sentEmails.add(email)

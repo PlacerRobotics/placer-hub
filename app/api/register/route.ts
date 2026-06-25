@@ -333,7 +333,7 @@ export async function POST(request: NextRequest) {
   // 11. Confirmation email to both guardians + the student. Best-effort — never
   // fail the registration if email isn't configured or the send errors.
   try {
-    const { data: gs } = await db.from('guardian').select('login_email, communication_email').eq('family_id', familyId)
+    const { data: gs } = await db.from('guardian').select('first_name, last_name, login_email, communication_email').eq('family_id', familyId)
     const { data: stu } = await db
       .from('student')
       .select('first_name, last_name, communication_email')
@@ -344,6 +344,10 @@ export async function POST(request: NextRequest) {
       stu?.communication_email,
     ].filter(Boolean) as string[]
     const studentName = stu ? `${stu.first_name} ${stu.last_name}`.trim() : 'your student'
+    const guardianNames = [...new Set(((gs ?? []) as any[]).map((g) => `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim()).filter(Boolean))].join(', ')
+    // The student's assigned team number for this season, if any (across this registration's enrollments).
+    const { data: tms } = await db.from('team_member').select('team:team_id ( team_number )').eq('student_id', studentId).eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null)
+    const teamNumber = ((tms ?? []) as any[]).map((t) => (Array.isArray(t.team) ? t.team[0] : t.team)?.team_number).filter(Boolean).join(', ') || null
     const subject = `Registration received — ${studentName} (Placer Robotics ${SEASON})`
     const html = registrationConfirmationHtml({
       studentName,
@@ -351,6 +355,8 @@ export async function POST(request: NextRequest) {
       paymentRef,
       zeffyUrl: config?.zeffy_student_url ?? null,
       season: SEASON,
+      guardianNames,
+      teamNumber,
     })
     const sent = await sendEmail({ to: recipients, subject, html })
     const status = sent.ok ? 'sent' : sent.error === 'no_api_key' ? 'skipped' : 'failed'
