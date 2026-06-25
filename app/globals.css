@@ -135,3 +135,8 @@ a:hover {
   /* Let queue titles wrap instead of clipping on narrow screens */
   .admin-queue-title { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
 }
+
+/* Family dashboard — student check cells: 4-up on desktop, 2-up on phones */
+@media (max-width: 520px) {
+  .student-checks { grid-template-columns: repeat(2, 1fr) !important; }
+}
