@@ -186,18 +186,27 @@ export async function POST(request: NextRequest) {
     if (primary) enrollmentId = enr.id
   }
 
-  // 7b. Auto-link IQ members to their coach's team (the IQ team application set
-  // "iq_team:<id>" in the application's triage_notes). Best-effort; admin can
-  // reassign later via the team tools.
+  // 7b. Auto-link the student to their team if the application carries a team pointer
+  // in triage_notes — "iq_team:<id>" (IQ, set by the coach flow) or "team:<id>"
+  // (V5/Combat, set by the returning-registration import). Places them on the team
+  // matching that team's program. Best-effort; admin can reassign via the team tools.
   try {
     const { data: appn } = await db.from('student_application').select('triage_notes').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
-    const m = (appn?.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i)
-    if (m && enrollmentId) {
+    const m = (appn?.triage_notes ?? '').match(/(?:iq_team|team):([0-9a-f-]{36})/i)
+    if (m) {
       const teamId = m[1]
-      const { data: existingTm } = await db.from('team_member').select('id').eq('enrollment_id', enrollmentId).eq('team_id', teamId).eq('team_role', 'student').is('revoked_at', null).maybeSingle()
-      if (!existingTm) await db.from('team_member').insert({ team_id: teamId, enrollment_id: enrollmentId, student_id: studentId, season: SEASON, team_role: 'student', program: 'vex_iq' })
+      const { data: t } = await db.from('team').select('id, program').eq('id', teamId).maybeSingle()
+      if (t) {
+        // Link the enrollment whose program matches the team (falls back to primary).
+        const { data: enrForTeam } = await db.from('enrollment').select('id').eq('student_id', studentId).eq('season', SEASON).eq('program', t.program).maybeSingle()
+        const enrId = enrForTeam?.id ?? enrollmentId
+        if (enrId) {
+          const { data: existingTm } = await db.from('team_member').select('id').eq('enrollment_id', enrId).eq('team_id', teamId).eq('team_role', 'student').is('revoked_at', null).maybeSingle()
+          if (!existingTm) await db.from('team_member').insert({ team_id: teamId, enrollment_id: enrId, student_id: studentId, season: SEASON, team_role: 'student', program: t.program })
+        }
+      }
     }
-  } catch (e) { console.error('[register] IQ team auto-link failed:', e) }
+  } catch (e) { console.error('[register] team auto-link failed:', e) }
 
   // 8. Emergency contacts — replace any existing for this student.
   await db.from('emergency_contact').delete().eq('student_id', studentId)

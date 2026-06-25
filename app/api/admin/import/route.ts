@@ -66,15 +66,24 @@ export async function POST(request: NextRequest) {
       if (!g1email) throw new Error('missing guardian1_email')
       const g1last = String(r.guardian1_last ?? '').trim()
 
+      // Household address — captured on the family by default (and reused on the student).
+      const street = [String(r.street_address ?? '').trim(), String(r.street_address_2 ?? '').trim()].filter(Boolean).join(' ') || null
+      const cityVal = String(r.city ?? '').trim()
+      const stateVal = String(r.state ?? '').trim() || null
+      const zipVal = String(r.zip ?? '').trim()
+      const familyAddress = { street_address: street, city: cityVal || null, state: stateVal, zip_code: zipVal || null }
+
       // 1. family (by guardian1 email)
       let familyId: string
       const { data: existingFam } = await db.from('family').select('id').ilike('primary_email', g1email).maybeSingle()
       if (existingFam) {
         familyId = existingFam.id
+        const famUpd = Object.fromEntries(Object.entries(familyAddress).filter(([, v]) => v != null))
+        if (Object.keys(famUpd).length) await db.from('family').update(famUpd).eq('id', familyId)
       } else {
         const { data: fam, error } = await db
           .from('family')
-          .insert({ primary_email: g1email, display_name: g1last ? `${g1last} Family` : null })
+          .insert({ primary_email: g1email, display_name: g1last ? `${g1last} Family` : null, ...familyAddress })
           .select('id')
           .single()
         if (error) throw new Error(error.message)
@@ -111,23 +120,20 @@ export async function POST(request: NextRequest) {
       }
       await db.from('guardian').upsert(guardianRows, { onConflict: 'login_email' })
 
-      // 3. student (city/zip_code are NOT NULL)
-      const city = String(r.city ?? '').trim()
-      const zip = String(r.zip ?? '').trim()
+      // 3. student (city/zip_code are NOT NULL) — reuses the household address above.
       const grade = parseGrade(r.grade_fall_2026)
-      if (!city || !zip) throw new Error('missing city or zip (required for student)')
+      if (!cityVal || !zipVal) throw new Error('missing city or zip (required for student)')
       if (grade == null) throw new Error('missing/invalid grade_fall_2026')
       const studentEmail = String(r.student_email ?? '').trim().toLowerCase() || null
-      const street = [String(r.street_address ?? '').trim(), String(r.street_address_2 ?? '').trim()].filter(Boolean).join(' ') || null
       const studentFields = {
         first_name: String(r.student_first_name ?? '').trim(),
         last_name: String(r.student_last_name ?? '').trim(),
         communication_email: studentEmail,
         phone: String(r.student_phone ?? '').trim() || null,
         street_address: street,
-        city,
-        state: String(r.state ?? '').trim() || null,
-        zip_code: zip,
+        city: cityVal,
+        state: stateVal,
+        zip_code: zipVal,
         grade,
         school_raw: String(r.school ?? '').trim() || null,
         tshirt_size: parseTshirt(r.tshirt_size),
@@ -164,7 +170,17 @@ export async function POST(request: NextRequest) {
 
       const program = String(r.program_26_27 ?? '').trim().toLowerCase()
       const validProgram = ['vex_v5', 'combat', 'vex_iq', 'both'].includes(program) ? program : 'not_sure'
-      const noteParts = [r.team_26_27 ? `Team: ${String(r.team_26_27).trim()}` : null, String(r.notes ?? '').trim() || null].filter(Boolean)
+      // Resolve the team to a machine pointer so the student is auto-placed on it when
+      // they register (iq_team: for IQ, team: for V5/Combat). Falls back to a free-text
+      // note if the team can't be matched (admin can assign manually).
+      const teamRef = String(r.team_26_27 ?? '').trim()
+      let teamNote: string | null = teamRef ? `Team: ${teamRef}` : null
+      if (teamRef) {
+        let t = (await db.from('team').select('id, program').eq('season', SEASON).eq('team_number', teamRef).maybeSingle()).data
+        if (!t) t = (await db.from('team').select('id, program').eq('season', SEASON).ilike('team_name', teamRef).maybeSingle()).data
+        if (t) teamNote = `${t.program === 'vex_iq' ? 'iq_team' : 'team'}:${t.id}`
+      }
+      const noteParts = [teamNote, String(r.notes ?? '').trim() || null].filter(Boolean)
 
       // student_application (program intent, admin_import source)
       await db.from('student_application').insert({
