@@ -143,13 +143,18 @@ export async function sendMagicLinkEmail({ email, redirectPath, subject, heading
   const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email: to, options: { redirectTo: landing } })
   const link = (data as { properties?: { action_link?: string } } | null)?.properties?.action_link
   if (error || !link) return { ok: false, error: error?.message ?? 'no_link' }
-  const html = emailShell(heading, `
+  return sendEmail({ to: [to], subject, html: magicLinkHtml({ heading, intro, buttonLabel, link, preheader }) })
+}
+
+// The branded magic-link / invite email body. Extracted so it can be previewed
+// without generating a live sign-in link.
+export function magicLinkHtml({ heading, intro, buttonLabel, link, preheader }: { heading: string; intro: string; buttonLabel: string; link: string; preheader?: string }): string {
+  return emailShell(heading, `
     <p style="${P}">${intro}</p>
     ${emailButton(link, buttonLabel)}
     <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">This link signs you in automatically and can be used once. If the button doesn't work, copy this address into your browser:</p>
     <p style="margin:6px 0 0;font-size:12px;line-height:1.5;word-break:break-all;"><a href="${link}" style="color:#0E2558;">${link}</a></p>`,
     preheader ?? intro)
-  return sendEmail({ to: [to], subject, html })
 }
 
 export function iqTeamSubmittedHtml({ coachName, teamName, season, paymentRef, zeffyUrl, fee }: { coachName: string; teamName: string | null; season: string; paymentRef: string; zeffyUrl: string | null; fee: number }): string {
