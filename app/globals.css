@@ -106,3 +106,32 @@ a {
 a:hover {
   color: var(--color-gold-dark);
 }
+
+/* Admin shell — responsive sidebar (hamburger drawer on mobile) */
+.admin-menu-btn { display: none; }
+.admin-overlay { display: none; }
+@media (max-width: 768px) {
+  .admin-menu-btn { display: inline-flex; }
+  .admin-nav {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    bottom: 0;
+    z-index: 60;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.35);
+    overflow-y: auto;
+  }
+  .admin-nav.admin-nav--open { transform: translateX(0); }
+  .admin-overlay.admin-overlay--open {
+    display: block;
+    position: fixed;
+    inset: 52px 0 0 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 55;
+  }
+  .admin-main { padding: 1.25rem 1rem !important; }
+  /* Let queue titles wrap instead of clipping on narrow screens */
+  .admin-queue-title { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
+}

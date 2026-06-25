@@ -1,8 +1,11 @@
 /**
  * AdminShell — layout for authenticated admin pages
- * Darker navy header, sidebar nav on desktop, queue-first layout
+ * Darker navy header, sidebar nav on desktop, hamburger drawer on mobile.
  */
 
+'use client'
+
+import { useState } from 'react'
 import Link from 'next/link'
 
 interface AdminShellProps {
@@ -31,13 +34,15 @@ const NAV_ITEMS = [
 ]
 
 export function AdminShell({ children, activePath = '/admin' }: AdminShellProps) {
+  const [open, setOpen] = useState(false)
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--color-bg-light)' }}>
       {/* Header */}
       <header
         style={{
           backgroundColor: 'var(--color-navy-darker)',
-          padding: '0 1.5rem',
+          padding: '0 1rem',
           height: '52px',
           display: 'flex',
           alignItems: 'center',
@@ -48,11 +53,26 @@ export function AdminShell({ children, activePath = '/admin' }: AdminShellProps)
           borderBottom: '1px solid rgba(255,255,255,0.06)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span
-            className="font-display"
-            style={{ color: 'var(--color-gold)', fontSize: '1rem', fontWeight: 700 }}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          <button
+            type="button"
+            className="admin-menu-btn"
+            aria-label="Toggle menu"
+            onClick={() => setOpen((o) => !o)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--color-gold)',
+              fontSize: '1.4rem',
+              lineHeight: 1,
+              cursor: 'pointer',
+              padding: 0,
+              alignItems: 'center',
+            }}
           >
+            ☰
+          </button>
+          <span className="font-display" style={{ color: 'var(--color-gold)', fontSize: '1rem', fontWeight: 700 }}>
             Placer Robotics
           </span>
           <span
@@ -71,17 +91,18 @@ export function AdminShell({ children, activePath = '/admin' }: AdminShellProps)
           </span>
         </div>
 
-        <Link
-          href="/dashboard"
-          style={{ color: 'var(--color-blue-gray)', fontSize: '0.8125rem', textDecoration: 'none' }}
-        >
+        <Link href="/dashboard" style={{ color: 'var(--color-blue-gray)', fontSize: '0.8125rem', textDecoration: 'none' }}>
           Exit admin
         </Link>
       </header>
 
       <div style={{ display: 'flex' }}>
-        {/* Sidebar */}
+        {/* Backdrop (mobile, when drawer open) */}
+        <div className={`admin-overlay${open ? ' admin-overlay--open' : ''}`} onClick={() => setOpen(false)} />
+
+        {/* Sidebar / drawer */}
         <nav
+          className={`admin-nav${open ? ' admin-nav--open' : ''}`}
           style={{
             width: '200px',
             minHeight: 'calc(100vh - 52px)',
@@ -96,9 +117,10 @@ export function AdminShell({ children, activePath = '/admin' }: AdminShellProps)
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setOpen(false)}
                 style={{
                   display: 'block',
-                  padding: '0.5rem 1.25rem',
+                  padding: '0.625rem 1.25rem',
                   fontSize: '0.875rem',
                   color: isActive ? 'var(--color-gold)' : 'var(--color-blue-gray)',
                   textDecoration: 'none',
@@ -114,7 +136,7 @@ export function AdminShell({ children, activePath = '/admin' }: AdminShellProps)
         </nav>
 
         {/* Main content */}
-        <main style={{ flex: 1, padding: '1.75rem 2rem', minWidth: 0 }}>
+        <main className="admin-main" style={{ flex: 1, padding: '1.75rem 2rem', minWidth: 0 }}>
           {children}
         </main>
       </div>

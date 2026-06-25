@@ -105,6 +105,7 @@ export function AdminQueueTable({ title, count, items, emptyMessage }: AdminQueu
             >
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
+                  className="admin-queue-title"
                   style={{
                     fontWeight: 500,
                     fontSize: '0.9375rem',
