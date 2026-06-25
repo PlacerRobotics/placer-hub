@@ -129,7 +129,13 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
       if (!confirm(`This will send magic links to ${guardians} guardians. Continue?`)) return
       const ids = [...new Set(eligible.map((r) => r.familySeasonId).filter(Boolean))]
       const d = await call('/api/admin/registrations/bulk', { action, ids })
-      if (d) { setMsg(`Sent ${d.sent ?? 0} invite(s).`); setSelected(new Set()) }
+      if (d) {
+        const fails: string[] = d.failures ?? []
+        setMsg(fails.length
+          ? `Sent ${d.sent ?? 0} invite(s). ${fails.length} failed: ${fails.join('; ')}`
+          : `Sent ${d.sent ?? 0} invite(s).`)
+        setSelected(new Set())
+      }
     } else if (action === 'cancel') {
       if (!confirm(`Cancel ${selectedRows.length} selected registration(s)?`)) return
       const ids = [...new Set(selectedRows.map((r) => r.familySeasonId).filter(Boolean))]

@@ -49,7 +49,8 @@ export default function LoginPage() {
           setErrorMessage(error.message)
           return
         }
-        // Strip the tokens from the URL, then continue into the app.
+        // Record the sign-in (last_login_at), then continue into the app.
+        fetch('/api/auth/touch-login', { method: 'POST' }).catch(() => {})
         const rt = new URLSearchParams(window.location.search).get('redirectTo')
         window.history.replaceState(null, '', window.location.pathname)
         router.replace(rt && rt.startsWith('/') ? rt : '/dashboard')

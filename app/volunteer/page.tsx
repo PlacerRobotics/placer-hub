@@ -9,7 +9,12 @@ type Tone = 'complete' | 'warn' | 'pending'
 const DOT: Record<Tone, string> = { complete: 'var(--color-success)', warn: '#C9971B', pending: 'var(--color-error)' }
 const ICON: Record<Tone, string> = { complete: '✓', warn: '!', pending: '○' }
 
-function Row({ tone, label, detail, action }: { tone: Tone; label: string; detail: string; action?: { label: string; href: string } }) {
+const APS_URL = 'https://www.abusepreventionsystems.com'
+const ApsLink = () => (
+  <a href={APS_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>abusepreventionsystems.com</a>
+)
+
+function Row({ tone, label, detail, action }: { tone: Tone; label: string; detail: React.ReactNode; action?: { label: string; href: string } }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.875rem', padding: '0.875rem 0', borderBottom: '1px solid var(--color-border)' }}>
       <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: '50%', background: DOT[tone], color: '#fff', fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>{ICON[tone]}</span>
@@ -49,10 +54,10 @@ export default async function VolunteerPortal() {
 
   // APS status.
   let apsTone: Tone = 'pending'
-  let apsDetail = 'Required — complete CA Mandated Reporter training. Enroll at abusepreventionsystems.com'
+  let apsDetail: React.ReactNode = <>Required — complete CA Mandated Reporter training. Enroll at <ApsLink />.</>
   if (cert?.expiration_date) {
     if (cert.expiration_date >= APS_VALID_THROUGH) { apsTone = 'complete'; apsDetail = `Valid through ${cert.expiration_date}.` }
-    else { apsTone = 'warn'; apsDetail = `Renewal required — expires ${cert.expiration_date} (must be valid through ${APS_VALID_THROUGH}). Renew at abusepreventionsystems.com` }
+    else { apsTone = 'warn'; apsDetail = <>Renewal required — expires {cert.expiration_date} (must be valid through {APS_VALID_THROUGH}). Renew at <ApsLink />.</> }
   }
 
   const dojDone = bgStep?.status === 'complete'

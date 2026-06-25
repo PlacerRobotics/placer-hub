@@ -34,7 +34,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   })
   if (!r.ok) return NextResponse.json({ error: r.error === 'no_api_key' ? "Email isn't configured yet." : 'Could not send the invite.' }, { status: 500 })
 
-  await db.from('family_season').update({ magic_link_sent: true }).eq('id', id)
+  await db.from('family_season').update({ magic_link_sent: true, updated_at: new Date().toISOString() }).eq('id', id)
   await logRegAudit(db, {
     familySeasonId: id,
     field: 'magic_link_sent',

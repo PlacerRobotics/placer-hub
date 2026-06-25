@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 export type Coach = {
@@ -30,6 +29,11 @@ export function TeamCoaches({ teamId, coaches }: { teamId: string; coaches: Coac
   const [role, setRole] = useState('coach')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [nf, setNf] = useState('')
+  const [nl, setNl] = useState('')
+  const [ne, setNe] = useState('')
+  const [np, setNp] = useState('')
 
   async function search(value: string) {
     setQ(value); setPicked(null)
@@ -41,18 +45,28 @@ export function TeamCoaches({ teamId, coaches }: { teamId: string; coaches: Coac
     } catch { setHits([]) }
   }
 
+  function resetAdd() {
+    setAdding(false); setQ(''); setHits([]); setPicked(null); setRole('coach')
+    setCreating(false); setNf(''); setNl(''); setNe(''); setNp(''); setError('')
+  }
+
   async function save() {
-    if (!picked || busy) return
+    if (busy) return
+    const payload = creating
+      ? { new_guardian: { first_name: nf, last_name: nl, email: ne, phone: np }, team_role: role }
+      : picked ? { guardian_id: picked.id, team_role: role } : null
+    if (!payload) return
+    if (creating && (!nf.trim() || !nl.trim() || !ne.trim())) { setError('First name, last name, and email are required.'); return }
     setBusy(true); setError('')
     try {
       const res = await fetch(`/api/admin/teams/${teamId}/coaches`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ guardian_id: picked.id, team_role: role }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Failed to add coach.'); return }
-      setAdding(false); setQ(''); setHits([]); setPicked(null); setRole('coach'); router.refresh()
+      resetAdd(); router.refresh()
     } catch { setError('Network error.') } finally { setBusy(false) }
   }
 
@@ -102,13 +116,22 @@ export function TeamCoaches({ teamId, coaches }: { teamId: string; coaches: Coac
               ))}
             </div>
           )}
-          {!picked && q.trim().length >= 2 && hits.length === 0 && (
+          {!picked && !creating && q.trim().length >= 2 && hits.length === 0 && (
             <p className="text-help" style={{ marginTop: '0.5rem' }}>
-              No match. <Link href="/admin/guardians/new">Create new guardian →</Link>
+              No match.{' '}
+              <button type="button" onClick={() => { setCreating(true); const parts = q.trim().split(/\s+/); setNf(parts[0] ?? ''); setNl(parts.slice(1).join(' ')) }} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-navy-deep)', textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit' }}>Create new guardian →</button>
             </p>
           )}
           {picked && (
             <p style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>Selected: <strong>{gName(picked)}</strong> ({picked.login_email})</p>
+          )}
+          {creating && (
+            <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <input style={inputStyle} value={nf} onChange={(e) => setNf(e.target.value)} placeholder="First name" />
+              <input style={inputStyle} value={nl} onChange={(e) => setNl(e.target.value)} placeholder="Last name" />
+              <input style={{ ...inputStyle, gridColumn: '1 / -1' }} value={ne} onChange={(e) => setNe(e.target.value)} placeholder="Email (sign-in)" type="email" />
+              <input style={{ ...inputStyle, gridColumn: '1 / -1' }} value={np} onChange={(e) => setNp(e.target.value)} placeholder="Phone (optional)" />
+            </div>
           )}
 
           <div style={{ marginTop: '0.875rem' }}>
@@ -120,8 +143,8 @@ export function TeamCoaches({ teamId, coaches }: { teamId: string; coaches: Coac
 
           {error && <p style={{ color: 'var(--color-error)', fontSize: '0.8125rem', marginTop: '0.625rem' }}>{error}</p>}
           <div style={{ display: 'flex', gap: '0.625rem', marginTop: '1rem' }}>
-            <button type="button" onClick={save} disabled={!picked || busy} style={{ ...btn, backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', cursor: picked && !busy ? 'pointer' : 'not-allowed' }}>{busy ? 'Saving…' : 'Save'}</button>
-            <button type="button" onClick={() => { setAdding(false); setQ(''); setHits([]); setPicked(null); setError('') }} disabled={busy} style={{ ...btn, backgroundColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}>Cancel</button>
+            <button type="button" onClick={save} disabled={(!picked && !creating) || busy} style={{ ...btn, backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', cursor: (picked || creating) && !busy ? 'pointer' : 'not-allowed' }}>{busy ? 'Saving…' : creating ? 'Create & Add' : 'Save'}</button>
+            <button type="button" onClick={resetAdd} disabled={busy} style={{ ...btn, backgroundColor: 'var(--color-border)', color: 'var(--color-text-primary)' }}>Cancel</button>
           </div>
         </div>
       )}

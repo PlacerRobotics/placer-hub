@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     for (const fsId of ids) {
       const { data: fs } = await db.from('family_season').select('status').eq('id', fsId).maybeSingle()
       if (!fs) continue
-      await db.from('family_season').update({ status: 'cancelled' }).eq('id', fsId)
+      await db.from('family_season').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', fsId)
       await logRegAudit(db, { familySeasonId: fsId, field: 'status', oldValue: fs.status, newValue: 'cancelled', changedBy: admin.id })
       count++
     }
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
         sentEmails.add(email)
         sent++
       }
-      await db.from('family_season').update({ magic_link_sent: true }).eq('id', fs.id)
+      await db.from('family_season').update({ magic_link_sent: true, updated_at: new Date().toISOString() }).eq('id', fs.id)
       await logRegAudit(db, { familySeasonId: fs.id, field: 'magic_link_sent', oldValue: 'false', newValue: 'true', changedBy: admin.id, notes: `bulk invite to ${email}` })
     }
     return NextResponse.json({ ok: true, sent, guardians: sentEmails.size, failures })

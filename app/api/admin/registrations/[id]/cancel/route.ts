@@ -14,7 +14,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { data: fs } = await db.from('family_season').select('status').eq('id', id).maybeSingle()
   if (!fs) return NextResponse.json({ error: 'Registration not found.' }, { status: 404 })
 
-  const { error } = await db.from('family_season').update({ status: 'cancelled' }).eq('id', id)
+  const { error } = await db.from('family_season').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   await logRegAudit(db, { familySeasonId: id, field: 'status', oldValue: fs.status, newValue: 'cancelled', changedBy: admin.id })
   return NextResponse.json({ ok: true })

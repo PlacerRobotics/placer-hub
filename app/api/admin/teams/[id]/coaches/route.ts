@@ -23,12 +23,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
   }
-  const guardianId = String(body.guardian_id ?? '').trim()
+  let guardianId = String(body.guardian_id ?? '').trim()
   const teamRole = String(body.team_role ?? '').trim()
-  if (!guardianId) return NextResponse.json({ error: 'A guardian is required.' }, { status: 400 })
   if (!COACH_ROLES.has(teamRole)) return NextResponse.json({ error: 'Invalid role.' }, { status: 400 })
 
   const db = createAdminClient()
+
+  // Create a new (coach-only) guardian inline when no existing one was picked.
+  if (!guardianId && body.new_guardian) {
+    const ng = body.new_guardian
+    const email = String(ng?.email ?? '').trim().toLowerCase()
+    const first = String(ng?.first_name ?? '').trim()
+    const last = String(ng?.last_name ?? '').trim()
+    const phone = String(ng?.phone ?? '').trim()
+    if (!email || !first || !last) return NextResponse.json({ error: 'New coach needs a first name, last name, and email.' }, { status: 400 })
+
+    // Reuse a guardian with this email if one exists; otherwise create a coach-only family + guardian.
+    const { data: existing } = await db.from('guardian').select('id').ilike('login_email', email).maybeSingle()
+    if (existing) {
+      guardianId = existing.id
+    } else {
+      const { data: fam, error: famErr } = await db.from('family').insert({ primary_email: email, display_name: `${last} (coach)` }).select('id').single()
+      if (famErr) return NextResponse.json({ error: famErr.message }, { status: 500 })
+      const { data: g, error: gErr } = await db.from('guardian').insert({
+        family_id: fam.id, first_name: first, last_name: last, login_email: email, phone: phone || '', role: 'other',
+      }).select('id').single()
+      if (gErr) return NextResponse.json({ error: gErr.message }, { status: 500 })
+      guardianId = g.id
+    }
+  }
+
+  if (!guardianId) return NextResponse.json({ error: 'A guardian is required.' }, { status: 400 })
 
   // team_member.program is NOT NULL — inherit it from the team.
   const { data: team, error: teamErr } = await db.from('team').select('program').eq('id', teamId).maybeSingle()
