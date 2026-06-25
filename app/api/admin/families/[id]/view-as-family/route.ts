@@ -26,7 +26,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const { data, error } = await (db as any).auth.admin.generateLink({
       type: 'magiclink',
       email,
-      options: { redirectTo: `${site}/api/auth/callback` },
+      // Land on /login, which consumes the implicit-flow tokens; /api/auth/callback
+      // (server) can't read the URL hash, so the session wouldn't be set there.
+      options: { redirectTo: `${site}/login?redirectTo=/dashboard` },
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     actionLink = data?.properties?.action_link ?? ''

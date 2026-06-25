@@ -37,6 +37,20 @@ export default function RolesManager({ admins }: { admins: AdminRow[] }) {
   const [busy, setBusy] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newRole, setNewRole] = useState('registration_admin')
+  const [impEmail, setImpEmail] = useState('')
+  const [impMsg, setImpMsg] = useState('')
+
+  async function impersonate() {
+    if (!impEmail.trim()) return
+    setBusy(true); setImpMsg('')
+    try {
+      const res = await fetch('/api/admin/impersonate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: impEmail.trim() }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setImpMsg(d.error || 'Failed.'); return }
+      window.open(d.url, '_blank', 'noopener')
+      setImpMsg(`Opened a session as ${d.email} in a new tab.`)
+    } catch { setImpMsg('Network error.') } finally { setBusy(false) }
+  }
 
   async function post(url: string, body: any) {
     setBusy(true); setMsg('')
@@ -65,6 +79,18 @@ export default function RolesManager({ admins }: { admins: AdminRow[] }) {
             Grant role
           </button>
           {msg && <span style={{ fontSize: '0.8125rem', color: msg.includes('fail') || msg.includes('No account') || msg.includes('only') ? 'var(--color-error)' : 'var(--color-text-muted)' }}>{msg}</span>}
+        </div>
+      </div>
+
+      <div style={card}>
+        <h3 className="text-card-title" style={{ marginBottom: '0.75rem' }}>Debug — view as a user</h3>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.875rem' }}>
+          Opens a one-click session as any existing user (family, coach, volunteer, admin) so you can see exactly what they see. <strong>Open in an incognito window</strong> so you don’t replace your own admin session. Super-admin only.
+        </p>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input style={{ ...input, minWidth: 240 }} type="email" placeholder="person@email.com" value={impEmail} onChange={(e) => setImpEmail(e.target.value)} />
+          <button type="button" style={navyBtn} disabled={busy || !impEmail.trim()} onClick={impersonate}>Open session as user</button>
+          {impMsg && <span style={{ fontSize: '0.8125rem', color: impMsg.startsWith('Opened') ? 'var(--color-text-muted)' : 'var(--color-error)' }}>{impMsg}</span>}
         </div>
       </div>
 
