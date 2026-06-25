@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader } from '@/components/ui'
 import AccountForm, { type AccountData } from './account-form'
+
+const SEASON = '2026-27'
 
 export default async function AccountPage() {
   const supabase = await createClient()
@@ -36,6 +39,22 @@ export default async function AccountPage() {
     .order('created_at', { ascending: true })
   const g2 = (gAll ?? []).find((g: any) => g.id !== guardian.id)
 
+  // Fundraising/payment method — editable until a payment is recorded.
+  const { data: fs } = await supabase.from('family_season').select('fundraising_methods').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
+  const { data: cfg } = await supabase.from('season_config').select('one_program_fundraising_target').eq('season', SEASON).maybeSingle()
+  // "Payment recorded" = a registration-fee payment on file, or any enrollment marked paid.
+  const { data: paidEnr } = studentIds.length
+    ? await supabase.from('enrollment').select('id').eq('season', SEASON).eq('registration_fee_status', 'paid').in('student_id', studentIds).limit(1)
+    : { data: [] as any[] }
+  const { data: payTx } = await supabase.from('payment_transaction').select('id').eq('family_id', familyId).eq('season', SEASON).limit(1)
+  const paymentLocked = (paidEnr ?? []).length > 0 || (payTx ?? []).length > 0
+  // employer-match (family) + sponsor interest (admin-RLS) via service role.
+  const adb = createAdminClient()
+  const [{ data: fam }, { data: sp }] = await Promise.all([
+    adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', familyId).maybeSingle(),
+    adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount').eq('family_id', familyId).eq('season', SEASON).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+  ])
+
   const data: AccountData = {
     guardian1: {
       name: `${guardian.first_name} ${guardian.last_name}`.trim(),
@@ -63,6 +82,17 @@ export default async function AccountPage() {
         ec_relationship: ec?.relationship ?? '',
       }
     }),
+    fundraising: {
+      methods: (fs?.fundraising_methods ?? []) as string[],
+      employer_company: fam?.employer_match_company ?? '',
+      employer_pct: fam?.employer_match_pct != null ? String(fam.employer_match_pct) : '',
+      employer_portal: fam?.employer_match_portal ?? '',
+      sponsor_business: sp?.business_name ?? '',
+      sponsor_contact: sp?.contact_name ?? '',
+      sponsor_amount: sp?.estimated_amount != null ? String(sp.estimated_amount) : '',
+      target: cfg?.one_program_fundraising_target ?? 550,
+      locked: paymentLocked,
+    },
     guardian2: g2
       ? {
           first_name: g2.first_name ?? '',

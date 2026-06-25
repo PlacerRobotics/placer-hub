@@ -13,7 +13,23 @@ export type AccountData = {
   guardian1: { name: string; email: string; communication_email: string; slack_email: string; street_address: string; city: string; state: string; zip_code: string; phone: string }
   students: { id: string; name: string; tshirt_size: string; communication_email: string; fusion_education_email: string; slack_email: string; ec_first: string; ec_last: string; ec_phone: string; ec_relationship: string }[]
   guardian2: { first_name: string; last_name: string; email: string; communication_email: string; slack_email: string; street_address: string; city: string; state: string; zip_code: string; phone: string } | null
+  fundraising: {
+    methods: string[]
+    employer_company: string; employer_pct: string; employer_portal: string
+    sponsor_business: string; sponsor_contact: string; sponsor_amount: string
+    target: number
+    locked: boolean
+  }
 }
+
+const FUND_METHODS: [string, string, string][] = [
+  ['direct_donation', 'Direct contribution via Zeffy', 'I’ll donate toward the commitment online'],
+  ['corporate_match', 'Employer / corporate match', 'My employer matches charitable donations'],
+  ['sponsored', 'Business sponsorship', 'A business is sponsoring my student'],
+  ['paper_check', 'Paper check', 'I’ll submit a paper check'],
+  ['pending', 'Financial assistance', 'I’d like to apply for financial assistance'],
+]
+const FUND_LABEL: Record<string, string> = Object.fromEntries(FUND_METHODS.map(([v, l]) => [v, l]))
 
 const WORKSPACE_HELP = 'Google Workspace email — used for Google Drive access and all communications.'
 
@@ -53,6 +69,7 @@ export default function AccountForm({ data }: { data: AccountData }) {
     <>
       {data.students.map((s) => <StudentSection key={s.id} student={s} onSaved={() => router.refresh()} />)}
       <FamilySection g1={data.guardian1} onSaved={() => router.refresh()} />
+      <FundraisingSection f={data.fundraising} onSaved={() => router.refresh()} />
       <FormSection title="Guardian 1 (you)" description="To change your login email, contact info@placerrobotics.org.">
         <FormField label="Name"><div style={{ fontSize: '0.9375rem' }}>{data.guardian1.name}</div></FormField>
         <FormField label="Login email"><div style={{ fontSize: '0.9375rem' }}>{data.guardian1.email}</div></FormField>
@@ -152,6 +169,78 @@ function FamilySection({ g1, onSaved }: { g1: AccountData['guardian1']; onSaved:
       <FormField label="ZIP" htmlFor="zip"><TextInput id="zip" value={zip} onChange={(e) => setZip(e.target.value)} /></FormField>
       <FormField label="Primary phone" htmlFor="phone"><TextInput id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></FormField>
       <div><PrimaryButton loading={busy} onClick={save}>Save contact info</PrimaryButton><Saved state={state} /></div>
+    </FormSection>
+  )
+}
+
+function FundraisingSection({ f, onSaved }: { f: AccountData['fundraising']; onSaved: () => void }) {
+  const [methods, setMethods] = useState<string[]>(f.methods.length ? f.methods : ['direct_donation'])
+  const [empCompany, setEmpCompany] = useState(f.employer_company)
+  const [empPct, setEmpPct] = useState(f.employer_pct)
+  const [empPortal, setEmpPortal] = useState(f.employer_portal)
+  const [spBusiness, setSpBusiness] = useState(f.sponsor_business)
+  const [spContact, setSpContact] = useState(f.sponsor_contact)
+  const [spAmount, setSpAmount] = useState(f.sponsor_amount)
+  const [state, setState] = useState('')
+  const [busy, setBusy] = useState(false)
+  const toggle = (v: string) => setMethods((s) => (s.includes(v) ? s.filter((x) => x !== v) : [...s, v]))
+  const hasMatch = methods.includes('corporate_match')
+  const hasSponsor = methods.includes('sponsored')
+
+  if (f.locked) {
+    return (
+      <FormSection title="Payment & Fundraising" description="Locked once a payment is recorded.">
+        <FormField label="Your fundraising method(s)" helpText="A payment has been recorded, so this is locked. To change it, contact info@placerrobotics.org.">
+          <div style={{ fontSize: '0.9375rem' }}>{f.methods.length ? f.methods.map((m) => FUND_LABEL[m] ?? m).join(', ') : '—'}</div>
+        </FormField>
+      </FormSection>
+    )
+  }
+
+  async function save() {
+    if (!methods.length) { setState('Pick at least one method.'); return }
+    if (hasMatch && !(empCompany.trim() && empPct.trim() && empPortal)) { setState('Complete the employer match fields.'); return }
+    if (hasSponsor && !(spBusiness.trim() && spContact.trim() && spAmount.trim())) { setState('Complete the sponsorship fields.'); return }
+    setBusy(true); setState('')
+    try {
+      const res = await fetch('/api/family/fundraising', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ methods, employer_company: empCompany, employer_pct: empPct, employer_portal: empPortal, sponsor_business: spBusiness, sponsor_contact: spContact, sponsor_amount: spAmount }),
+      })
+      const d = await res.json().catch(() => ({}))
+      setState(res.ok ? 'saved' : (d.error || 'Save failed.'))
+      if (res.ok) onSaved()
+    } catch { setState('Network error.') } finally { setBusy(false) }
+  }
+
+  return (
+    <FormSection title="Payment & Fundraising" description={`How you’ll meet your $${f.target} fundraising commitment. You can change this until a payment is recorded.`}>
+      {FUND_METHODS.map(([v, label, desc]) => (
+        <label key={v} style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start', cursor: 'pointer', marginBottom: '0.5rem' }}>
+          <input type="checkbox" checked={methods.includes(v)} onChange={() => toggle(v)} style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--color-navy-deep)' }} />
+          <span><span style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{label}</span><span style={{ display: 'block', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{desc}</span></span>
+        </label>
+      ))}
+      {hasMatch && (
+        <div style={{ paddingLeft: '1.625rem', display: 'grid', gap: '0.625rem' }}>
+          <FormField label="Employer name" htmlFor="fcomp"><TextInput id="fcomp" value={empCompany} onChange={(e) => setEmpCompany(e.target.value)} /></FormField>
+          <FormField label="Match percentage" htmlFor="fpct"><TextInput id="fpct" type="number" value={empPct} onChange={(e) => setEmpPct(e.target.value)} placeholder="e.g. 100" /></FormField>
+          <div>
+            <label htmlFor="fport" style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--color-text-muted)' }}>How submitted</label>
+            <select id="fport" value={empPortal} onChange={(e) => setEmpPortal(e.target.value)} style={selectStyle}>
+              <option value="">Select…</option><option value="benevity">Benevity</option><option value="yourcause">YourCause</option><option value="employer_portal">Employer portal</option><option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+      )}
+      {hasSponsor && (
+        <div style={{ paddingLeft: '1.625rem', display: 'grid', gap: '0.625rem' }}>
+          <FormField label="Business name" htmlFor="fbiz"><TextInput id="fbiz" value={spBusiness} onChange={(e) => setSpBusiness(e.target.value)} /></FormField>
+          <FormField label="Contact name" htmlFor="fcon"><TextInput id="fcon" value={spContact} onChange={(e) => setSpContact(e.target.value)} /></FormField>
+          <FormField label="Estimated amount" htmlFor="famt"><TextInput id="famt" type="number" value={spAmount} onChange={(e) => setSpAmount(e.target.value)} /></FormField>
+        </div>
+      )}
+      <div><PrimaryButton loading={busy} onClick={save}>Save fundraising</PrimaryButton><Saved state={state} /></div>
     </FormSection>
   )
 }
