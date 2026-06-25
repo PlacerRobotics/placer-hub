@@ -90,6 +90,23 @@ export function FamilyShell({
       >
         {children}
       </main>
+
+      {/* Persistent help — infrequent parents always know where to get unstuck */}
+      <footer
+        style={{
+          maxWidth: maxWidthMap[maxWidth],
+          margin: '0 auto',
+          padding: '1rem 1.5rem 2.5rem',
+          textAlign: 'center',
+          fontSize: '0.8125rem',
+          color: 'var(--color-text-muted)',
+        }}
+      >
+        Questions or stuck? Email{' '}
+        <a href="mailto:info@placerrobotics.org" style={{ color: 'var(--color-navy-deep)' }}>
+          info@placerrobotics.org
+        </a>
+      </footer>
     </div>
   )
 }

@@ -49,7 +49,7 @@ export default async function RegistrationDetailPage({
 
   // A 'both' student has two enrollment rows (vex_v5 + combat); fetch all.
   const { data: enrs } = student
-    ? await supabase.from('enrollment').select('id, program, division').eq('student_id', student.id).eq('season', SEASON)
+    ? await supabase.from('enrollment').select('id, program, division, fundraising_methods').eq('student_id', student.id).eq('season', SEASON)
     : { data: [] as any[] }
   const enrList = (enrs ?? []) as any[]
   const programVal = enrList.length > 1 ? 'both' : (enrList[0]?.program ?? '')
@@ -82,8 +82,11 @@ export default async function RegistrationDetailPage({
   // sponsorship interest in family_sponsor_interest. Read via service role (admin).
   const adb = createAdminClient()
   const { data: fam } = await adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', fs.family_id).maybeSingle()
-  const { data: sponsor } = await adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount, status').eq('family_id', fs.family_id).eq('season', SEASON).order('created_at', { ascending: false }).limit(1).maybeSingle()
-  const fundMethods = (fs.fundraising_methods ?? []) as string[]
+  const { data: sponsor } = student
+    ? await adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount, status').eq('family_id', fs.family_id).eq('season', SEASON).eq('student_id', student.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+    : { data: null as any }
+  // Per-student fundraising — from this student's enrollment(s).
+  const fundMethods = [...new Set(enrList.flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))]
 
   const name = student ? `${student.first_name} ${student.last_name}` : 'Registration'
   const assignTeams: AssignTeam[] = (allTeams ?? []).map((t: any) => ({ id: t.id, number: t.team_number ?? '', name: t.team_name ?? '', program: t.program }))

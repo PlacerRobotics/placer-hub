@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { FamilyShell, PageHeader, ActionCard, StatusBadge, WarningAlert, SuccessAlert } from '@/components/ui'
+import { FamilyShell, PageHeader, StatusBadge, WarningAlert, SuccessAlert } from '@/components/ui'
 import { supporterLevel } from '@/lib/supporter'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
 
@@ -51,8 +51,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let guardian2: { name: string; email: string } | null = null
   const studentCards: StudentCard[] = []
   const kidTeams: KidTeam[] = []
-  let firstUnregisteredName = ''
-  let firstUnregisteredStudentId = ''
   let guardianHasSigned = false
   let hasActiveWaivers = false
   let coachTeams: any[] = []
@@ -160,7 +158,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               { cap: 'Team', val: hasTeam ? (team.team_name || team.team_number || 'Assigned') : 'Pending', state: hasTeam ? 'done' : 'todo' },
             ]
         const complete = isIqKid ? isSigned : (registered && isSigned && paid && hasTeam)
-        if (!isIqKid && !registered && !firstUnregisteredName) { firstUnregisteredName = name; firstUnregisteredStudentId = s.id }
         studentCards.push({
           studentId: s.id,
           name,
@@ -274,9 +271,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const coachedTeams = Object.values(teamRowMap).filter((t) => t.coached)
   const kidOnlyTeams = Object.values(teamRowMap).filter((t) => !t.coached)
 
-  const nextSteps: { title: string; desc: string; cta: string; href: string }[] = []
-  if (firstUnregisteredName) nextSteps.push({ title: `Complete registration for ${firstUnregisteredName}`, desc: 'Finish the form and submit payment to secure the 2026–27 spot.', cta: 'Continue registration', href: firstUnregisteredStudentId ? `/register?student=${firstUnregisteredStudentId}` : '/register' })
-  if (showSignPrompt) nextSteps.push({ title: 'Sign your agreements', desc: 'Review and sign this season’s participation and policy agreements from your account.', cta: 'Review & sign', href: '/waivers' })
+  // Consolidated to-do — every outstanding action across all kids + the parent, in one list.
+  type Todo = { label: string; cta: string; href?: string; external?: string }
+  const todos: Todo[] = []
+  for (const c of studentCards) {
+    const fn = c.name.split(' ')[0]
+    if (c.needsWizard) todos.push({ label: `Finish registration for ${fn}`, cta: 'Continue', href: `/register?student=${c.studentId}` })
+    else if (!c.isIqKid && !c.paid) todos.push({ label: `Pay the $40 registration fee for ${fn}`, cta: 'Pay via Zeffy', external: zeffyStudentUrl || ZEFFY_REGISTRATION_URL })
+  }
+  if (showSignPrompt) todos.push({ label: 'Sign your family agreements', cta: 'Review & sign', href: '/waivers' })
+  if (volunteer && (volunteer.apsState === 'expired' || volunteer.apsState === 'expiring')) {
+    todos.push({ label: `Renew your Abuse Prevention (APS) — ${volunteer.apsState === 'expired' ? 'expired' : 'expiring soon'}`, cta: 'View', href: '/volunteer' })
+  }
 
   const panel: React.CSSProperties = { backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }
   const rowFlex: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem' }
@@ -307,25 +313,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </div>
       )}
 
-      {/* NEXT STEPS */}
-      {nextSteps.length > 0 && (
+      {/* WHAT'S NEXT — one consolidated to-do across all kids */}
+      {todos.length > 0 ? (
         <section style={{ marginBottom: '0.5rem' }}>
-          <ActionCard title={nextSteps[0].title} description={nextSteps[0].desc} ctaLabel={nextSteps[0].cta} href={nextSteps[0].href} />
-          {nextSteps.length > 1 && (
-            <div style={{ ...panel, marginTop: '0.75rem' }}>
-              {nextSteps.slice(1).map((a) => (
-                <div key={a.title} style={rowFlex}>
-                  <span style={{ fontSize: '0.9375rem' }}>{a.title}</span>
-                  <Link href={a.href} style={smallLink}>{a.cta} →</Link>
-                </div>
-              ))}
+          <div style={panel}>
+            <div style={{ padding: '0.75rem 1.25rem', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-navy-deep)' }}>
+              <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.9375rem' }}>What’s next · {todos.length} {todos.length === 1 ? 'item' : 'items'}</span>
             </div>
-          )}
+            {todos.map((t, i) => (
+              <div key={i} style={{ ...rowFlex, borderBottom: i < todos.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                <span style={{ fontSize: '0.9375rem' }}>{t.label}</span>
+                {t.external
+                  ? <a href={t.external} target="_blank" rel="noopener noreferrer" style={{ ...smallLink, color: 'var(--color-gold-dark)', whiteSpace: 'nowrap' }}>{t.cta} →</a>
+                  : <Link href={t.href!} style={{ ...smallLink, color: 'var(--color-gold-dark)', whiteSpace: 'nowrap' }}>{t.cta} →</Link>}
+              </div>
+            ))}
+          </div>
         </section>
-      )}
-      {nextSteps.length === 0 && fullyComplete && (
-        <div style={{ marginBottom: '0.5rem' }}><SuccessAlert title="You're all set">Every student is registered, signed, paid, and assigned to a team for {SEASON}.</SuccessAlert></div>
-      )}
+      ) : studentCards.length > 0 && fullyComplete ? (
+        <div style={{ marginBottom: '0.5rem' }}><SuccessAlert title="You're all set">Every student is registered, signed, paid, and on a team for {SEASON}.</SuccessAlert></div>
+      ) : null}
 
       {/* MY CHILDREN */}
       {studentCards.length === 0 ? (
@@ -366,6 +373,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#8a6d1a' }}>Registration fee not yet received</div>
                   <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>Pay the $40 registration fee via Zeffy to secure {card.name}’s spot.</div>
                   <a href={zeffyStudentUrl || ZEFFY_REGISTRATION_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.5rem', padding: '7px 14px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 6, textDecoration: 'none' }}>Pay Now via Zeffy →</a>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Already paid? It can take up to a day to show here — please don’t pay again.</div>
                 </div>
               )}
               {/* Fundraising commitment — per student. The $40 fee is separate (above). */}

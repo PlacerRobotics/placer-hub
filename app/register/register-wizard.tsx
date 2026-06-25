@@ -390,7 +390,7 @@ export default function RegisterWizard({
             </a>
             <ZeffyMethodsNote />
             <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0.625rem 0 1.25rem', lineHeight: 1.6 }}>
-              On Zeffy, choose the ticket for {programLabel}. You can pay just the $40 registration fee, or pick a higher ticket (e.g. Standard or Champion) to put money toward your ${fundraisingTarget} fundraising commitment too — and you can always give more later.
+              On Zeffy, choose the ticket for {programLabel}. You can pay just the $40 registration fee, or pick a higher ticket (e.g. Standard or Champion) to put money toward your ${fundraisingTarget} fundraising commitment too — and you can always give more later. Payments can take up to a day to show on your dashboard, so please don’t pay twice.
             </p>
             {fundMethods.filter((m) => SUBMIT_METHOD_MESSAGE[m]).map((m) => (
               <div key={m} style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.875rem 1rem', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>

@@ -87,7 +87,8 @@ export default function LoginPage() {
     <PublicShell maxWidth="sm">
       <h1 className="text-page-title">Sign in to Placer Robotics Hub</h1>
       <p className="text-body" style={{ marginTop: '0.75rem', color: 'var(--color-text-muted)' }}>
-        We&apos;ll email you a secure sign-in link. No password needed.
+        We&apos;ll email you a secure sign-in link — no password needed. It arrives within
+        a minute; check your spam folder if you don&apos;t see it.
       </p>
 
       {isIqCoach && (

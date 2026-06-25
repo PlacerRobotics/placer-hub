@@ -124,36 +124,41 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const methods: string[] = Array.isArray(body.fundraising_methods) ? body.fundraising_methods.filter((x: string) => FUND.includes(x)) : []
     const { data: stu } = await db.from('student').select('family_id').eq('id', studentId).maybeSingle()
     const famId = stu?.family_id
-    if (famId) {
-      const primary = FUND.find((m) => methods.includes(m)) ?? null
-      const { data: fsRow } = await db.from('family_season').select('fundraising_methods').eq('id', id).maybeSingle()
-      const before = ((fsRow?.fundraising_methods ?? []) as string[]).join(', ')
+    const { data: enrs } = await db.from('enrollment').select('id, fundraising_methods').eq('student_id', studentId).eq('season', SEASON).order('created_at', { ascending: true })
+    const enrList = enrs ?? []
+    if (famId && enrList.length) {
+      // Per-student: write the method(s) on the (primary) enrollment.
+      const before = ((enrList[0].fundraising_methods ?? []) as string[]).join(', ')
       const after = methods.join(', ')
       if (before !== after) {
-        await db.from('family_season').update({ fundraising_methods: methods, fundraising_method: primary }).eq('id', id)
+        await db.from('enrollment').update({ fundraising_methods: methods }).eq('id', enrList[0].id)
         await log('fundraising_methods', before || null, after || null)
       }
-      // Employer match lives on family — set for corporate_match, clear otherwise.
+      // Family-level union for badges/filters that read family_season.
+      const { data: allEnr } = await db.from('enrollment').select('fundraising_methods').eq('family_id', famId).eq('season', SEASON)
+      const union = [...new Set((allEnr ?? []).flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))]
+      const primary = FUND.find((m) => union.includes(m)) ?? union[0] ?? null
+      await db.from('family_season').update({ fundraising_methods: union, fundraising_method: primary }).eq('id', id)
+
+      // Employer match lives on family (parent's employer) — set for corporate_match.
       if (methods.includes('corporate_match')) {
         await db.from('family').update({
           employer_match_company: body.employer_company || null,
           employer_match_pct: body.employer_pct ? Number(body.employer_pct) : null,
           employer_match_portal: body.employer_portal || null,
         }).eq('id', famId)
-      } else {
-        await db.from('family').update({ employer_match_company: null, employer_match_pct: null, employer_match_portal: null }).eq('id', famId)
       }
-      // Sponsorship interest — update the existing wizard row if present (preserves any
-      // admin-set status), else insert. Left in place when sponsorship is removed.
+      // Sponsorship interest — per student. Update the existing row if present
+      // (preserves admin-set status), else insert.
       if (methods.includes('sponsored')) {
         const vals = {
           business_name: body.sponsor_business || null,
           contact_name: body.sponsor_contact || null,
           estimated_amount: body.sponsor_amount ? Number(body.sponsor_amount) : null,
         }
-        const { data: existing } = await db.from('family_sponsor_interest').select('id').eq('family_id', famId).eq('season', SEASON).eq('source', 'registration_wizard').order('created_at', { ascending: false }).limit(1).maybeSingle()
+        const { data: existing } = await db.from('family_sponsor_interest').select('id').eq('family_id', famId).eq('season', SEASON).eq('student_id', studentId).eq('source', 'registration_wizard').order('created_at', { ascending: false }).limit(1).maybeSingle()
         if (existing) await db.from('family_sponsor_interest').update(vals).eq('id', existing.id)
-        else await db.from('family_sponsor_interest').insert({ family_id: famId, season: SEASON, ...vals, status: 'pending', source: 'registration_wizard' })
+        else await db.from('family_sponsor_interest').insert({ family_id: famId, student_id: studentId, season: SEASON, ...vals, status: 'pending', source: 'registration_wizard' })
       }
     }
   }
