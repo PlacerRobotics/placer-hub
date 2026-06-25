@@ -4,10 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getCurrentVolunteer, ensureClearance, VOLUNTEER_SEASON, VOLUNTEER_WAIVER_TYPES } from '@/lib/volunteer'
 
-// POST — sign the active, versioned volunteer agreements (Release of Liability +
-// Registered Volunteer policy acknowledgment). Records a waiver_signature per
-// document (version, body_hash snapshot, typed first+last name, acceptance date,
-// email, IP/UA) and stamps the clearance signal once BOTH are signed.
+// POST — sign the active, versioned volunteer agreements (VOLUNTEER_WAIVER_TYPES:
+// Release of Liability, Center Use, Youth Protection summary, Registered Volunteer
+// policy). Records a waiver_signature per document (version, body_hash snapshot, typed
+// first+last name, acceptance date, email, IP/UA) and stamps the clearance signal once
+// ALL required documents are signed.
 export async function POST(req: NextRequest) {
   const session = await createClient()
   const { data: { user } } = await session.auth.getUser()

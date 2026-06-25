@@ -5,10 +5,21 @@ export const VOLUNTEER_SEASON = '2026-27'
 // APS certificates must be valid through the end of the season.
 export const APS_VALID_THROUGH = '2027-05-31'
 
-// Volunteers sign two documents each season, in this order:
-//  1. the same Release of Liability the guardians sign (student_participation), and
-//  2. the Registered Volunteer policy acknowledgment (volunteer).
-export const VOLUNTEER_WAIVER_TYPES = ['student_participation', 'volunteer'] as const
+// Volunteers acknowledge & sign the same agreements families do — EXCEPT the
+// Student & Family Expectations (which is student-facing). Order shown to the user:
+//  1. Release of Liability (student_participation, same as guardians)
+//  2. Robotics Center Use — Summary of Key Policies (center_use_summary)
+//  3. Youth Protection & Abuse Prevention Summary (youth_protection_summary)
+//  4. Registered Volunteer Agreement (volunteer)
+export const VOLUNTEER_WAIVER_TYPES = [
+  'student_participation',
+  'center_use_summary',
+  'youth_protection_summary',
+  'volunteer',
+] as const
+
+// Shown for awareness on the volunteer waiver page, but NOT required to sign.
+export const VOLUNTEER_REMINDER_TYPES = ['expectations_agreement'] as const
 
 export type CurrentVolunteer = {
   profileId: string
