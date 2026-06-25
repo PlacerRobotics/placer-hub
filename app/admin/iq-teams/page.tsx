@@ -49,6 +49,20 @@ export default async function IqTeamsPage() {
       for (const s of (sigs ?? []) as any[]) signed.add(s.student_id)
     }
   }
+
+  // Per-team fee payments (how the fee was paid + total), newest source first.
+  const feeMap: Record<string, { amount: number; source: string }> = {}
+  if (teamIds.length) {
+    const { data: pays } = await createAdminClient()
+      .from('payment_transaction').select('team_id, source, amount, received_at')
+      .in('team_id', teamIds).order('received_at', { ascending: false })
+    for (const p of (pays ?? []) as any[]) {
+      const cur = feeMap[p.team_id] ?? { amount: 0, source: '' }
+      cur.amount += Number(p.amount || 0)
+      if (!cur.source) cur.source = p.source // first seen = most recent
+      feeMap[p.team_id] = cur
+    }
+  }
   teams.sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || String(a.created_at).localeCompare(String(b.created_at)))
   const counts = (s: string) => teams.filter((t) => t.status === s).length
 
@@ -64,8 +78,11 @@ export default async function IqTeamsPage() {
       coach: coachMap[t.id] || '—',
       students: total,
       waivers: `${signedN}/${total}`,
+      status: t.status,
       statusLabel: sl, statusVariant: sv,
       fee: t.team_fee_status ?? 'unpaid',
+      feeAmount: feeMap[t.id]?.amount ?? 0,
+      feeSource: feeMap[t.id]?.source ?? '',
       events: !!t.events_vex_com_registered,
       created: new Date(t.created_at).toLocaleDateString(),
       createdRaw: String(t.created_at),

@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { fetchZeffyPayments, zeffyAnswer } from '@/lib/zeffy'
+import { fetchZeffyPayments } from '@/lib/zeffy'
 
 const SEASON = '2026-27'
 const REF_RE = /IQT-[A-Z0-9]{8}/i
@@ -20,16 +20,28 @@ function safeIso(v: any): string {
   const d = new Date(v)
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString()
 }
+function questionPools(p: any): any[][] {
+  return [p.buyer_questions, ...(p.items ?? []).map((it: any) => it.questions)]
+}
 // Search every buyer/item answer for an IQ team reference code (IQT-XXXXXXXX).
 function findRefCode(p: any): string | null {
-  const pools: any[] = [p.buyer_questions, ...(p.items ?? []).map((it: any) => it.questions)]
-  for (const qs of pools) {
+  for (const qs of questionPools(p)) {
     for (const q of qs ?? []) {
       const m = REF_RE.exec(String(q?.answer ?? ''))
       if (m) return m[0].toUpperCase()
     }
   }
   return null
+}
+// First answer to a question whose text contains any of `fragments` (across buyer + item questions).
+function findAnswer(p: any, fragments: string[]): string {
+  for (const qs of questionPools(p)) {
+    for (const f of fragments) {
+      const m = (qs ?? []).find((q: any) => String(q?.question || '').toLowerCase().includes(f))
+      if (m?.answer != null && String(m.answer).trim()) return String(m.answer).trim()
+    }
+  }
+  return ''
 }
 
 // POST { apply?: boolean } — pull the IQ team-fee Zeffy campaign and match each
@@ -70,10 +82,11 @@ export async function POST(req: NextRequest) {
     if (!paymentId) continue
 
     const buyerEmail = (p.buyer?.email ?? '').trim().toLowerCase()
-    const signInEmail = (zeffyAnswer(p.buyer_questions, 'sign-in email') || zeffyAnswer(p.buyer_questions, 'coach email') || zeffyAnswer(p.buyer_questions, 'guardian email')).toLowerCase()
-    const email = signInEmail || buyerEmail
+    // Prefer an explicit email answer on the form; fall back to the Zeffy account email.
+    const answeredEmail = findAnswer(p, ['sign-in email', 'coach email', 'guardian email', 'email']).toLowerCase()
+    const email = answeredEmail || buyerEmail
     const refCode = findRefCode(p)
-    const teamNumber = (zeffyAnswer(p.buyer_questions, 'team number') || zeffyAnswer(p.buyer_questions, 'team #') || zeffyAnswer((p.items ?? [])[0]?.questions, 'team number')).trim()
+    const teamNumber = findAnswer(p, ['team number', 'team #', 'team no', 'team id', 'team'])
     const label = `${p.buyer?.first_name ?? ''} ${p.buyer?.last_name ?? ''}`.trim() || email || paymentId
 
     // Dedup by source_payment_id (re-syncs don't double-record).

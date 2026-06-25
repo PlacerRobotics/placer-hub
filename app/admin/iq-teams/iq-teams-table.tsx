@@ -8,8 +8,17 @@ import { StatusBadge } from '@/components/ui'
 type Variant = 'success' | 'warning' | 'info' | 'error' | 'neutral'
 export type IqRow = {
   id: string; label: string; teamNumber: string; kit: string; coach: string; students: number; waivers: string
-  statusLabel: string; statusVariant: Variant; fee: string; events: boolean; created: string; createdRaw: string
+  status: string; statusLabel: string; statusVariant: Variant; fee: string; feeAmount: number; feeSource: string
+  events: boolean; created: string; createdRaw: string
 }
+
+const STATUS_FILTERS: { key: string; label: string }[] = [
+  { key: 'all', label: 'All statuses' },
+  { key: 'pending_payment', label: 'Pending payment' },
+  { key: 'pending_admin_confirmation', label: 'Pending approval' },
+  { key: 'active', label: 'Active' },
+]
+const feeSourceLabel = (s: string) => (s === 'zeffy' ? 'Zeffy' : s === 'manual' ? 'manual' : s)
 
 const cell: React.CSSProperties = { padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left', whiteSpace: 'nowrap' }
 const th: React.CSSProperties = { ...cell, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '0.6875rem', color: 'var(--color-text-muted)', cursor: 'pointer', userSelect: 'none' }
@@ -34,13 +43,15 @@ export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: 
   const [busy, setBusy] = useState(false)
   const [sortKey, setSortKey] = useState('teamNumber')
   const [dir, setDir] = useState<1 | -1>(1)
+  const [statusFilter, setStatusFilter] = useState('all')
 
   function sortBy(key: string) {
     if (key === sortKey) setDir((d) => (d === 1 ? -1 : 1))
     else { setSortKey(key); setDir(1) }
   }
   const col = COLS.find((c) => c.key === sortKey) ?? COLS[0]
-  const sorted = [...rows].sort((a, b) => {
+  const filtered = statusFilter === 'all' ? rows : rows.filter((r) => r.status === statusFilter)
+  const sorted = [...filtered].sort((a, b) => {
     if (sortKey === 'teamNumber') { const ae = !a.teamNumber, be = !b.teamNumber; if (ae && !be) return 1; if (!ae && be) return -1 }
     const av = col.get(a), bv = col.get(b)
     if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
@@ -57,6 +68,12 @@ export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: 
 
   return (
     <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.75rem' }}>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '7px 10px', fontSize: '0.8125rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit', backgroundColor: 'var(--color-surface)' }}>
+          {STATUS_FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+        </select>
+        <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{sorted.length} team{sorted.length === 1 ? '' : 's'}</span>
+      </div>
       {canAct && sel.size > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem', padding: '0.5rem 0.875rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
           <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{sel.size} selected</span>
@@ -86,7 +103,14 @@ export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: 
                 <td style={cell}>{r.students}</td>
                 <td style={cell}>{r.waivers}</td>
                 <td style={cell}><StatusBadge label={r.statusLabel} variant={r.statusVariant} /></td>
-                <td style={cell}><StatusBadge label={r.fee} variant={r.fee === 'paid' ? 'success' : 'warning'} /></td>
+                <td style={cell}>
+                  <StatusBadge label={r.fee} variant={r.fee === 'paid' ? 'success' : 'warning'} />
+                  {r.fee === 'paid' && (r.feeAmount > 0 || r.feeSource) && (
+                    <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)', marginTop: 2 }}>
+                      {r.feeAmount > 0 ? `$${r.feeAmount.toLocaleString()}` : ''}{r.feeAmount > 0 && r.feeSource ? ' · ' : ''}{r.feeSource ? feeSourceLabel(r.feeSource) : ''}
+                    </div>
+                  )}
+                </td>
                 <td style={cell}>{r.events ? '✓' : '—'}</td>
                 <td style={cell}><Link href={`/admin/iq-teams/${r.id}`} style={linkStyle}>Manage →</Link></td>
               </tr>
