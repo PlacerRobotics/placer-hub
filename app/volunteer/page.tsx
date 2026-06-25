@@ -4,15 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader, EmptyState, InfoAlert } from '@/components/ui'
 import { getCurrentVolunteer, VOLUNTEER_SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
+import ApsCertForm from './aps-cert-form'
 
 type Tone = 'complete' | 'warn' | 'pending'
 const DOT: Record<Tone, string> = { complete: 'var(--color-success)', warn: '#C9971B', pending: 'var(--color-error)' }
 const ICON: Record<Tone, string> = { complete: '✓', warn: '!', pending: '○' }
 
-const APS_URL = 'https://www.abusepreventionsystems.com'
-const ApsLink = () => (
-  <a href={APS_URL} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>abusepreventionsystems.com</a>
-)
+const APS_SIGN_IN = 'https://safetysystem.abusepreventionsystems.com/auth/sign_in'
+const APS_TRAINING = 'https://safetysystem.abusepreventionsystems.com/training_assignments/overview/california'
+const extLink: React.CSSProperties = { color: 'var(--color-navy-deep)', fontWeight: 600 }
 
 function Row({ tone, label, detail, action }: { tone: Tone; label: string; detail: React.ReactNode; action?: { label: string; href: string } }) {
   return (
@@ -52,12 +52,14 @@ export default async function VolunteerPortal() {
     db.from('team_member').select('team_role, team:team_id(team_name, team_number, program)').eq('guardian_id', vol.guardianId).is('revoked_at', null),
   ])
 
-  // APS status.
+  // APS status. The certificate expiry (when on file) is shown here; volunteers can
+  // record/update it themselves in the "APS certificate" card below.
+  const certLink = cert?.cert_url ? <> · <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={extLink}>View certificate</a></> : null
   let apsTone: Tone = 'pending'
-  let apsDetail: React.ReactNode = <>Required — complete CA Mandated Reporter training. Enroll at <ApsLink />.</>
+  let apsDetail: React.ReactNode = <>Required — complete CA Mandated Reporter training, then record your certificate below.</>
   if (cert?.expiration_date) {
-    if (cert.expiration_date >= APS_VALID_THROUGH) { apsTone = 'complete'; apsDetail = `Valid through ${cert.expiration_date}.` }
-    else { apsTone = 'warn'; apsDetail = <>Renewal required — expires {cert.expiration_date} (must be valid through {APS_VALID_THROUGH}). Renew at <ApsLink />.</> }
+    if (cert.expiration_date >= APS_VALID_THROUGH) { apsTone = 'complete'; apsDetail = <>Valid through {cert.expiration_date}.{certLink}</> }
+    else { apsTone = 'warn'; apsDetail = <>Renewal required — expires {cert.expiration_date} (must be valid through {APS_VALID_THROUGH}).{certLink}</> }
   }
 
   const dojDone = bgStep?.status === 'complete'
@@ -88,6 +90,17 @@ export default async function VolunteerPortal() {
       </div>
 
       <div style={{ marginTop: '1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+        <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '1rem 1.25rem' }}>
+          <h3 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.5rem' }}>APS certificate</h3>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+            CA Mandated Reporter (AB 506) training is required and must stay valid through {APS_VALID_THROUGH}.
+          </div>
+          <div style={{ marginTop: '0.625rem', fontSize: '0.8125rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <a href={APS_SIGN_IN} target="_blank" rel="noopener noreferrer" style={extLink}>Sign in to APS — view my certificates →</a>
+            <a href={APS_TRAINING} target="_blank" rel="noopener noreferrer" style={extLink}>Start the CA Mandated Reporter training →</a>
+          </div>
+          <ApsCertForm expiration={cert?.expiration_date ?? ''} certUrl={cert?.cert_url ?? ''} />
+        </div>
         <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '1rem 1.25rem' }}>
           <h3 style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.5rem' }}>My Teams</h3>
           {teams.length ? teams.map((t: any, i: number) => (

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader, InfoAlert, SuccessAlert } from '@/components/ui'
-import { getCurrentVolunteer, ensureClearance, VOLUNTEER_SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
+import { getCurrentVolunteer, VOLUNTEER_SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
 
 const input: React.CSSProperties = { width: '100%', maxWidth: 320, padding: '9px 12px', fontSize: '0.9375rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
 const btn: React.CSSProperties = { padding: '9px 18px', backgroundColor: 'var(--color-navy-deep)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit' }
@@ -43,22 +43,6 @@ export default async function VolunteerRenewPage() {
     await createAdminClient().from('guardian').update({ phone: String(formData.get('phone') ?? '').trim() }).eq('id', v.guardianId)
     redirect('/volunteer/renew')
   }
-  async function signWaiver(formData: FormData) {
-    'use server'
-    const v = await getCurrentVolunteer(); if (!v) return
-    const sig = String(formData.get('signature') ?? '').trim()
-    if (!sig) return
-    const adb = createAdminClient()
-    const c = await ensureClearance(adb, v.profileId)
-    // Recompute season completion to set a sensible status.
-    const cert2 = (await adb.from('youth_protection_cert').select('expiration_date').eq('volunteer_id', v.profileId).order('expiration_date', { ascending: false }).limit(1).maybeSingle()).data
-    const bg = (await adb.from('volunteer_step').select('status').eq('volunteer_id', v.profileId).eq('step', 'background_check').maybeSingle()).data
-    const complete = !!c?.rc_quiz_passed && !!c?.yp_quiz_passed && !!cert2?.expiration_date && cert2.expiration_date >= APS_VALID_THROUGH && bg?.status === 'complete'
-    await adb.from('volunteer_clearance').update({ waiver_signed_date: new Date().toISOString(), waiver_signature_text: sig, status: complete ? 'cleared' : 'in_progress', updated_at: new Date().toISOString() }).eq('id', c.id)
-    if (complete) await adb.from('volunteer_profile').update({ status: 'cleared', cleared_at: new Date().toISOString() }).eq('id', v.profileId)
-    redirect('/volunteer/renew')
-  }
-
   return (
     <FamilyShell familyName={vol.name || vol.email} maxWidth="md">
       <PageHeader title="Renew your volunteer status" subtitle={`Registered Volunteer renewal · ${VOLUNTEER_SEASON}`} />
@@ -87,7 +71,7 @@ export default async function VolunteerRenewPage() {
         ) : (
           <>
             <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.625rem' }}>
-              {cert?.expiration_date ? `Your certificate expires ${cert.expiration_date}` : 'No certificate on file'} — it must be valid through {APS_VALID_THROUGH}. Renew the free course at <a href="https://abusepreventionsystems.com" target="_blank" rel="noreferrer" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>abusepreventionsystems.com</a>.
+              {cert?.expiration_date ? `Your certificate expires ${cert.expiration_date}` : 'No certificate on file'} — it must be valid through {APS_VALID_THROUGH}. Renew the course at <a href="https://safetysystem.abusepreventionsystems.com/training_assignments/overview/california" target="_blank" rel="noreferrer" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>APS (CA Mandated Reporter)</a>, then record your new expiry on the <Link href="/volunteer" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>Volunteer Portal</Link>.
             </div>
             <div style={{ fontSize: '0.8125rem', color: '#C9971B', fontWeight: 600 }}>Your APS training status is pending admin verification. You may complete the other renewal steps now.</div>
           </>
@@ -117,12 +101,9 @@ export default async function VolunteerRenewPage() {
         ) : (
           <>
             <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.625rem' }}>
-              I have read and agree to the current Placer Robotics Youth Protection &amp; Abuse Prevention Policy and Robotics Center Use Policy for the {VOLUNTEER_SEASON} season. (<Link href="/volunteer/waiver" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>read full waiver</Link>)
+              Review and sign the full Placer Robotics Youth Protection &amp; Abuse Prevention Agreement for the {VOLUNTEER_SEASON} season. Your signed copy (name, date, and version) is retained on file.
             </div>
-            <form action={signWaiver} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <input name="signature" placeholder="Type your full legal name" style={input} />
-              <button style={btn}>Sign &amp; submit</button>
-            </form>
+            <Link href="/volunteer/waiver" style={{ ...btn, textDecoration: 'none' }}>Read &amp; sign the agreement →</Link>
           </>
         )}
       </div>

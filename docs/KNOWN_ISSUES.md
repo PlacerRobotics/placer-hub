@@ -63,7 +63,18 @@ Severity: **[BLOCKER]** = needed before launch · **[FIX]** = real bug, should f
 - **[LATER] "Default to prior team"** not wired (prior team only in `triage_notes`).
 
 ### Volunteers
-- **[LATER]** Clearance steps are admin-attestation only (no APS/quiz integration).
+- **[RESOLVED] Volunteer waiver is now the real, versioned waiver** (mig 0043 seeds the
+  `volunteer` `waiver_template`). `/volunteer/waiver` renders the actual body and records a
+  `waiver_signature` (version, body_hash snapshot, first+last typed name, acceptance date,
+  email, IP/UA). Renew now routes through the same page (no more bypass server action).
+- **[RESOLVED] APS on the portal** — real APS links (safetysystem sign-in + CA Mandated
+  Reporter training), the certificate expiry is shown, and volunteers can self-record
+  their cert (expiry + link) via `POST /api/volunteer/aps`. Admin can still verify/override
+  from the volunteer detail page.
+- **[LATER]** Self-reported APS certs have no `verified` flag — admin entry and volunteer
+  self-report write the same `youth_protection_cert` row; add a trust/verification flag if
+  compliance requires distinguishing them.
+- **[LATER]** RC/YP quiz are self-service; DOJ background check is still manual.
 
 ### Data / schema
 - **[RESOLVED] `registration_audit_log` is now append-only** (mig 0042) — update/delete

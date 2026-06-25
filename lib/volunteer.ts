@@ -9,6 +9,9 @@ export type CurrentVolunteer = {
   profileId: string
   status: string
   guardianId: string
+  familyId: string
+  firstName: string
+  lastName: string
   name: string
   email: string
 }
@@ -23,11 +26,13 @@ export async function getCurrentVolunteer(): Promise<CurrentVolunteer | null> {
   const { data: { user } } = await session.auth.getUser()
   if (!user?.email) return null
   const db = createAdminClient()
-  const { data: g } = await db.from('guardian').select('id, first_name, last_name, login_email').ilike('login_email', user.email).maybeSingle()
+  const { data: g } = await db.from('guardian').select('id, family_id, first_name, last_name, login_email').ilike('login_email', user.email).maybeSingle()
   if (!g) return null
   const { data: vp } = await db.from('volunteer_profile').select('id, status').eq('guardian_id', g.id).maybeSingle()
   if (!vp) return null
-  return { profileId: vp.id, status: vp.status, guardianId: g.id, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), email: g.login_email }
+  const firstName = g.first_name ?? ''
+  const lastName = g.last_name ?? ''
+  return { profileId: vp.id, status: vp.status, guardianId: g.id, familyId: g.family_id, firstName, lastName, name: `${firstName} ${lastName}`.trim(), email: g.login_email }
 }
 
 /** Get (or create) the per-season clearance row for a volunteer. */

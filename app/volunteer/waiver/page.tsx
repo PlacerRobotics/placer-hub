@@ -1,20 +1,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { FamilyShell, PageHeader } from '@/components/ui'
-import { getCurrentVolunteer } from '@/lib/volunteer'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { FamilyShell, PageHeader, SuccessAlert, WarningAlert } from '@/components/ui'
+import { getCurrentVolunteer, VOLUNTEER_SEASON } from '@/lib/volunteer'
 import WaiverSignForm from './sign-form'
-
-const WAIVER_PARAS = [
-  'By signing below, I acknowledge that I have read, understand, and agree to follow and enforce the Placer Robotics Youth Protection and Abuse Prevention Policy, the Robotics Center Use Policy, and all associated training requirements for the 2026-27 program season.',
-  'I understand that:',
-]
-const WAIVER_POINTS = [
-  'I am required to complete CA AB506 mandated reporter training and maintain a valid certificate through May 31, 2027.',
-  'I must pass the annual Robotics Center Use Safety Quiz and Youth Protection Supplemental Quiz with a score of 90% or higher.',
-  'I must follow the Two-Adult Rule at all times when interacting with youth in any Placer Robotics program or facility.',
-  'I must report any suspicion of child abuse or neglect directly to Child Protective Services or law enforcement.',
-  'Violations of these policies may result in suspension or revocation of my Registered Volunteer status.',
-]
 
 export default async function VolunteerWaiverPage() {
   const supabase = await createClient()
@@ -23,17 +12,68 @@ export default async function VolunteerWaiverPage() {
   const vol = await getCurrentVolunteer()
   if (!vol) redirect('/volunteer')
 
+  const db = createAdminClient()
+  // The REAL, versioned waiver text (seeded in waiver_template).
+  const { data: tmpl } = await db
+    .from('waiver_template')
+    .select('id, version, title, body_markdown, body_hash')
+    .eq('waiver_type', 'volunteer')
+    .eq('active', true)
+    .order('effective_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  // Has this volunteer already signed THIS version this season?
+  const { data: sig } = tmpl
+    ? await db
+        .from('waiver_signature')
+        .select('signed_at, typed_name, waiver_version')
+        .eq('volunteer_id', vol.profileId)
+        .eq('waiver_template_id', tmpl.id)
+        .eq('season', VOLUNTEER_SEASON)
+        .order('signed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null as any }
+
   return (
     <FamilyShell familyName={vol.name || vol.email} maxWidth="md">
-      <PageHeader title="Youth Protection & Abuse Prevention Policy" subtitle="Annual acknowledgment · 2026-27 season" />
-      <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '1.25rem 1.5rem', fontSize: '0.9375rem', lineHeight: 1.6, color: 'var(--color-text-muted)' }}>
-        {WAIVER_PARAS.map((p, i) => <p key={i} style={{ margin: '0 0 0.75rem' }}>{p}</p>)}
-        <ul style={{ margin: '0 0 0.75rem', paddingLeft: '1.25rem' }}>
-          {WAIVER_POINTS.map((p, i) => <li key={i} style={{ marginBottom: '0.5rem' }}>{p}</li>)}
-        </ul>
-        <p style={{ margin: 0 }}>I understand that my electronic signature below constitutes a legally binding acknowledgment of these policies.</p>
-      </div>
-      <WaiverSignForm volunteerName={vol.name} />
+      <PageHeader title={tmpl?.title ?? 'Registered Volunteer Agreement'} subtitle={`Annual acknowledgment · ${VOLUNTEER_SEASON} season${tmpl ? ` · v${tmpl.version}` : ''}`} breadcrumb={[{ label: 'Volunteer Portal', href: '/volunteer' }, { label: 'Agreement' }]} />
+
+      {!tmpl ? (
+        <WarningAlert title="Agreement unavailable">
+          The volunteer agreement isn’t published yet. Please contact info@placerrobotics.org.
+        </WarningAlert>
+      ) : sig ? (
+        <SuccessAlert title="Already signed">
+          You signed this agreement (v{sig.waiver_version}) on {new Date(sig.signed_at).toLocaleDateString()} as “{sig.typed_name}”. A copy is retained on file.
+        </SuccessAlert>
+      ) : (
+        <>
+          <div
+            style={{
+              maxHeight: 360,
+              overflowY: 'auto',
+              border: '1px solid var(--color-border)',
+              borderRadius: 10,
+              padding: '1.25rem 1.5rem',
+              fontSize: '0.9375rem',
+              lineHeight: 1.6,
+              color: 'var(--color-text-muted)',
+              whiteSpace: 'pre-wrap',
+            }}
+          >
+            {tmpl.body_markdown}
+          </div>
+          <WaiverSignForm
+            templateId={tmpl.id}
+            version={tmpl.version}
+            bodyHash={tmpl.body_hash}
+            defaultFirst={vol.firstName}
+            defaultLast={vol.lastName}
+          />
+        </>
+      )}
     </FamilyShell>
   )
 }
