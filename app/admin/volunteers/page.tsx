@@ -51,14 +51,20 @@ export default async function AdminVolunteersPage() {
     const waiver = !!c?.waiver_signed_date
 
     // Buckets. Admin-set states come from the profile; the rest is derived from
-    // this season's clearance. "core" = everything except the annual agreements.
+    // this season's clearance.
+    //  · Cleared        = everything done for the season (incl. APS valid + agreements)
+    //  · Renewal pending = a RETURNING volunteer (has had an APS cert) with a season
+    //                      renewal outstanding — APS expiring/expired, quizzes, or agreements
+    //  · In progress     = new volunteer still in initial setup. No APS cert ever → here.
     const ps = p.status as string
     let bucket: VolRow['bucket']
     if (ps === 'denied') bucket = 'denied'
     else if (ps === 'deactivated' || ps === 'suspended' || ps === 'withdrawn') bucket = 'deactivated'
     else {
       const core = doj && aps === 'valid' && rc && yp
-      bucket = core ? (waiver ? 'cleared' : 'renewal_pending') : 'in_progress'
+      if (core && waiver) bucket = 'cleared'
+      else if (aps !== 'none') bucket = 'renewal_pending' // has/had an APS cert → renewal, not initial setup
+      else bucket = 'in_progress'
     }
 
     return {
