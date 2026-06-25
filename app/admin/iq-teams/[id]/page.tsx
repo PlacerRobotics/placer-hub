@@ -104,7 +104,7 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     if (!(amount > 0)) return
     const received = String(formData.get('received') ?? '').trim()
     const deposited = String(formData.get('deposited') ?? '').trim()
-    const { data: t } = await adb.from('team').select('status, team_payment_reference_code').eq('id', id).maybeSingle()
+    const { data: t } = await adb.from('team').select('status, team_payment_reference_code, team_fee_amount').eq('id', id).maybeSingle()
     await adb.from('payment_transaction').insert({
       team_id: id, season: SEASON,
       source: String(formData.get('source') ?? 'check'),
@@ -116,8 +116,13 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
       deposited_at: deposited ? new Date(deposited).toISOString() : null,
       notes: String(formData.get('note') ?? '').trim() || 'IQ team fee', created_by: a.id,
     })
-    const newStatus = t?.status === 'pending_payment' ? 'pending_admin_confirmation' : t?.status
-    await adb.from('team').update({ team_fee_status: 'paid', status: newStatus }).eq('id', id)
+    // Mark paid only once the cumulative total covers the full team fee.
+    const { data: pays } = await adb.from('payment_transaction').select('amount').eq('team_id', id)
+    const total = (pays ?? []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
+    const fee = Number(t?.team_fee_amount) || 1200
+    const fullyPaid = total >= fee
+    const newStatus = fullyPaid && t?.status === 'pending_payment' ? 'pending_admin_confirmation' : t?.status
+    await adb.from('team').update({ team_fee_status: fullyPaid ? 'paid' : 'unpaid', status: newStatus }).eq('id', id)
     redirect(`/admin/iq-teams/${id}`)
   }
   async function markDeposited(formData: FormData) {
@@ -134,9 +139,12 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     const adb = createAdminClient()
     if (!(await hasAnyRole(adb, a.id, ROLES))) return
     await adb.from('payment_transaction').delete().eq('id', String(formData.get('paymentId') ?? '')).eq('team_id', id)
-    // If no payments remain, the fee is no longer paid (status is left as-is).
-    const { data: remaining } = await adb.from('payment_transaction').select('id').eq('team_id', id).limit(1)
-    if (!(remaining ?? []).length) await adb.from('team').update({ team_fee_status: 'unpaid' }).eq('id', id)
+    // Recompute against the full fee — voiding a payment can drop a team back to unpaid.
+    const { data: tf } = await adb.from('team').select('team_fee_amount').eq('id', id).maybeSingle()
+    const { data: remaining } = await adb.from('payment_transaction').select('amount').eq('team_id', id)
+    const total = (remaining ?? []).reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0)
+    const fee = Number(tf?.team_fee_amount) || 1200
+    await adb.from('team').update({ team_fee_status: total >= fee ? 'paid' : 'unpaid' }).eq('id', id)
     redirect(`/admin/iq-teams/${id}`)
   }
   async function dropStudent(formData: FormData) {

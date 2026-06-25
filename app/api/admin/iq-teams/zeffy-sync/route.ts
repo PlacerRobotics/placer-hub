@@ -101,14 +101,14 @@ export async function POST(req: NextRequest) {
     let team: any = null
     let reason = ''
     if (refCode) {
-      const { data: t } = await db.from('team').select('id, status, team_payment_reference_code, team_number').eq('program', 'vex_iq').eq('season', SEASON).eq('team_payment_reference_code', refCode).maybeSingle()
+      const { data: t } = await db.from('team').select('id, status, team_payment_reference_code, team_number, team_fee_amount').eq('program', 'vex_iq').eq('season', SEASON).eq('team_payment_reference_code', refCode).maybeSingle()
       if (t) team = t; else reason = `no IQ team for ref ${refCode}`
     }
     if (!team && email) {
       const { data: g } = await db.from('guardian').select('id').ilike('login_email', email).maybeSingle()
       if (g) {
         const { data: tms } = await db.from('team_member')
-          .select('team:team_id ( id, status, team_payment_reference_code, team_number, program, season )')
+          .select('team:team_id ( id, status, team_payment_reference_code, team_number, team_fee_amount, program, season )')
           .eq('guardian_id', g.id).eq('team_role', 'coach').eq('program', 'vex_iq').is('revoked_at', null)
         const teams = (tms ?? []).map((r: any) => (Array.isArray(r.team) ? r.team[0] : r.team)).filter((t: any) => t && t.program === 'vex_iq' && t.season === SEASON)
         // Prefer a team still awaiting payment.
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       } else if (!reason) reason = `no guardian for ${email}`
     }
     if (!team && teamNumber) {
-      const { data: t } = await db.from('team').select('id, status, team_payment_reference_code, team_number').eq('program', 'vex_iq').eq('season', SEASON).eq('team_number', teamNumber).maybeSingle()
+      const { data: t } = await db.from('team').select('id, status, team_payment_reference_code, team_number, team_fee_amount').eq('program', 'vex_iq').eq('season', SEASON).eq('team_number', teamNumber).maybeSingle()
       if (t) team = t; else if (!reason) reason = `no IQ team #${teamNumber}`
     }
     if (!team) {
@@ -158,8 +158,15 @@ export async function POST(req: NextRequest) {
         raw_payload: p,
       })
       if (!payErr) {
-        const newStatus = team.status === 'pending_payment' ? 'pending_admin_confirmation' : team.status
-        await db.from('team').update({ team_fee_status: 'paid', status: newStatus }).eq('id', team.id)
+        // Only mark paid once the cumulative total covers the full team fee.
+        const { data: pays } = await db.from('payment_transaction').select('amount').eq('team_id', team.id)
+        const total = (pays ?? []).reduce((s: number, x: any) => s + (Number(x.amount) || 0), 0)
+        const fee = Number(team.team_fee_amount) || 1200
+        const fullyPaid = total >= fee
+        const newStatus = fullyPaid && team.status === 'pending_payment' ? 'pending_admin_confirmation' : team.status
+        await db.from('team').update({ team_fee_status: fullyPaid ? 'paid' : 'unpaid', status: newStatus }).eq('id', team.id)
+        results[results.length - 1].partial = !fullyPaid
+        results[results.length - 1].paidTotal = total
         applied++
       }
     }
