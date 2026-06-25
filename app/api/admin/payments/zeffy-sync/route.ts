@@ -124,27 +124,19 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // The fee is satisfied by one payment. If the enrollment is already paid/
-      // waived, or already claimed by another payment in this batch, this is a
-      // duplicate/overpayment — leave it unmatched for an admin to review.
-      if (enrollment.registration_fee_status === 'paid' || enrollment.registration_fee_status === 'waived') {
-        unmatched++
-        results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'unmatched', reason: `registration fee already ${enrollment.registration_fee_status}` })
-        continue
-      }
-      if (claimed.has(enrollment.id)) {
-        unmatched++
-        results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'unmatched', reason: 'another Zeffy payment in this batch already covers this enrollment' })
-        continue
-      }
-      claimed.add(enrollment.id)
+      // Apply EVERY Zeffy payment tied to the student: the first covers the (still-open)
+      // registration fee; anything beyond that is fundraising. We total all of a
+      // student's Zeffy money and auto-mark the fundraising commitment received once it's
+      // covered (fee + target), regardless of the declared method. Duplicate Zeffy items
+      // are filtered above by source_payment_id, so totals don't double-count on re-sync.
+      const feeOpen = !(enrollment.registration_fee_status === 'paid' || enrollment.registration_fee_status === 'waived') && !claimed.has(enrollment.id)
+      const ptype = feeOpen ? 'registration_fee' : 'fundraising'
 
       matched++
-      results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'matched', enrollmentId: enrollment.id })
+      results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'matched', enrollmentId: enrollment.id, type: ptype })
 
       if (apply) {
-        // Zeffy amounts are in cents.
-        const cents = Number(item.amount ?? p.amount ?? 0) || 0
+        const amt = (Number(item.amount ?? p.amount ?? 0) || 0) / 100 // Zeffy amounts are in cents
         const { data: pay, error } = await db
           .from('payment_transaction')
           .insert({
@@ -152,8 +144,8 @@ export async function POST(req: NextRequest) {
             season: SEASON,
             source: 'zeffy',
             source_payment_id: itemId,
-            amount: cents / 100,
-            payment_type: 'registration_fee',
+            amount: amt,
+            payment_type: ptype,
             donor_name: `${p.buyer?.first_name ?? ''} ${p.buyer?.last_name ?? ''}`.trim() || null,
             donor_email: buyerEmail || null,
             received_at: epochToIso(p.created) ?? safeIso(p.createdAt ?? p.created_at),
@@ -163,25 +155,22 @@ export async function POST(req: NextRequest) {
           .select('id')
           .single()
         if (!error && pay) {
-          await linkPaymentToEnrollment(db, {
-            paymentId: pay.id,
-            enrollment,
-            paymentType: 'registration_fee',
-            adminId: admin.id,
-          })
+          await linkPaymentToEnrollment(db, { paymentId: pay.id, enrollment, paymentType: ptype, adminId: admin.id })
+          if (ptype === 'registration_fee') claimed.add(enrollment.id)
           applied++
-          // Direct Zeffy contribution that covers the fundraising commitment (e.g. a
-          // Standard/Champion ticket) → auto-mark fundraising received.
-          const amt = cents / 100
+
+          // Total all of this enrollment's Zeffy money → auto-mark fundraising received
+          // once it covers the fee + commitment.
           const fee = Number(enrollment.registration_fee_amount) || 40
           const target = Number(enrollment.fundraising_target) || 0
-          const methods = (enrollment.fundraising_methods ?? []) as string[]
-          if (target > 0 && methods.includes('direct_donation') && !enrollment.fundraising_received_at && amt >= fee + target) {
-            await db.from('enrollment').update({
-              fundraising_received_at: epochToIso(p.created) ?? safeIso(p.createdAt ?? p.created_at) ?? new Date().toISOString(),
-              fundraising_received_amount: amt - fee,
-              fundraising_received_note: 'Zeffy contribution (auto)',
-            }).eq('id', enrollment.id)
+          if (target > 0 && !enrollment.fundraising_received_at) {
+            const { data: pays } = await db.from('payment_transaction').select('amount').eq('enrollment_id', enrollment.id)
+            const total = (pays ?? []).reduce((s: number, x: any) => s + (Number(x.amount) || 0), 0)
+            if (total >= fee + target) {
+              const at = epochToIso(p.created) ?? safeIso(p.createdAt ?? p.created_at)
+              await db.from('enrollment').update({ fundraising_received_at: at, fundraising_received_amount: Math.max(0, total - fee), fundraising_received_note: 'Zeffy contribution (auto)' }).eq('id', enrollment.id)
+              enrollment.fundraising_received_at = at
+            }
           }
         }
       }
