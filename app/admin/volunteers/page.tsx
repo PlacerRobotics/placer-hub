@@ -45,17 +45,29 @@ export default async function AdminVolunteersPage() {
     const exp = certByVol[p.id] ?? null
     let aps: VolRow['aps'] = 'none'
     if (exp) aps = exp >= APS_VALID_THROUGH ? 'valid' : exp >= today ? 'expiring' : 'expired'
+    const doj = !!dojByVol[p.id]
+    const rc = !!c?.rc_quiz_passed
+    const yp = !!c?.yp_quiz_passed
+    const waiver = !!c?.waiver_signed_date
+
+    // Buckets. Admin-set states come from the profile; the rest is derived from
+    // this season's clearance. "core" = everything except the annual agreements.
+    const ps = p.status as string
+    let bucket: VolRow['bucket']
+    if (ps === 'denied') bucket = 'denied'
+    else if (ps === 'deactivated' || ps === 'suspended' || ps === 'withdrawn') bucket = 'deactivated'
+    else {
+      const core = doj && aps === 'valid' && rc && yp
+      bucket = core ? (waiver ? 'cleared' : 'renewal_pending') : 'in_progress'
+    }
+
     return {
       id: p.id,
       name: g ? `${g.first_name} ${g.last_name}`.trim() : 'Unknown volunteer',
       email: g?.login_email ?? '—',
       status: c?.status ?? p.status ?? 'pending',
-      doj: !!dojByVol[p.id],
-      aps,
-      apsExpiry: exp,
-      rc: !!c?.rc_quiz_passed,
-      yp: !!c?.yp_quiz_passed,
-      waiver: !!c?.waiver_signed_date,
+      bucket,
+      doj, aps, apsExpiry: exp, rc, yp, waiver,
     }
   })
 

@@ -13,7 +13,7 @@ const STEP_LABELS: Record<string, string> = {
   youth_protection_quiz: 'Youth Protection Quiz', lab_use_quiz: 'Lab Use Quiz', lab_orientation: 'Lab Orientation', custom: 'Additional requirement',
 }
 const STEP_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { complete: 'success', in_progress: 'info', pending: 'neutral', waived: 'neutral' }
-const VOL_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { pending: 'warning', in_progress: 'info', cleared: 'success', expired: 'warning', suspended: 'error', withdrawn: 'neutral' }
+const VOL_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { pending: 'warning', in_progress: 'info', cleared: 'success', expired: 'warning', suspended: 'error', withdrawn: 'neutral', denied: 'error', deactivated: 'neutral' }
 
 const smallBtn: React.CSSProperties = { padding: '6px 14px', backgroundColor: 'var(--color-navy-deep)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 const ghostBtn: React.CSSProperties = { ...smallBtn, backgroundColor: 'transparent', color: 'var(--color-error)', border: '1px solid var(--color-error)' }
@@ -95,8 +95,16 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
     'use server'
     if (!(await getAdminProfile())) return
     const to = String(formData.get('to') ?? '')
-    const patch = to === 'suspended' ? { status: 'suspended', suspended_at: new Date().toISOString() } : to === 'cleared' ? { status: 'cleared', cleared_at: new Date().toISOString() } : { status: 'in_progress', suspended_at: null }
-    await createAdminClient().from('volunteer_profile').update(patch).eq('id', id)
+    const now = new Date().toISOString()
+    const db = createAdminClient()
+    const patch: Record<string, unknown> =
+      to === 'denied' ? { status: 'denied' }
+      : to === 'deactivated' ? { status: 'deactivated' }
+      : to === 'cleared' ? { status: 'cleared', cleared_at: now }
+      : { status: 'in_progress', suspended_at: null } // reactivate
+    await db.from('volunteer_profile').update(patch).eq('id', id)
+    // Keep this season's clearance row in sync so other views match.
+    await db.from('volunteer_clearance').update({ status: patch.status }).eq('volunteer_id', id).eq('season', SEASON)
     redirect(`/admin/volunteers/${id}`)
   }
   async function sendMagicLink() {
@@ -181,9 +189,12 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
         <div style={{ paddingTop: '1.25rem', borderTop: '1px solid var(--color-border)', display: 'flex', gap: '0.625rem', flexWrap: 'wrap' }}>
           <form action={sendMagicLink}><button style={smallBtn}>Send magic link</button></form>
           {vp.status !== 'cleared' && <form action={setStatus}><input type="hidden" name="to" value="cleared" /><button style={smallBtn}>Mark cleared</button></form>}
-          {vp.status === 'suspended'
-            ? <form action={setStatus}><input type="hidden" name="to" value="reinstate" /><button style={smallBtn}>Reinstate</button></form>
-            : <form action={setStatus}><input type="hidden" name="to" value="suspended" /><button style={ghostBtn}>Suspend</button></form>}
+          {(vp.status === 'denied' || vp.status === 'deactivated' || vp.status === 'suspended' || vp.status === 'withdrawn')
+            ? <form action={setStatus}><input type="hidden" name="to" value="reactivate" /><button style={smallBtn}>Reactivate</button></form>
+            : <>
+                <form action={setStatus}><input type="hidden" name="to" value="denied" /><button style={ghostBtn}>Deny</button></form>
+                <form action={setStatus}><input type="hidden" name="to" value="deactivated" /><button style={ghostBtn}>Deactivate</button></form>
+              </>}
         </div>
       </AdminDetailPanel>
     </AdminShell>

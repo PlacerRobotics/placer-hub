@@ -4,35 +4,23 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { StatusBadge } from '@/components/ui'
 
+export type Bucket = 'cleared' | 'renewal_pending' | 'in_progress' | 'denied' | 'deactivated'
 export type VolRow = {
-  id: string; name: string; email: string; status: string
+  id: string; name: string; email: string; status: string; bucket: Bucket
   doj: boolean; aps: 'valid' | 'expiring' | 'expired' | 'none'; apsExpiry: string | null
   rc: boolean; yp: boolean; waiver: boolean
 }
 
 const GREEN = 'var(--color-success)', RED = 'var(--color-error)', YELLOW = '#C9971B', BLUE = 'var(--color-info)', GREY = 'var(--color-text-muted)'
-const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'error' | 'neutral'> = { cleared: 'success', in_progress: 'info', pending: 'warning', expired: 'error', suspended: 'error', withdrawn: 'neutral' }
-
-function dotColor(r: VolRow): string {
-  if (r.status === 'suspended' || r.status === 'expired' || r.aps === 'expired') return RED
-  if (r.status === 'cleared' && r.aps === 'valid' && r.waiver && r.rc && r.yp && r.doj) return GREEN
-  if (r.aps === 'expiring') return YELLOW
-  if (r.status === 'pending') return BLUE
-  return YELLOW
+type Variant = 'success' | 'warning' | 'info' | 'error' | 'neutral'
+const BUCKET_META: Record<Bucket, { label: string; variant: Variant; color: string }> = {
+  cleared: { label: 'Cleared', variant: 'success', color: GREEN },
+  renewal_pending: { label: 'Renewal pending', variant: 'info', color: BLUE },
+  in_progress: { label: 'In progress', variant: 'warning', color: YELLOW },
+  denied: { label: 'Denied', variant: 'error', color: RED },
+  deactivated: { label: 'Deactivated', variant: 'neutral', color: GREY },
 }
-const matchTab = (r: VolRow, t: string) => {
-  switch (t) {
-    case 'all': return true
-    case 'pending': return r.status === 'pending'
-    case 'in_progress': return r.status === 'in_progress'
-    case 'cleared': return r.status === 'cleared'
-    case 'expiring': return r.aps === 'expiring'
-    case 'expired': return r.status === 'expired' || r.aps === 'expired'
-    case 'suspended': return r.status === 'suspended'
-    case 'waiver_missing': return (r.status === 'cleared' || r.status === 'in_progress') && !r.waiver
-    default: return true
-  }
-}
+const matchTab = (r: VolRow, t: string) => t === 'all' || r.bucket === t
 
 const cell: React.CSSProperties = { padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left', whiteSpace: 'nowrap' }
 const th: React.CSSProperties = { ...cell, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '0.6875rem', color: 'var(--color-text-muted)' }
@@ -61,7 +49,7 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
   function toggleAll() { setSel((p) => { const n = new Set(p); if (allSelected) filteredIds.forEach((id) => n.delete(id)); else filteredIds.forEach((id) => n.add(id)); return n }) }
   async function runBulk(action: string, label: string) {
     if (!sel.size || busy) return
-    const confirmActions = ['doj_complete', 'mark_cleared', 'suspend', 'orientation_done']
+    const confirmActions = ['doj_complete', 'mark_cleared', 'deny', 'deactivate', 'reactivate', 'orientation_done']
     if (confirmActions.includes(action) && !confirm(`Apply “${label}” to ${sel.size} volunteer(s)?`)) return
     setBusy(true); setMsg('')
     try {
@@ -77,13 +65,11 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
 
   const STATS: [string, string, string][] = [
     ['all', 'Total', GREY],
-    ['pending', 'New / pending', BLUE],
-    ['in_progress', 'In progress', YELLOW],
     ['cleared', 'Cleared', GREEN],
-    ['expiring', 'APS expiring', YELLOW],
-    ['expired', 'Expired', RED],
-    ['waiver_missing', 'Waiver unsigned', RED],
-    ['suspended', 'Suspended', RED],
+    ['renewal_pending', 'Renewal pending', BLUE],
+    ['in_progress', 'In progress', YELLOW],
+    ['denied', 'Denied', RED],
+    ['deactivated', 'Deactivated', GREY],
   ]
 
   function aps(r: VolRow) {
@@ -123,7 +109,9 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
           <button type="button" onClick={() => runBulk('orientation_done', 'Orientation done')} disabled={busy} style={outlineBtn}>Orientation done</button>
           <button type="button" onClick={() => runBulk('notify_waiver', 'Waiver reminder')} disabled={busy} style={outlineBtn}>Notify: sign waiver</button>
           <button type="button" onClick={() => runBulk('notify_aps', 'APS reminder')} disabled={busy} style={outlineBtn}>Notify: APS expiring</button>
-          <button type="button" onClick={() => runBulk('suspend', 'Suspend')} disabled={busy} style={dangerBtn}>Suspend</button>
+          <button type="button" onClick={() => runBulk('reactivate', 'Reactivate')} disabled={busy} style={outlineBtn}>Reactivate</button>
+          <button type="button" onClick={() => runBulk('deny', 'Deny')} disabled={busy} style={dangerBtn}>Deny</button>
+          <button type="button" onClick={() => runBulk('deactivate', 'Deactivate')} disabled={busy} style={dangerBtn}>Deactivate</button>
           <button type="button" onClick={() => setSel(new Set())} disabled={busy} style={{ ...outlineBtn, marginLeft: 'auto' }}>Clear</button>
         </div>
       )}
@@ -136,9 +124,9 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
             {filtered.length === 0 ? <tr><td style={cell} colSpan={10}>No volunteers in this view.</td></tr> : filtered.map((r) => (
               <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/admin/volunteers/${r.id}`)}>
                 <td style={cell} onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} aria-label={`Select ${r.name}`} /></td>
-                <td style={cell}><span style={{ display: 'inline-block', width: 11, height: 11, borderRadius: '50%', background: dotColor(r) }} /></td>
+                <td style={cell}><span style={{ display: 'inline-block', width: 11, height: 11, borderRadius: '50%', background: BUCKET_META[r.bucket].color }} /></td>
                 <td style={cell}><div style={{ fontWeight: 600 }}>{r.name}</div><div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{r.email}</div></td>
-                <td style={cell}><StatusBadge label={r.status.replace(/_/g, ' ')} variant={STATUS_VARIANT[r.status] ?? 'neutral'} /></td>
+                <td style={cell}><StatusBadge label={BUCKET_META[r.bucket].label} variant={BUCKET_META[r.bucket].variant} /></td>
                 <td style={cell}>{flag(r.doj)}</td>
                 <td style={cell}>{aps(r)}</td>
                 <td style={cell}>{flag(r.rc)}</td>

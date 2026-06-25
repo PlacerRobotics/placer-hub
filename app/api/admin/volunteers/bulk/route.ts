@@ -85,5 +85,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, action, processed: ids.length })
   }
 
+  // Admin-only lifecycle: Denied / Deactivated (and reactivate back to In Progress).
+  if (action === 'deny' || action === 'deactivate' || action === 'reactivate') {
+    const status = action === 'deny' ? 'denied' : action === 'deactivate' ? 'deactivated' : 'in_progress'
+    for (const batch of chunk(ids, 50)) {
+      const { error: e1 } = await db.from('volunteer_profile').update({ status }).in('id', batch)
+      if (e1) return NextResponse.json({ error: e1.message }, { status: 500 })
+      const { error: e2 } = await db.from('volunteer_clearance').update({ status }).in('volunteer_id', batch).eq('season', SEASON)
+      if (e2) return NextResponse.json({ error: e2.message }, { status: 500 })
+    }
+    return NextResponse.json({ ok: true, action, processed: ids.length })
+  }
+
   return NextResponse.json({ error: 'Unknown action.' }, { status: 400 })
 }
