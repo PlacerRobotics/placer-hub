@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
+import { volunteerBucket, VOLUNTEER_BUCKET_META } from '@/lib/volunteer-buckets'
 
 const SEASON = '2026-27'
 
@@ -13,7 +14,6 @@ const STEP_LABELS: Record<string, string> = {
   youth_protection_quiz: 'Youth Protection Quiz', lab_use_quiz: 'Lab Use Quiz', lab_orientation: 'Lab Orientation', custom: 'Additional requirement',
 }
 const STEP_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { complete: 'success', in_progress: 'info', pending: 'neutral', waived: 'neutral' }
-const VOL_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { pending: 'warning', in_progress: 'info', cleared: 'success', expired: 'warning', suspended: 'error', withdrawn: 'neutral', denied: 'error', deactivated: 'neutral' }
 
 const smallBtn: React.CSSProperties = { padding: '6px 14px', backgroundColor: 'var(--color-navy-deep)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 const ghostBtn: React.CSSProperties = { ...smallBtn, backgroundColor: 'transparent', color: 'var(--color-error)', border: '1px solid var(--color-error)' }
@@ -135,11 +135,24 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
   const apsLabel: React.ReactNode = cert?.expiration_date
     ? <>{cert.expiration_date >= APS_VALID_THROUGH ? `Valid through ${cert.expiration_date}` : `Expires ${cert.expiration_date} (renew)`}{apsCertLink}</>
     : 'Not on file'
+  // Derived bucket (matches the volunteers dashboard) — not the drifting stored status.
+  const apsState = cert?.expiration_date
+    ? (cert.expiration_date >= APS_VALID_THROUGH ? 'valid' : cert.expiration_date >= new Date().toISOString().slice(0, 10) ? 'expiring' : 'expired')
+    : 'none'
+  const bucket = volunteerBucket({
+    profileStatus: vp.status,
+    doj: (steps ?? []).some((s: any) => s.step === 'background_check' && s.status === 'complete'),
+    apsState,
+    rc: !!clearance?.rc_quiz_passed,
+    yp: !!clearance?.yp_quiz_passed,
+    waiver: !!clearance?.waiver_signed_date,
+  })
+  const bucketMeta = VOLUNTEER_BUCKET_META[bucket]
   const fields = [
     { label: 'Volunteer', value: volunteerName },
     { label: 'Email', value: guardian?.login_email ?? '—' },
     { label: 'Phone', value: guardian?.phone ?? '—' },
-    { label: 'Status', value: <StatusBadge label={vp.status} variant={VOL_VARIANT[vp.status] ?? 'neutral'} /> },
+    { label: 'Status', value: <StatusBadge label={bucketMeta.label} variant={bucketMeta.variant} /> },
   ]
 
   const ClearRow = ({ label, ok, detail, action }: { label: string; ok: boolean; detail: React.ReactNode; action?: React.ReactNode }) => (

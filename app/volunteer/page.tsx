@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader, EmptyState, InfoAlert } from '@/components/ui'
 import { getCurrentVolunteer, VOLUNTEER_SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
+import { volunteerBucket, VOLUNTEER_BUCKET_META } from '@/lib/volunteer-buckets'
 
 type Tone = 'complete' | 'warn' | 'pending'
 const DOT: Record<Tone, string> = { complete: 'var(--color-success)', warn: '#C9971B', pending: 'var(--color-error)' }
@@ -91,13 +92,22 @@ export default async function VolunteerPortal() {
   const waiver = !!clearance?.waiver_signed_date
   const teams = (teamRows ?? []).map((t: any) => (Array.isArray(t.team) ? t.team[0] : t.team)).filter(Boolean)
 
+  // Derived bucket — the stored clearance/profile status drifts, so compute it.
+  const apsState = cert?.expiration_date
+    ? (cert.expiration_date >= APS_VALID_THROUGH ? 'valid' : cert.expiration_date >= new Date().toISOString().slice(0, 10) ? 'expiring' : 'expired')
+    : 'none'
+  const bucket = volunteerBucket({ profileStatus: vol.status, doj: dojDone, apsState, rc: !!rc, yp: !!yp, waiver })
+  const bucketMeta = VOLUNTEER_BUCKET_META[bucket]
+
   return (
     <FamilyShell familyName={vol.name || vol.email} maxWidth="md">
       <PageHeader title="Volunteer Portal" subtitle={`Registered Volunteer clearance · ${VOLUNTEER_SEASON}`} />
 
       <div style={{ marginBottom: '1.5rem' }}>
-        <InfoAlert title={`Status: ${(clearance?.status ?? vol.status).replace(/_/g, ' ')}`}>
-          Complete each step below to be cleared for the season. Both quizzes and the annual agreements must be renewed each season.
+        <InfoAlert title={`Status: ${bucketMeta.label}`}>
+          {bucket === 'cleared'
+            ? 'You’re cleared for the 2026-27 season — thank you for volunteering! Both quizzes and the annual agreements renew each season.'
+            : 'Complete each step below to be cleared for the season. Both quizzes and the annual agreements must be renewed each season.'}
         </InfoAlert>
       </div>
 
@@ -106,8 +116,8 @@ export default async function VolunteerPortal() {
         <Row tone={'complete'} label="Application" detail={clearance?.application_submitted_at ? `Submitted ${new Date(clearance.application_submitted_at).toLocaleDateString()}` : 'On file'} />
         <Row tone={dojDone ? 'complete' : 'pending'} label="DOJ Background Check" detail={dojDone ? 'Cleared' : 'Required (one-time) — coordinated with the registrar.'} />
         <Row tone={apsTone} label="APS Mandated Reporter Training" detail={apsDetail} actions={apsActions} />
-        <Row tone={rc ? 'complete' : 'pending'} label="Robotics Center Use Quiz" detail={rc ? `Passed ${clearance?.rc_quiz_passed_date ?? ''} · ${clearance?.rc_quiz_score ?? ''}%` : 'Not passed this season (90% to pass).'} actions={rc ? undefined : [{ label: 'Take Quiz', href: '/volunteer/quiz/rc' }]} />
-        <Row tone={yp ? 'complete' : 'pending'} label="Youth Protection Quiz" detail={yp ? `Passed ${clearance?.yp_quiz_passed_date ?? ''} · ${clearance?.yp_quiz_score ?? ''}%` : 'Not passed this season (90% to pass).'} actions={yp ? undefined : [{ label: 'Take Quiz', href: '/volunteer/quiz/yp' }]} />
+        <Row tone={rc ? 'complete' : 'pending'} label="Robotics Center Use Quiz" detail={rc ? `Passed ${clearance?.rc_quiz_passed_date ?? ''}${clearance?.rc_quiz_score != null ? ` · ${clearance.rc_quiz_score}%` : ''}` : 'Not passed this season (90% to pass).'} actions={rc ? undefined : [{ label: 'Take Quiz', href: '/volunteer/quiz/rc' }]} />
+        <Row tone={yp ? 'complete' : 'pending'} label="Youth Protection Quiz" detail={yp ? `Passed ${clearance?.yp_quiz_passed_date ?? ''}${clearance?.yp_quiz_score != null ? ` · ${clearance.yp_quiz_score}%` : ''}` : 'Not passed this season (90% to pass).'} actions={yp ? undefined : [{ label: 'Take Quiz', href: '/volunteer/quiz/yp' }]} />
         <Row
           tone={waiver ? 'complete' : 'pending'}
           label="Annual Agreements"
