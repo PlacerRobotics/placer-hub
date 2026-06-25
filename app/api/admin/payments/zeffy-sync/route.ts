@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
           else {
             const { data: enrs } = await db
               .from('enrollment')
-              .select('id, family_id, program, registration_fee_amount, registration_fee_status')
+              .select('id, family_id, program, registration_fee_amount, registration_fee_status, fundraising_target, fundraising_methods, fundraising_received_at')
               .eq('student_id', stu.id)
               .eq('season', SEASON)
             const list = (enrs ?? []) as any[]
@@ -170,6 +170,19 @@ export async function POST(req: NextRequest) {
             adminId: admin.id,
           })
           applied++
+          // Direct Zeffy contribution that covers the fundraising commitment (e.g. a
+          // Standard/Champion ticket) → auto-mark fundraising received.
+          const amt = cents / 100
+          const fee = Number(enrollment.registration_fee_amount) || 40
+          const target = Number(enrollment.fundraising_target) || 0
+          const methods = (enrollment.fundraising_methods ?? []) as string[]
+          if (target > 0 && methods.includes('direct_donation') && !enrollment.fundraising_received_at && amt >= fee + target) {
+            await db.from('enrollment').update({
+              fundraising_received_at: epochToIso(p.created) ?? safeIso(p.createdAt ?? p.created_at) ?? new Date().toISOString(),
+              fundraising_received_amount: amt - fee,
+              fundraising_received_note: 'Zeffy contribution (auto)',
+            }).eq('id', enrollment.id)
+          }
         }
       }
     }

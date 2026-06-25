@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 import RegistrationEdit from './edit-modal'
 import TeamAssign, { type AssignTeam } from './team-assign'
+import FundraisingReceived from './fundraising-received'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', both: 'VEX V5 & Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure' }
@@ -49,7 +50,7 @@ export default async function RegistrationDetailPage({
 
   // A 'both' student has two enrollment rows (vex_v5 + combat); fetch all.
   const { data: enrs } = student
-    ? await supabase.from('enrollment').select('id, program, division, fundraising_methods').eq('student_id', student.id).eq('season', SEASON)
+    ? await supabase.from('enrollment').select('id, program, division, fundraising_methods, fundraising_received_at, fundraising_received_amount, fundraising_received_note').eq('student_id', student.id).eq('season', SEASON)
     : { data: [] as any[] }
   const enrList = (enrs ?? []) as any[]
   const programVal = enrList.length > 1 ? 'both' : (enrList[0]?.program ?? '')
@@ -164,6 +165,19 @@ export default async function RegistrationDetailPage({
       <AdminDetailPanel title="Guardian" fields={guardianFields} />
       <AdminDetailPanel title="Registration" fields={regFields} />
       <AdminDetailPanel title="Fundraising" fields={fundraisingFields} />
+      {student && enrList.length > 0 && (
+        <div style={{ marginTop: '-0.75rem', marginBottom: '1.25rem' }}>
+          <FundraisingReceived
+            familySeasonId={fs.id}
+            studentId={student.id}
+            current={{
+              receivedAt: (enrList[0] as any).fundraising_received_at ?? null,
+              amount: (enrList[0] as any).fundraising_received_amount != null ? String((enrList[0] as any).fundraising_received_amount) : '',
+              note: (enrList[0] as any).fundraising_received_note ?? '',
+            }}
+          />
+        </div>
+      )}
 
       <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
         <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-light)' }}>

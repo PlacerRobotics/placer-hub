@@ -41,7 +41,7 @@ export default async function AccountPage() {
 
   // Per-student fundraising — editable until that student's registration fee is paid.
   const { data: enrs } = studentIds.length
-    ? await supabase.from('enrollment').select('student_id, program, fundraising_methods, fundraising_target, registration_fee_status').eq('season', SEASON).in('student_id', studentIds)
+    ? await supabase.from('enrollment').select('student_id, program, fundraising_methods, fundraising_target, registration_fee_status, fundraising_received_at').eq('season', SEASON).in('student_id', studentIds)
     : { data: [] as any[] }
   const enrByStudent: Record<string, any[]> = {}
   for (const e of enrs ?? []) (enrByStudent[e.student_id] ??= []).push(e)
@@ -86,7 +86,7 @@ export default async function AccountPage() {
         ec_relationship: ec?.relationship ?? '',
         fund: {
           show: enrsS.length > 0 && !isIq, // registered, non-IQ
-          locked: enrsS.some((e: any) => e.registration_fee_status === 'paid'),
+          locked: enrsS.some((e: any) => e.registration_fee_status === 'paid' || e.fundraising_received_at),
           methods: [...new Set(enrsS.flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))],
           target: Math.max(0, ...enrsS.map((e: any) => Number(e.fundraising_target) || 0)) || defaultTarget,
           employer_company: fam?.employer_match_company ?? '',

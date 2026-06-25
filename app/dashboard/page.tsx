@@ -22,7 +22,7 @@ const ZEFFY_REGISTRATION_URL = 'https://www.zeffy.com/en-US/ticketing/2026-27-pl
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
-type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean; fundMethods: string[]; fundTarget: number; fundDeadline: string }
+type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean; fundMethods: string[]; fundTarget: number; fundDeadline: string; fundReceivedAt: string | null }
 type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; division: string; isIq: boolean; studentId: string; dropRequested: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
@@ -79,7 +79,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const studentIds = students.map((s: any) => s.id)
 
     if (studentIds.length) {
-      const { data: enrollments } = await supabase.from('enrollment').select('id, student_id, program, registration_fee_status, submitted_at, fundraising_methods, fundraising_target').eq('season', SEASON).in('student_id', studentIds)
+      const { data: enrollments } = await supabase.from('enrollment').select('id, student_id, program, registration_fee_status, submitted_at, fundraising_methods, fundraising_target, fundraising_received_at').eq('season', SEASON).in('student_id', studentIds)
       const { data: apps } = await supabase.from('student_application').select('student_id, program_interest, triage_notes, reviewed_at').eq('season', SEASON).in('student_id', studentIds)
       const { data: sigs } = await supabase.from('waiver_signature').select('student_id').eq('season', SEASON).in('student_id', studentIds)
       const { data: tms } = await supabase.from('team_member').select('student_id, team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('student_id', studentIds)
@@ -176,6 +176,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           fundMethods: [...new Set(enrs.flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))],
           fundTarget: Math.max(0, ...enrs.map((e: any) => Number(e.fundraising_target) || 0)),
           fundDeadline: fundraisingDeadline(reviewedByStudent[s.id] ?? null),
+          fundReceivedAt: (enrs.map((e: any) => e.fundraising_received_at).find(Boolean) ?? null) as string | null,
         })
 
         if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
@@ -280,7 +281,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   for (const c of studentCards) {
     const fn = c.name.split(' ')[0]
     if (c.needsWizard) todos.push({ label: `Finish registration for ${fn}`, cta: 'Continue', href: `/register?student=${c.studentId}` })
-    else if (!c.isIqKid && !c.paid) todos.push({ label: `Pay ${fn}’s $40 fee + $${c.fundTarget || 550} fundraising commitment (due ${c.fundDeadline})`, cta: 'Pay via Zeffy', external: zeffyStudentUrl || ZEFFY_REGISTRATION_URL })
+    else if (!c.isIqKid && !c.paid) todos.push({ label: c.fundReceivedAt ? `Pay ${fn}’s $40 registration fee` : `Pay ${fn}’s $40 fee + $${c.fundTarget || 550} fundraising commitment (due ${c.fundDeadline})`, cta: 'Pay via Zeffy', external: zeffyStudentUrl || ZEFFY_REGISTRATION_URL })
   }
   if (showSignPrompt) todos.push({ label: 'Sign your family agreements', cta: 'Review & sign', href: '/waivers' })
   if (volunteer && (volunteer.apsState === 'expired' || volunteer.apsState === 'expiring')) {
@@ -382,10 +383,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               {/* Fundraising commitment — per student. The $40 fee is separate (above). */}
               {!card.isIqKid && card.registered && (
                 <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
-                  <span style={{ color: 'var(--color-text-muted)' }}>Fundraising commitment{card.fundTarget ? ` · $${card.fundTarget}` : ''} · due {card.fundDeadline}</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Fundraising commitment{card.fundTarget ? ` · $${card.fundTarget}` : ''}{card.fundReceivedAt ? '' : ` · due ${card.fundDeadline}`}</span>
                   <span style={{ display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
-                    <span style={{ color: card.fundMethods.length ? 'var(--color-text-primary)' : '#C9971B', fontWeight: 600 }}>{card.fundMethods.length ? card.fundMethods.map(fundLabel).join(', ') : 'Not selected'}</span>
-                    <Link href={`/dashboard/edit#student-${card.studentId}`} style={smallLink}>{card.fundMethods.length ? 'Change' : 'Set'}</Link>
+                    {card.fundReceivedAt ? (
+                      <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>✓ Received {new Date(card.fundReceivedAt).toLocaleDateString()}</span>
+                    ) : (
+                      <>
+                        <span style={{ color: card.fundMethods.length ? 'var(--color-text-primary)' : '#C9971B', fontWeight: 600 }}>{card.fundMethods.length ? card.fundMethods.map(fundLabel).join(', ') : 'Not selected'}</span>
+                        <Link href={`/dashboard/edit#student-${card.studentId}`} style={smallLink}>{card.fundMethods.length ? 'Change' : 'Set'}</Link>
+                      </>
+                    )}
                   </span>
                 </div>
               )}

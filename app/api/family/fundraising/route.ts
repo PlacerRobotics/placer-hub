@@ -27,10 +27,10 @@ export async function PATCH(req: NextRequest) {
   // Verify the student belongs to this family + load their enrollments.
   const { data: student } = await db.from('student').select('id, family_id').eq('id', studentId).maybeSingle()
   if (!student || student.family_id !== familyId) return NextResponse.json({ error: 'Student not found for this family.' }, { status: 403 })
-  const { data: enrs } = await db.from('enrollment').select('id, registration_fee_status').eq('student_id', studentId).eq('season', SEASON).order('created_at', { ascending: true })
+  const { data: enrs } = await db.from('enrollment').select('id, registration_fee_status, fundraising_received_at').eq('student_id', studentId).eq('season', SEASON).order('created_at', { ascending: true })
   const enrList = enrs ?? []
   if (!enrList.length) return NextResponse.json({ error: 'This student isn’t registered yet.' }, { status: 400 })
-  if (enrList.some((e: any) => e.registration_fee_status === 'paid')) {
+  if (enrList.some((e: any) => e.registration_fee_status === 'paid' || e.fundraising_received_at)) {
     return NextResponse.json({ error: 'A payment has been recorded for this student — contact info@placerrobotics.org to change the method.' }, { status: 409 })
   }
 
