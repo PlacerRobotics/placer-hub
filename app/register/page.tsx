@@ -67,7 +67,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   // and the consent flags we prefill on resume.
   const { data: enrollment } = await supabase
     .from('enrollment')
-    .select('payment_reference_code, student_slack_consent, parent_email_access_certified')
+    .select('payment_reference_code, student_slack_consent, parent_email_access_certified, fundraising_methods')
     .eq('student_id', student.id)
     .eq('season', SEASON)
     .order('created_at', { ascending: true })
@@ -105,11 +105,10 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
     const adb = createAdminClient()
     const [{ data: famRow }, { data: spRow }] = await Promise.all([
       adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', familyId).maybeSingle(),
-      adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount').eq('family_id', familyId).eq('season', SEASON).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount').eq('family_id', familyId).eq('season', SEASON).eq('student_id', student.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ])
-    const { data: fsFund } = await supabase.from('family_season').select('fundraising_methods').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
     fundraising = {
-      methods: (fsFund?.fundraising_methods ?? []) as string[],
+      methods: (enrollment?.fundraising_methods ?? []) as string[],
       employer_company: famRow?.employer_match_company ?? '',
       employer_pct: famRow?.employer_match_pct != null ? String(famRow.employer_match_pct) : '',
       employer_portal: famRow?.employer_match_portal ?? '',

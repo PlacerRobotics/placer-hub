@@ -21,7 +21,7 @@ const ZEFFY_REGISTRATION_URL = 'https://www.zeffy.com/en-US/ticketing/2026-27-pl
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
-type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean }
+type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean; fundMethods: string[]; fundTarget: number }
 type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; division: string; isIq: boolean; studentId: string; dropRequested: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
@@ -59,16 +59,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const teamCount: Record<string, number> = {}
   let zeffyIqUrl: string | null = null
   let zeffyStudentUrl: string | null = null
-  let fundraisingMethods: string[] = []
   let employerCompany = ''
   let volunteer: { label: string; variant: Variant; apsExpiry: string | null; apsState: 'valid' | 'expiring' | 'expired' | 'none'; bgCheck: boolean; waiver: boolean } | null = null
 
   if (guardian) {
     const familyId = guardian.family_id
 
-    const { data: fs } = await supabase.from('family_season').select('status, fundraising_methods').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
+    const { data: fs } = await supabase.from('family_season').select('status').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
     fsStatus = fs?.status ?? ''
-    fundraisingMethods = (fs?.fundraising_methods ?? []) as string[]
 
     const { data: aid } = await supabase.from('financial_aid').select('status').eq('family_id', familyId).eq('season', SEASON).order('requested_at', { ascending: false }).limit(1).maybeSingle()
     if (aid) aidStatus = aid.status
@@ -82,7 +80,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const studentIds = students.map((s: any) => s.id)
 
     if (studentIds.length) {
-      const { data: enrollments } = await supabase.from('enrollment').select('id, student_id, program, registration_fee_status, submitted_at').eq('season', SEASON).in('student_id', studentIds)
+      const { data: enrollments } = await supabase.from('enrollment').select('id, student_id, program, registration_fee_status, submitted_at, fundraising_methods, fundraising_target').eq('season', SEASON).in('student_id', studentIds)
       const { data: apps } = await supabase.from('student_application').select('student_id, program_interest, triage_notes').eq('season', SEASON).in('student_id', studentIds)
       const { data: sigs } = await supabase.from('waiver_signature').select('student_id').eq('season', SEASON).in('student_id', studentIds)
       const { data: tms } = await supabase.from('team_member').select('student_id, team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('student_id', studentIds)
@@ -175,6 +173,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           paid,
           // Wizard still has something for the family to do: register (non-IQ) or sign waivers (IQ).
           needsWizard: isIqKid ? !isSigned : !registered,
+          // Per-student fundraising (from the student's enrollment(s)).
+          fundMethods: [...new Set(enrs.flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))],
+          fundTarget: Math.max(0, ...enrs.map((e: any) => Number(e.fundraising_target) || 0)),
         })
 
         if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
@@ -247,7 +248,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const showSignPrompt = !!guardian && !guardianHasSigned && anyRegistered && hasActiveWaivers
   const readyCount = studentCards.filter((c) => c.complete).length
 
-  // Fundraising display (Part 4) — family-level method(s), shown on each registered card.
+  // Fundraising display — per-student method(s) (the parent's employer applies when matched).
   const fundLabel = (m: string) => {
     switch (m) {
       case 'direct_donation': return 'Via Zeffy contribution'
@@ -258,8 +259,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       default: return m
     }
   }
-  const fundraisingNotSelected = fundraisingMethods.length === 0
-  const fundraisingDisplay = fundraisingNotSelected ? 'Not selected' : fundraisingMethods.map(fundLabel).join(', ')
 
   // Team-centric "My teams": one row per team, grouping my kids onto their team and
   // merging with any team I coach (a team can be both).
@@ -357,7 +356,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <span>{card.detail}</span>
                 <span style={{ display: 'flex', gap: '0.875rem' }}>
                   {card.needsWizard && <Link href={`/register?student=${card.studentId}`} style={{ ...smallLink, color: 'var(--color-gold-dark)' }}>Continue registration →</Link>}
-                  <Link href="/dashboard/edit" style={smallLink}>Edit details</Link>
+                  <Link href={`/dashboard/edit#student-${card.studentId}`} style={smallLink}>Edit {card.name.split(' ')[0]}’s details</Link>
                 </span>
               </div>
 
@@ -369,13 +368,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                   <a href={zeffyStudentUrl || ZEFFY_REGISTRATION_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.5rem', padding: '7px 14px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 6, textDecoration: 'none' }}>Pay Now via Zeffy →</a>
                 </div>
               )}
-              {/* Fundraising row (non-IQ, registered) — family-level method (Part 4). */}
-              {!card.isIqKid && fsStatus === 'registered' && (
+              {/* Fundraising commitment — per student. The $40 fee is separate (above). */}
+              {!card.isIqKid && card.registered && (
                 <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8125rem' }}>
-                  <span style={{ color: 'var(--color-text-muted)' }}>Fundraising</span>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Fundraising commitment{card.fundTarget ? ` · $${card.fundTarget}` : ''}</span>
                   <span style={{ display: 'flex', gap: '0.625rem', alignItems: 'center' }}>
-                    <span style={{ color: fundraisingNotSelected ? '#C9971B' : 'var(--color-text-primary)', fontWeight: 600 }}>{fundraisingDisplay}</span>
-                    {fundraisingNotSelected && <Link href="/dashboard/edit" style={smallLink}>Update</Link>}
+                    <span style={{ color: card.fundMethods.length ? 'var(--color-text-primary)' : '#C9971B', fontWeight: 600 }}>{card.fundMethods.length ? card.fundMethods.map(fundLabel).join(', ') : 'Not selected'}</span>
+                    <Link href={`/dashboard/edit#student-${card.studentId}`} style={smallLink}>{card.fundMethods.length ? 'Change' : 'Set'}</Link>
                   </span>
                 </div>
               )}

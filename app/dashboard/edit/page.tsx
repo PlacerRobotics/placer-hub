@@ -39,21 +39,22 @@ export default async function AccountPage() {
     .order('created_at', { ascending: true })
   const g2 = (gAll ?? []).find((g: any) => g.id !== guardian.id)
 
-  // Fundraising/payment method — editable until a payment is recorded.
-  const { data: fs } = await supabase.from('family_season').select('fundraising_methods').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
-  const { data: cfg } = await supabase.from('season_config').select('one_program_fundraising_target').eq('season', SEASON).maybeSingle()
-  // "Payment recorded" = a registration-fee payment on file, or any enrollment marked paid.
-  const { data: paidEnr } = studentIds.length
-    ? await supabase.from('enrollment').select('id').eq('season', SEASON).eq('registration_fee_status', 'paid').in('student_id', studentIds).limit(1)
+  // Per-student fundraising — editable until that student's registration fee is paid.
+  const { data: enrs } = studentIds.length
+    ? await supabase.from('enrollment').select('student_id, program, fundraising_methods, fundraising_target, registration_fee_status').eq('season', SEASON).in('student_id', studentIds)
     : { data: [] as any[] }
-  const { data: payTx } = await supabase.from('payment_transaction').select('id').eq('family_id', familyId).eq('season', SEASON).limit(1)
-  const paymentLocked = (paidEnr ?? []).length > 0 || (payTx ?? []).length > 0
-  // employer-match (family) + sponsor interest (admin-RLS) via service role.
+  const enrByStudent: Record<string, any[]> = {}
+  for (const e of enrs ?? []) (enrByStudent[e.student_id] ??= []).push(e)
+  const { data: cfg } = await supabase.from('season_config').select('one_program_fundraising_target').eq('season', SEASON).maybeSingle()
+  const defaultTarget = Number(cfg?.one_program_fundraising_target ?? 550)
+  // employer-match (family, shared) + per-student sponsor interest (admin-RLS) via service role.
   const adb = createAdminClient()
-  const [{ data: fam }, { data: sp }] = await Promise.all([
+  const [{ data: fam }, { data: sponsors }] = await Promise.all([
     adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', familyId).maybeSingle(),
-    adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount').eq('family_id', familyId).eq('season', SEASON).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    adb.from('family_sponsor_interest').select('student_id, business_name, contact_name, estimated_amount').eq('family_id', familyId).eq('season', SEASON).eq('source', 'registration_wizard'),
   ])
+  const sponsorByStudent: Record<string, any> = {}
+  for (const sp of sponsors ?? []) if (sp.student_id && !sponsorByStudent[sp.student_id]) sponsorByStudent[sp.student_id] = sp
 
   const data: AccountData = {
     guardian1: {
@@ -69,6 +70,9 @@ export default async function AccountPage() {
     },
     students: students.map((s: any) => {
       const ec = ecByStudent[s.id]
+      const enrsS = enrByStudent[s.id] ?? []
+      const isIq = enrsS.some((e: any) => e.program === 'vex_iq')
+      const sp = sponsorByStudent[s.id]
       return {
         id: s.id,
         name: `${s.first_name} ${s.last_name}`.trim(),
@@ -80,19 +84,20 @@ export default async function AccountPage() {
         ec_last: ec?.last_name ?? '',
         ec_phone: ec?.phone ?? '',
         ec_relationship: ec?.relationship ?? '',
+        fund: {
+          show: enrsS.length > 0 && !isIq, // registered, non-IQ
+          locked: enrsS.some((e: any) => e.registration_fee_status === 'paid'),
+          methods: [...new Set(enrsS.flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))],
+          target: Math.max(0, ...enrsS.map((e: any) => Number(e.fundraising_target) || 0)) || defaultTarget,
+          employer_company: fam?.employer_match_company ?? '',
+          employer_pct: fam?.employer_match_pct != null ? String(fam.employer_match_pct) : '',
+          employer_portal: fam?.employer_match_portal ?? '',
+          sponsor_business: sp?.business_name ?? '',
+          sponsor_contact: sp?.contact_name ?? '',
+          sponsor_amount: sp?.estimated_amount != null ? String(sp.estimated_amount) : '',
+        },
       }
     }),
-    fundraising: {
-      methods: (fs?.fundraising_methods ?? []) as string[],
-      employer_company: fam?.employer_match_company ?? '',
-      employer_pct: fam?.employer_match_pct != null ? String(fam.employer_match_pct) : '',
-      employer_portal: fam?.employer_match_portal ?? '',
-      sponsor_business: sp?.business_name ?? '',
-      sponsor_contact: sp?.contact_name ?? '',
-      sponsor_amount: sp?.estimated_amount != null ? String(sp.estimated_amount) : '',
-      target: cfg?.one_program_fundraising_target ?? 550,
-      locked: paymentLocked,
-    },
     guardian2: g2
       ? {
           first_name: g2.first_name ?? '',

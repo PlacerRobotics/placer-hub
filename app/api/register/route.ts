@@ -290,31 +290,33 @@ export async function POST(request: NextRequest) {
     const FUND_METHODS = ['direct_donation', 'corporate_match', 'sponsored', 'paper_check', 'pending']
     const fr = body.fundraising
     const methods: string[] = Array.isArray(fr?.methods) ? fr.methods.filter((m: string) => FUND_METHODS.includes(m)) : []
-    if (methods.length) {
-      // fundraising_methods = full set; fundraising_method = primary (first in canonical
-      // order) for backward-compatible badges/filters.
-      const primary = FUND_METHODS.find((m) => methods.includes(m)) ?? methods[0]
-      await db.from('family_season').update({ fundraising_methods: methods, fundraising_method: primary }).eq('family_id', familyId).eq('season', SEASON)
+    if (methods.length && enrollmentId) {
+      // Per-student: store the method(s) on this student's (primary) enrollment.
+      await db.from('enrollment').update({ fundraising_methods: methods }).eq('id', enrollmentId)
 
-      // Employer-match details live on the family record. Set when corporate_match is
-      // selected, clear otherwise so the record matches the current selection.
+      // Family-level union (for admin badges/filters that read family_season).
+      const { data: allEnr } = await db.from('enrollment').select('fundraising_methods').eq('family_id', familyId).eq('season', SEASON)
+      const union = [...new Set((allEnr ?? []).flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))]
+      const primary = FUND_METHODS.find((m) => union.includes(m)) ?? union[0] ?? null
+      await db.from('family_season').update({ fundraising_methods: union, fundraising_method: primary }).eq('family_id', familyId).eq('season', SEASON)
+
+      // Employer-match details live on the family record (the parent's employer). Set
+      // when corporate_match is selected for this student; left as-is otherwise so a
+      // sibling's match isn't wiped.
       if (methods.includes('corporate_match')) {
         await db.from('family').update({
           employer_match_company: fr.employer_company ?? null,
           employer_match_pct: fr.employer_pct ?? null,
           employer_match_portal: fr.employer_portal ?? null,
         }).eq('id', familyId)
-      } else {
-        await db.from('family').update({ employer_match_company: null, employer_match_pct: null, employer_match_portal: null }).eq('id', familyId)
       }
 
-      // Business-sponsorship interest → family_sponsor_interest (sponsor_commitment is
-      // the admin sponsor CRM, keyed to a sponsor entity — it can't hold this). Replace
-      // any prior registration-wizard row for this season to avoid duplicates on re-submit.
-      await db.from('family_sponsor_interest').delete().eq('family_id', familyId).eq('season', SEASON).eq('source', 'registration_wizard')
+      // Business-sponsorship interest → family_sponsor_interest, tied to THIS student.
+      await db.from('family_sponsor_interest').delete().eq('family_id', familyId).eq('season', SEASON).eq('student_id', studentId).eq('source', 'registration_wizard')
       if (methods.includes('sponsored')) {
         await db.from('family_sponsor_interest').insert({
           family_id: familyId,
+          student_id: studentId,
           season: SEASON,
           business_name: fr.sponsor_business ?? null,
           contact_name: fr.sponsor_contact ?? null,

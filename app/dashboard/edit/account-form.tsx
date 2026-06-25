@@ -11,15 +11,16 @@ const TSHIRT_OPTIONS: [string, string][] = [
 
 export type AccountData = {
   guardian1: { name: string; email: string; communication_email: string; slack_email: string; street_address: string; city: string; state: string; zip_code: string; phone: string }
-  students: { id: string; name: string; tshirt_size: string; communication_email: string; fusion_education_email: string; slack_email: string; ec_first: string; ec_last: string; ec_phone: string; ec_relationship: string }[]
+  students: {
+    id: string; name: string; tshirt_size: string; communication_email: string; fusion_education_email: string; slack_email: string
+    ec_first: string; ec_last: string; ec_phone: string; ec_relationship: string
+    fund: {
+      show: boolean; locked: boolean; methods: string[]; target: number
+      employer_company: string; employer_pct: string; employer_portal: string
+      sponsor_business: string; sponsor_contact: string; sponsor_amount: string
+    }
+  }[]
   guardian2: { first_name: string; last_name: string; email: string; communication_email: string; slack_email: string; street_address: string; city: string; state: string; zip_code: string; phone: string } | null
-  fundraising: {
-    methods: string[]
-    employer_company: string; employer_pct: string; employer_portal: string
-    sponsor_business: string; sponsor_contact: string; sponsor_amount: string
-    target: number
-    locked: boolean
-  }
 }
 
 const FUND_METHODS: [string, string, string][] = [
@@ -67,9 +68,13 @@ export default function AccountForm({ data }: { data: AccountData }) {
 
   return (
     <>
-      {data.students.map((s) => <StudentSection key={s.id} student={s} onSaved={() => router.refresh()} />)}
+      {data.students.map((s) => (
+        <div key={s.id} id={`student-${s.id}`} style={{ scrollMarginTop: '70px' }}>
+          <StudentSection student={s} onSaved={() => router.refresh()} />
+          {s.fund.show && <FundraisingSection studentId={s.id} name={s.name} fund={s.fund} onSaved={() => router.refresh()} />}
+        </div>
+      ))}
       <FamilySection g1={data.guardian1} onSaved={() => router.refresh()} />
-      <FundraisingSection f={data.fundraising} onSaved={() => router.refresh()} />
       <FormSection title="Guardian 1 (you)" description="To change your login email, contact info@placerrobotics.org.">
         <FormField label="Name"><div style={{ fontSize: '0.9375rem' }}>{data.guardian1.name}</div></FormField>
         <FormField label="Login email"><div style={{ fontSize: '0.9375rem' }}>{data.guardian1.email}</div></FormField>
@@ -173,25 +178,26 @@ function FamilySection({ g1, onSaved }: { g1: AccountData['guardian1']; onSaved:
   )
 }
 
-function FundraisingSection({ f, onSaved }: { f: AccountData['fundraising']; onSaved: () => void }) {
-  const [methods, setMethods] = useState<string[]>(f.methods.length ? f.methods : ['direct_donation'])
-  const [empCompany, setEmpCompany] = useState(f.employer_company)
-  const [empPct, setEmpPct] = useState(f.employer_pct)
-  const [empPortal, setEmpPortal] = useState(f.employer_portal)
-  const [spBusiness, setSpBusiness] = useState(f.sponsor_business)
-  const [spContact, setSpContact] = useState(f.sponsor_contact)
-  const [spAmount, setSpAmount] = useState(f.sponsor_amount)
+function FundraisingSection({ studentId, name, fund, onSaved }: { studentId: string; name: string; fund: AccountData['students'][number]['fund']; onSaved: () => void }) {
+  const first = name.split(' ')[0]
+  const [methods, setMethods] = useState<string[]>(fund.methods.length ? fund.methods : ['direct_donation'])
+  const [empCompany, setEmpCompany] = useState(fund.employer_company)
+  const [empPct, setEmpPct] = useState(fund.employer_pct)
+  const [empPortal, setEmpPortal] = useState(fund.employer_portal)
+  const [spBusiness, setSpBusiness] = useState(fund.sponsor_business)
+  const [spContact, setSpContact] = useState(fund.sponsor_contact)
+  const [spAmount, setSpAmount] = useState(fund.sponsor_amount)
   const [state, setState] = useState('')
   const [busy, setBusy] = useState(false)
   const toggle = (v: string) => setMethods((s) => (s.includes(v) ? s.filter((x) => x !== v) : [...s, v]))
   const hasMatch = methods.includes('corporate_match')
   const hasSponsor = methods.includes('sponsored')
 
-  if (f.locked) {
+  if (fund.locked) {
     return (
-      <FormSection title="Payment & Fundraising" description="Locked once a payment is recorded.">
-        <FormField label="Your fundraising method(s)" helpText="A payment has been recorded, so this is locked. To change it, contact info@placerrobotics.org.">
-          <div style={{ fontSize: '0.9375rem' }}>{f.methods.length ? f.methods.map((m) => FUND_LABEL[m] ?? m).join(', ') : '—'}</div>
+      <FormSection title={`${first}’s fundraising`} description="Locked once a payment is recorded.">
+        <FormField label="Fundraising method(s)" helpText="A payment has been recorded, so this is locked. To change it, contact info@placerrobotics.org.">
+          <div style={{ fontSize: '0.9375rem' }}>{fund.methods.length ? fund.methods.map((m) => FUND_LABEL[m] ?? m).join(', ') : '—'}</div>
         </FormField>
       </FormSection>
     )
@@ -205,7 +211,7 @@ function FundraisingSection({ f, onSaved }: { f: AccountData['fundraising']; onS
     try {
       const res = await fetch('/api/family/fundraising', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ methods, employer_company: empCompany, employer_pct: empPct, employer_portal: empPortal, sponsor_business: spBusiness, sponsor_contact: spContact, sponsor_amount: spAmount }),
+        body: JSON.stringify({ student_id: studentId, methods, employer_company: empCompany, employer_pct: empPct, employer_portal: empPortal, sponsor_business: spBusiness, sponsor_contact: spContact, sponsor_amount: spAmount }),
       })
       const d = await res.json().catch(() => ({}))
       setState(res.ok ? 'saved' : (d.error || 'Save failed.'))
@@ -214,7 +220,7 @@ function FundraisingSection({ f, onSaved }: { f: AccountData['fundraising']; onS
   }
 
   return (
-    <FormSection title="Payment & Fundraising" description={`How you’ll meet your $${f.target} fundraising commitment. You can change this until a payment is recorded.`}>
+    <FormSection title={`${first}’s fundraising`} description={`How you’ll meet ${first}’s $${fund.target} commitment (separate from the $40 registration fee). Editable until a payment is recorded.`}>
       {FUND_METHODS.map(([v, label, desc]) => (
         <label key={v} style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start', cursor: 'pointer', marginBottom: '0.5rem' }}>
           <input type="checkbox" checked={methods.includes(v)} onChange={() => toggle(v)} style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--color-navy-deep)' }} />
@@ -223,11 +229,11 @@ function FundraisingSection({ f, onSaved }: { f: AccountData['fundraising']; onS
       ))}
       {hasMatch && (
         <div style={{ paddingLeft: '1.625rem', display: 'grid', gap: '0.625rem' }}>
-          <FormField label="Employer name" htmlFor="fcomp"><TextInput id="fcomp" value={empCompany} onChange={(e) => setEmpCompany(e.target.value)} /></FormField>
-          <FormField label="Match percentage" htmlFor="fpct"><TextInput id="fpct" type="number" value={empPct} onChange={(e) => setEmpPct(e.target.value)} placeholder="e.g. 100" /></FormField>
+          <FormField label="Employer name" htmlFor={`fcomp-${studentId}`}><TextInput id={`fcomp-${studentId}`} value={empCompany} onChange={(e) => setEmpCompany(e.target.value)} /></FormField>
+          <FormField label="Match percentage" htmlFor={`fpct-${studentId}`}><TextInput id={`fpct-${studentId}`} type="number" value={empPct} onChange={(e) => setEmpPct(e.target.value)} placeholder="e.g. 100" /></FormField>
           <div>
-            <label htmlFor="fport" style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--color-text-muted)' }}>How submitted</label>
-            <select id="fport" value={empPortal} onChange={(e) => setEmpPortal(e.target.value)} style={selectStyle}>
+            <label htmlFor={`fport-${studentId}`} style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.25rem', color: 'var(--color-text-muted)' }}>How submitted</label>
+            <select id={`fport-${studentId}`} value={empPortal} onChange={(e) => setEmpPortal(e.target.value)} style={selectStyle}>
               <option value="">Select…</option><option value="benevity">Benevity</option><option value="yourcause">YourCause</option><option value="employer_portal">Employer portal</option><option value="other">Other</option>
             </select>
           </div>
@@ -235,9 +241,9 @@ function FundraisingSection({ f, onSaved }: { f: AccountData['fundraising']; onS
       )}
       {hasSponsor && (
         <div style={{ paddingLeft: '1.625rem', display: 'grid', gap: '0.625rem' }}>
-          <FormField label="Business name" htmlFor="fbiz"><TextInput id="fbiz" value={spBusiness} onChange={(e) => setSpBusiness(e.target.value)} /></FormField>
-          <FormField label="Contact name" htmlFor="fcon"><TextInput id="fcon" value={spContact} onChange={(e) => setSpContact(e.target.value)} /></FormField>
-          <FormField label="Estimated amount" htmlFor="famt"><TextInput id="famt" type="number" value={spAmount} onChange={(e) => setSpAmount(e.target.value)} /></FormField>
+          <FormField label="Business name" htmlFor={`fbiz-${studentId}`}><TextInput id={`fbiz-${studentId}`} value={spBusiness} onChange={(e) => setSpBusiness(e.target.value)} /></FormField>
+          <FormField label="Contact name" htmlFor={`fcon-${studentId}`}><TextInput id={`fcon-${studentId}`} value={spContact} onChange={(e) => setSpContact(e.target.value)} /></FormField>
+          <FormField label="Estimated amount" htmlFor={`famt-${studentId}`}><TextInput id={`famt-${studentId}`} type="number" value={spAmount} onChange={(e) => setSpAmount(e.target.value)} /></FormField>
         </div>
       )}
       <div><PrimaryButton loading={busy} onClick={save}>Save fundraising</PrimaryButton><Saved state={state} /></div>
