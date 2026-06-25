@@ -163,7 +163,8 @@ export function iqTeamSubmittedHtml({ coachName, teamName, season, paymentRef, z
     <p style="margin:0 0 8px;color:#3a4a63;font-size:15px;line-height:1.6;">Include this payment reference with your payment:</p>
     <p style="margin:0 0 20px;"><span style="display:inline-block;background-color:#f4f6fb;border:1px solid #e6eaf1;border-radius:6px;padding:8px 14px;color:#0E2558;font-size:16px;font-weight:700;letter-spacing:0.04em;">${paymentRef}</span></p>
     ${payBtn}
-    <p style="margin:20px 0 0;color:#3a4a63;font-size:14px;line-height:1.6;">Once payment is confirmed, our IQ Coordinator will review your team. You will receive a separate email with your login link and clearance instructions once your team is approved.</p>`)
+    <p style="margin:20px 0 0;color:#3a4a63;font-size:14px;line-height:1.6;">So we can match your payment to your team, please pay using the <strong>same email</strong> you’ll use to sign in to the Hub, and enter your reference code <strong>${paymentRef}</strong> in the Zeffy form when prompted.</p>
+    <p style="margin:12px 0 0;color:#3a4a63;font-size:14px;line-height:1.6;">Once payment is confirmed, our IQ Coordinator will review your team. You will receive a separate email with your login link and clearance instructions once your team is approved.</p>`)
 }
 
 export function iqTeamApprovedHtml({ coachName, teamName, season, volunteerUrl }: { coachName: string; teamName: string | null; season: string; volunteerUrl: string }): string {

@@ -4,6 +4,7 @@ import { getAdminProfile } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 import { AdminShell, PageHeader, EmptyState } from '@/components/ui'
 import IqTeamsTable, { type IqRow } from './iq-teams-table'
+import IqZeffySync from './zeffy-sync'
 
 const SEASON = '2026-27'
 const ROLES = ['iq_coordinator', 'super_admin', 'payment_admin', 'registration_admin']
@@ -74,6 +75,7 @@ export default async function IqTeamsPage() {
   return (
     <AdminShell>
       <PageHeader title="IQ Teams" subtitle={`${teams.length} teams · ${counts('pending_payment')} pending payment · ${counts('pending_admin_confirmation')} pending approval · ${counts('active')} active`} />
+      {canAct && <IqZeffySync />}
       {teams.length === 0 ? (
         <EmptyState title="No IQ teams yet" description="Teams appear here when a coach creates one at /iq/team." />
       ) : (
