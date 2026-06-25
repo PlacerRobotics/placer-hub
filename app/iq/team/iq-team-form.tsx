@@ -15,7 +15,7 @@ const lbl: React.CSSProperties = { display: 'block', fontSize: '0.8125rem', font
 const grid2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }
 const GRADES = [3, 4, 5, 6]
 
-export default function IqTeamForm({ email, coach, schools }: { email: string; coach: { first_name: string; last_name: string; phone: string }; schools: School[] }) {
+export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee }: { email: string; coach: { first_name: string; last_name: string; phone: string }; schools: School[]; zeffyUrl: string | null; fee: number }) {
   const router = useRouter()
   const [cFirst, setCFirst] = useState(coach.first_name)
   const [cLast, setCLast] = useState(coach.last_name)
@@ -70,9 +70,24 @@ export default function IqTeamForm({ email, coach, schools }: { email: string; c
       <>
         <PageHeader title="IQ team created" subtitle="One more step — pay your team fee." />
         <SuccessAlert title="Team created — payment needed">
-          We emailed you a Zeffy payment link and your reference code <strong>{result.paymentRef}</strong>. Once your $1,200
-          team fee is confirmed, the IQ Coordinator reviews your team. After approval, each family is invited to register.
+          Pay your <strong>${fee.toLocaleString()}</strong> team fee now to start the review. Once it’s confirmed, the IQ
+          Coordinator reviews your team; after approval, each family is invited to register. We also emailed you this link.
         </SuccessAlert>
+
+        <div style={{ marginTop: '1.25rem', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '1.25rem', textAlign: 'center' }}>
+          {zeffyUrl ? (
+            <a href={zeffyUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '13px 28px', background: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '1rem', borderRadius: 8, textDecoration: 'none' }}>
+              Pay the ${fee.toLocaleString()} team fee via Zeffy →
+            </a>
+          ) : (
+            <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>A secure payment link will be emailed to you shortly.</p>
+          )}
+          <p style={{ margin: '0.875rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+            Pay with the <strong>same email you signed in with</strong> ({email}) and enter your reference code{' '}
+            <strong>{result.paymentRef}</strong> in Zeffy — that’s how we match your payment to your team.
+          </p>
+        </div>
+
         <div style={{ marginTop: '1.25rem', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
           {result.members.map((m, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.75rem 1rem', borderBottom: i < result.members.length - 1 ? '1px solid var(--color-border)' : 'none', fontSize: '0.875rem' }}>
@@ -81,7 +96,7 @@ export default function IqTeamForm({ email, coach, schools }: { email: string; c
             </div>
           ))}
         </div>
-        <div style={{ marginTop: '1.25rem' }}><PrimaryButton onClick={() => router.push('/dashboard')}>Go to dashboard</PrimaryButton></div>
+        <div style={{ marginTop: '1.25rem' }}><SecondaryButton onClick={() => router.push('/dashboard')}>Go to dashboard</SecondaryButton></div>
       </>
     )
   }

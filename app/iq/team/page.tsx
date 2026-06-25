@@ -11,9 +11,10 @@ export default async function IqTeamPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login?redirectTo=/iq/team')
 
-  const [{ data: g }, { data: schools }] = await Promise.all([
+  const [{ data: g }, { data: schools }, { data: cfg }] = await Promise.all([
     supabase.from('guardian').select('first_name, last_name, phone').ilike('login_email', user.email ?? '').maybeSingle(),
     supabase.from('school').select('id, name, grade_min, grade_max').order('name'),
+    supabase.from('season_config').select('zeffy_iq_team_url, iq_team_fee').eq('season', '2026-27').maybeSingle(),
   ])
 
   return (
@@ -22,6 +23,8 @@ export default async function IqTeamPage() {
         email={user.email ?? ''}
         coach={{ first_name: g?.first_name ?? '', last_name: g?.last_name ?? '', phone: g?.phone ?? '' }}
         schools={schools ?? []}
+        zeffyUrl={cfg?.zeffy_iq_team_url ?? null}
+        fee={Number(cfg?.iq_team_fee ?? 1200)}
       />
     </PublicShell>
   )
