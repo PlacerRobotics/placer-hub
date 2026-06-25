@@ -46,14 +46,18 @@ export default async function VolunteerPortal() {
   const db = createAdminClient()
   const [{ data: clearance }, { data: cert }, { data: bgStep }, { data: teamRows }] = await Promise.all([
     db.from('volunteer_clearance').select('*').eq('volunteer_id', vol.profileId).eq('season', VOLUNTEER_SEASON).maybeSingle(),
-    db.from('youth_protection_cert').select('expiration_date, cert_url').eq('volunteer_id', vol.profileId).order('expiration_date', { ascending: false }).limit(1).maybeSingle(),
+    db.from('youth_protection_cert').select('expiration_date, cert_url, aps_cert_id').eq('volunteer_id', vol.profileId).order('expiration_date', { ascending: false }).limit(1).maybeSingle(),
     db.from('volunteer_step').select('status').eq('volunteer_id', vol.profileId).eq('step', 'background_check').maybeSingle(),
     db.from('team_member').select('team_role, team:team_id(team_name, team_number, program)').eq('guardian_id', vol.guardianId).is('revoked_at', null),
   ])
 
   // APS status. The certificate expiry (when on file) is shown here; volunteers can
   // record/update it themselves in the "APS certificate" card below.
-  const certLink = cert?.cert_url ? <> · <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={extLink}>View certificate</a></> : null
+  // Show the APS certificate number as a link straight to the APS certificate view.
+  const certLabel = cert?.aps_cert_id ? `Cert #${cert.aps_cert_id}` : 'View certificate'
+  const certLink = cert?.cert_url
+    ? <> · <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={extLink}>{certLabel}</a></>
+    : cert?.aps_cert_id ? <> · Cert #{cert.aps_cert_id}</> : null
   let apsTone: Tone = 'pending'
   let apsDetail: React.ReactNode = <>Required — complete CA Mandated Reporter training, then record your certificate below.</>
   if (cert?.expiration_date) {
@@ -103,7 +107,7 @@ export default async function VolunteerPortal() {
           <div style={{ marginTop: '0.625rem', fontSize: '0.8125rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <a href={APS_SIGN_IN} target="_blank" rel="noopener noreferrer" style={extLink}>Sign in to APS — view my certificates →</a>
             <a href={APS_TRAINING} target="_blank" rel="noopener noreferrer" style={extLink}>Start the CA Mandated Reporter training →</a>
-            {cert?.cert_url && <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={extLink}>View my certificate →</a>}
+            {cert?.cert_url && <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={extLink}>{cert.aps_cert_id ? `View my certificate (Cert #${cert.aps_cert_id}) →` : 'View my certificate →'}</a>}
           </div>
         </div>
         <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: '1rem 1.25rem' }}>

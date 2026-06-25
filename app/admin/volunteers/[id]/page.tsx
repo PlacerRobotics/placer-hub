@@ -46,7 +46,7 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
   const [{ data: steps }, { data: clearance }, { data: cert }, { data: attempts }] = await Promise.all([
     supabase.from('volunteer_step').select('id, step, status, completed_at, sort_order').eq('volunteer_id', id).order('sort_order', { ascending: true }),
     supabase.from('volunteer_clearance').select('*').eq('volunteer_id', id).eq('season', SEASON).maybeSingle(),
-    supabase.from('youth_protection_cert').select('expiration_date, cert_url').eq('volunteer_id', id).order('expiration_date', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('youth_protection_cert').select('expiration_date, cert_url, aps_cert_id').eq('volunteer_id', id).order('expiration_date', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('quiz_attempt').select('quiz_id, score, passed, attempted_at, season').eq('volunteer_id', id).order('attempted_at', { ascending: false }).limit(10),
   ])
 
@@ -119,7 +119,14 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
     redirect(`/admin/volunteers/${id}`)
   }
 
-  const apsLabel = cert?.expiration_date ? (cert.expiration_date >= APS_VALID_THROUGH ? `Valid through ${cert.expiration_date}` : `Expires ${cert.expiration_date} (renew)`) : 'Not on file'
+  const apsCertLink = cert?.aps_cert_id
+    ? <> · {cert.cert_url
+        ? <a href={cert.cert_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>Cert #{cert.aps_cert_id}</a>
+        : <>Cert #{cert.aps_cert_id}</>}</>
+    : null
+  const apsLabel: React.ReactNode = cert?.expiration_date
+    ? <>{cert.expiration_date >= APS_VALID_THROUGH ? `Valid through ${cert.expiration_date}` : `Expires ${cert.expiration_date} (renew)`}{apsCertLink}</>
+    : 'Not on file'
   const fields = [
     { label: 'Volunteer', value: volunteerName },
     { label: 'Email', value: guardian?.login_email ?? '—' },
@@ -127,7 +134,7 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
     { label: 'Status', value: <StatusBadge label={vp.status} variant={VOL_VARIANT[vp.status] ?? 'neutral'} /> },
   ]
 
-  const ClearRow = ({ label, ok, detail, action }: { label: string; ok: boolean; detail: string; action?: React.ReactNode }) => (
+  const ClearRow = ({ label, ok, detail, action }: { label: string; ok: boolean; detail: React.ReactNode; action?: React.ReactNode }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.75rem 1rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
       <div><span style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{label}</span> <StatusBadge label={ok ? 'done' : 'pending'} variant={ok ? 'success' : 'neutral'} /><div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>{detail}</div></div>
       {action}
