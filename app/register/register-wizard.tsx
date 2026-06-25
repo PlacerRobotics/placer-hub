@@ -90,6 +90,7 @@ type Props = {
   guardianName: string
   zeffyUrl: string | null
   fundraisingTarget: number
+  fundraisingDeadline: string
   emergency: { first_name: string; last_name: string; relationship: string; phone: string } | null
   consent: { slackConsent: boolean; emailCertified: boolean } | null
   signed: { signedAt: string; parentName: string; studentName: string } | null
@@ -172,6 +173,7 @@ export default function RegisterWizard({
   guardianName,
   zeffyUrl,
   fundraisingTarget,
+  fundraisingDeadline,
   emergency,
   consent,
   signed,
@@ -382,7 +384,7 @@ export default function RegisterWizard({
               <p style={{ fontWeight: 700, fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Payment summary</p>
               <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.9375rem' }}>
                 <Row label="Registration fee" value="$40 — required, paid via Zeffy (non-deductible)" />
-                <Row label="Fundraising commitment" value={`$${fundraisingTarget} — ${fundMethods.map((m) => FUND_METHOD_LABELS[m] ?? m).join(', ') || '—'}`} />
+                <Row label="Fundraising commitment" value={`$${fundraisingTarget} (due ${fundraisingDeadline}) — ${fundMethods.map((m) => FUND_METHOD_LABELS[m] ?? m).join(', ') || '—'}`} />
               </div>
             </div>
             <a href={payUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '12px 24px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
@@ -648,7 +650,7 @@ export default function RegisterWizard({
             <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', fontWeight: 700, margin: '0 0 0.5rem' }}>2 · Fundraising commitment</div>
             <h2 className="text-section-title" style={{ margin: '0 0 0.375rem' }}>How will you fulfill your fundraising commitment?</h2>
             <p style={{ fontSize: '0.9375rem', color: 'var(--color-text-muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
-              Separately from the $40 fee, your {programLabel} participation includes a <strong>${fundraisingTarget} fundraising commitment</strong>. <strong>Select all that apply</strong> — you can combine options (for example, donate part and also have a business sponsor).
+              Separately from the $40 fee, your {programLabel} participation includes a <strong>${fundraisingTarget} fundraising commitment</strong>, due <strong>{fundraisingDeadline}</strong>. <strong>Select all that apply</strong> — you can combine options (for example, donate part and also have a business sponsor).
             </p>
 
             <CheckCard checked={fundMethods.includes('direct_donation')} onToggle={() => toggleFundMethod('direct_donation')} title="Direct contribution via Zeffy" label="I’ll donate toward the $550 online">

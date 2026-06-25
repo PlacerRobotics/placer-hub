@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { fundraisingDeadline } from '@/lib/fundraising'
 import RegisterWizard from './register-wizard'
 
 const SEASON = '2026-27'
@@ -56,7 +57,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
 
   const { data: appn } = await supabase
     .from('student_application')
-    .select('program_interest')
+    .select('program_interest, reviewed_at')
     .eq('student_id', student.id)
     .eq('season', SEASON)
     .maybeSingle()
@@ -165,6 +166,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       guardianName={`${guardian.first_name} ${guardian.last_name}`}
       zeffyUrl={config?.zeffy_student_url ?? null}
       fundraisingTarget={config?.one_program_fundraising_target ?? 550}
+      fundraisingDeadline={fundraisingDeadline(appn?.reviewed_at ?? null)}
       emergency={ecRow ? { first_name: ecRow.first_name ?? '', last_name: ecRow.last_name ?? '', relationship: ecRow.relationship ?? '', phone: ecRow.phone ?? '' } : null}
       consent={enrollment ? { slackConsent: !!enrollment.student_slack_consent, emailCertified: !!enrollment.parent_email_access_certified } : null}
       signed={signed}
