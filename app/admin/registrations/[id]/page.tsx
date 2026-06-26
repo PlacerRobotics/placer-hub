@@ -5,6 +5,7 @@ import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/compone
 import RegistrationEdit from './edit-modal'
 import TeamAssign, { type AssignTeam } from './team-assign'
 import FundraisingReceived from './fundraising-received'
+import StatusControl from './status-control'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', both: 'VEX V5 & Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure' }
@@ -58,14 +59,21 @@ export default async function RegistrationDetailPage({
 
   let teamId: string | null = null
   let teamLabel = '—'
+  let teamPending = false
   if (student) {
     const { data: tms } = await supabase.from('team_member').select('team_id').eq('student_id', student.id).eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null)
     const teamIds = [...new Set(((tms ?? []) as any[]).map((t) => t.team_id).filter(Boolean))]
     if (teamIds.length) {
       teamId = teamIds[0]
-      const { data: ts } = await supabase.from('team').select('id, team_number, team_name').in('id', teamIds)
-      const t0 = ((ts ?? []) as any[])[0]
-      teamLabel = t0 ? (`${t0.team_number ?? ''}${t0.team_name ? ` · ${t0.team_name}` : ''}`.trim() || '—') : '—'
+    } else {
+      // Not registered yet — show the pending team pointer from the application.
+      const { data: appn } = await supabase.from('student_application').select('triage_notes').eq('student_id', student.id).eq('season', SEASON).maybeSingle()
+      const mt = String(appn?.triage_notes ?? '').match(/(?:iq_team|team):([0-9a-f-]{36})/i)
+      if (mt) { teamId = mt[1]; teamPending = true }
+    }
+    if (teamId) {
+      const { data: t0 } = await supabase.from('team').select('team_number, team_name').eq('id', teamId).maybeSingle()
+      teamLabel = t0 ? (`${t0.team_number ?? ''}${t0.team_name ? ` · ${t0.team_name}` : ''}`.trim() || '—') + (teamPending ? ' (pending)' : '') : '—'
     }
   }
 
@@ -164,6 +172,7 @@ export default async function RegistrationDetailPage({
       <AdminDetailPanel title="Student" fields={studentFields} />
       <AdminDetailPanel title="Guardian" fields={guardianFields} />
       <AdminDetailPanel title="Registration" fields={regFields} />
+      <StatusControl familySeasonId={fs.id} current={fs.status} />
       <AdminDetailPanel title="Fundraising" fields={fundraisingFields} />
       {student && enrList.length > 0 && (
         <div style={{ marginTop: '-0.75rem', marginBottom: '1.25rem' }}>

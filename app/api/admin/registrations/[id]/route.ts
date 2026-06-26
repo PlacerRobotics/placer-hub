@@ -58,20 +58,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  // team (team_member, one active row per enrollment). Empty team_id = unassign.
-  // A student team_member requires an enrollment (CHECK enrollment_id OR guardian_id),
-  // so assignment is only possible once the student is registered. Audit uses team #s.
+  // team — registered students assign via team_member (one active row per enrollment);
+  // pending students (no enrollment yet) set the auto-placement pointer on their
+  // application, which materializes into team_member at registration. Empty = unassign.
   if (body.team_id !== undefined) {
     const newTeamId = String(body.team_id || '')
-    const { data: enrs } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON)
-    if (newTeamId && !(enrs ?? []).length) {
-      return NextResponse.json({ error: 'This student isn’t registered yet — a team can be assigned after they complete registration.' }, { status: 400 })
-    }
     const numOf = async (tid: string | null | undefined) => {
       if (!tid) return 'unassigned'
       const { data } = await db.from('team').select('team_number, team_name').eq('id', tid).maybeSingle()
       return data?.team_number || data?.team_name || tid
     }
+    const { data: enrs } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON)
+
+    if (!(enrs ?? []).length) {
+      // Pending placement via the application's triage_notes pointer.
+      const { data: appn } = await db.from('student_application').select('id, triage_notes').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
+      if (!appn) return NextResponse.json({ error: 'No application found to assign a team to.' }, { status: 400 })
+      const parts = String(appn.triage_notes ?? '').split(' · ').filter(Boolean)
+      const oldPtr = parts.find((p) => /^(iq_team|team):[0-9a-f-]{36}$/i.test(p))
+      const rest = parts.filter((p) => !/^(iq_team|team):/i.test(p) && !/^Team:/i.test(p))
+      let next = rest
+      if (newTeamId) {
+        const { data: t } = await db.from('team').select('program').eq('id', newTeamId).maybeSingle()
+        next = [`${t?.program === 'vex_iq' ? 'iq_team' : 'team'}:${newTeamId}`, ...rest]
+      }
+      await db.from('student_application').update({ triage_notes: next.join(' · ') || null }).eq('id', appn.id)
+      await log('team (pending)', await numOf(oldPtr ? oldPtr.split(':')[1] : null), newTeamId ? await numOf(newTeamId) : 'unassigned')
+      return NextResponse.json({ ok: true })
+    }
+
     const newNum = newTeamId ? await numOf(newTeamId) : 'unassigned'
     for (const enr of (enrs ?? []) as any[]) {
       const { data: existing } = await db.from('team_member')

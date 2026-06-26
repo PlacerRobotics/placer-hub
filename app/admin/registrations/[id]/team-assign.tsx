@@ -49,13 +49,11 @@ export default function TeamAssign({ familySeasonId, studentId, studentProgram, 
           <button type="button" onClick={() => { setSel(''); setErr(''); setOpen(true) }} style={linkBtn}>Change Team</button>
           <button type="button" onClick={() => post('')} disabled={busy} style={dangerLink}>Remove from Team</button>
         </span>
-      ) : hasEnrollment ? (
+      ) : (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span style={{ color: 'var(--color-text-muted)' }}>Unassigned</span>
+          <span style={{ color: 'var(--color-text-muted)' }}>Unassigned{hasEnrollment ? '' : ' · pending placement'}</span>
           <button type="button" onClick={() => { setSel(''); setErr(''); setOpen(true) }} style={navyBtn}>Assign Team</button>
         </span>
-      ) : (
-        <span style={{ color: 'var(--color-text-muted)' }}>Unassigned — register the student first to assign a team</span>
       )}
       {err && !open && <span style={{ color: 'var(--color-error)', fontSize: '0.8125rem', marginLeft: 8 }}>{err}</span>}
 
