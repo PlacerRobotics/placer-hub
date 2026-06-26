@@ -295,11 +295,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     if (c.needsWizard) todos.push({ label: `Finish registration for ${fn}`, cta: 'Continue', href: `/register?student=${c.studentId}` })
     else if (!c.isIqKid && !c.paid) todos.push({ label: c.fundReceivedAt ? `Pay ${fn}’s $40 registration fee` : `Pay ${fn}’s $40 fee + $${c.fundTarget || 550} fundraising commitment (due ${c.fundDeadline})`, cta: 'Pay via Zeffy', external: zeffyStudentUrl || ZEFFY_REGISTRATION_URL })
   }
-  // IQ coach team fee — outstanding until the $1,200 fee is paid, even after the
-  // coordinator has approved the team.
+  // IQ coach — get your team registered: build the roster (3+ members), pay the
+  // $1,200 fee, then the IQ Coordinator approves it. Each open step is its own to-do.
   for (const t of coachedTeams) {
-    if (t.isIq && t.feeStatus !== 'paid' && t.feeStatus !== 'not_applicable') {
+    if (!t.isIq) continue
+    if (t.status !== 'active' && t.count < 3) {
+      const need = 3 - t.count
+      todos.push({ label: `Add your ${t.label} roster — ${t.count === 0 ? 'add your team members' : `${need} more member${need === 1 ? '' : 's'}`} (3+ needed)`, cta: 'Set up team', href: `/iq/team/${t.id}` })
+    }
+    if (t.feeStatus !== 'paid' && t.feeStatus !== 'not_applicable') {
       todos.push({ label: `Pay your VEX IQ team fee — $${(t.feeAmount || 1200).toLocaleString()}${t.payRef ? ` (ref ${t.payRef})` : ''}`, cta: 'Pay via Zeffy', external: zeffyIqUrl ?? undefined, href: zeffyIqUrl ? undefined : '/dashboard' })
+    }
+    if (t.status !== 'active' && t.count >= 3 && (t.feeStatus === 'paid' || t.feeStatus === 'not_applicable')) {
+      todos.push({ label: `${t.label} is awaiting IQ Coordinator approval`, cta: 'View team', href: `/iq/team/${t.id}` })
     }
   }
   if (showSignPrompt) todos.push({ label: 'Sign your family agreements', cta: 'Review & sign', href: '/waivers' })
@@ -441,11 +449,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                               ? <Link href={`/iq/team/${tm.id}`} style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>{tm.label}</Link>
                               : <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{tm.label}</span>}
                             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{tm.programLabel} · {tm.divisionLabel} · {tm.count} {tm.count === 1 ? 'student' : 'students'}</div>
+                            {tm.isIq && tm.status !== 'active' && (
+                              <div style={{ fontSize: '0.8125rem', color: '#C9971B', fontWeight: 600, marginTop: '0.25rem' }}>
+                                To register your team: {tm.count < 3 ? 'add your roster (3+), ' : ''}{tm.feeStatus !== 'paid' && tm.feeStatus !== 'not_applicable' ? 'pay the $1,200 fee, ' : ''}then coordinator approval.
+                              </div>
+                            )}
                           </div>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             {tm.status ? <StatusBadge label={lbl} variant={variant} /> : null}
                             {tm.isIq && tm.feeStatus !== 'paid' && tm.feeStatus !== 'not_applicable' && zeffyIqUrl && <Link href={zeffyIqUrl} target="_blank" style={smallLink}>Pay ${(tm.feeAmount || 1200).toLocaleString()} →</Link>}
-                            {tm.isIq && <Link href={`/iq/team/${tm.id}`} style={smallLink}>Manage →</Link>}
+                            {tm.isIq && <Link href={`/iq/team/${tm.id}`} style={smallLink}>{tm.status === 'active' ? 'Manage →' : 'Set up team →'}</Link>}
                           </span>
                         </div>
                       )
