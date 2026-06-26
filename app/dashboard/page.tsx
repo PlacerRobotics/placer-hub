@@ -27,6 +27,8 @@ const RES_HANDBOOK = 'https://docs.google.com/document/d/1HXsC2LHMADf5a2svsOZLaG
 const RES_IQ_ADDENDUM = 'https://docs.google.com/document/d/17MtNftPsKIWnS-_yn3xxZD3wGdX2tJTE/edit'
 const RES_V5_DRIVE = 'https://drive.google.com/drive/folders/0AMHpvFT5atYCUk9PVA'
 const RES_COMBAT_DRIVE = 'https://drive.google.com/drive/folders/0AJWmYed6tfyuUk9PVA'
+const SLACK_MAIN = 'https://join.slack.com/t/placerrobotics/shared_invite/zt-422x9i083-6P4w8NE8tFricY67KTICaw'
+const SLACK_IQ = 'https://join.slack.com/t/placerroboticsvexiq/shared_invite/zt-422xl7n2r-UjR5INuEKgleeFrFj1BFsg'
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
@@ -548,6 +550,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           { label: 'IQ Parent Handbook — Addendum A', href: RES_IQ_ADDENDUM, show: hasIq },
           { label: 'V5 Members Drive', href: RES_V5_DRIVE, show: hasV5 || !studentCards.length },
           { label: 'Combat Members Drive', href: RES_COMBAT_DRIVE, show: hasCombat || !studentCards.length },
+          { label: 'Join our Slack (V5 & Combat)', href: SLACK_MAIN, show: hasV5 || hasCombat || !studentCards.length },
+          { label: 'Join the VEX IQ Slack', href: SLACK_IQ, show: hasIq },
         ].filter((r) => r.show)
         return (
           <section style={section}>
