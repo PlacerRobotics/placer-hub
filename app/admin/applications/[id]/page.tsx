@@ -104,13 +104,13 @@ export default async function ApplicationDetailPage({
     try {
       const adb = createAdminClient()
       const { data: g } = await adb.from('guardian').select('first_name, login_email').eq('family_id', familyId).eq('role', 'primary').maybeSingle()
-      const { data: a } = await adb.from('student_application').select('student:student_id ( first_name, last_name )').eq('id', id).maybeSingle()
+      const { data: a } = await adb.from('student_application').select('program_interest, student:student_id ( first_name, last_name )').eq('id', id).maybeSingle()
       const s: any = a?.student ? (Array.isArray(a.student) ? a.student[0] : a.student) : null
       if (g?.login_email) {
         await sendEmail({
           to: [g.login_email],
           subject: `Application accepted — Placer Robotics ${SEASON}`,
-          html: applicationAcceptedHtml({ guardianName: g.first_name ?? '', studentName: s ? `${s.first_name} ${s.last_name}`.trim() : 'your student', season: SEASON }),
+          html: applicationAcceptedHtml({ guardianName: g.first_name ?? '', studentName: s ? `${s.first_name} ${s.last_name}`.trim() : 'your student', programLabel: a?.program_interest ? (PROGRAM_LABELS[a.program_interest] ?? a.program_interest) : undefined, season: SEASON }),
         })
       }
     } catch (e) { console.error('[accept] email failed:', e) }
