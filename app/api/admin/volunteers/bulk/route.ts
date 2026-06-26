@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, apsReminderHtml, volunteerWaiverReminderHtml } from '@/lib/email'
+import { getApsUser } from '@/lib/aps'
 import { VOLUNTEER_SEASON as SEASON } from '@/lib/volunteer'
 
 const chunk = <T,>(a: T[], n: number): T[][] => { const o: T[][] = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o }
@@ -34,8 +35,9 @@ export async function POST(req: NextRequest) {
 
   if (action === 'notify_waiver' || action === 'notify_aps') {
     // Load all profiles and filter in memory (avoid an oversized .in()).
-    const { data: vpsAll } = await db.from('volunteer_profile').select('id, guardian:guardian_id ( first_name, last_name, login_email )')
+    const { data: vpsAll } = await db.from('volunteer_profile').select('id, aps_user_id, guardian:guardian_id ( first_name, last_name, login_email )')
     const vps = (vpsAll ?? []).filter((v: any) => idSet.has(v.id))
+    const apsKey = process.env.APS_API_KEY
 
     const certByVol: Record<string, string> = {}
     if (action === 'notify_aps') {
@@ -56,7 +58,9 @@ export async function POST(req: NextRequest) {
         const exp = certByVol[v.id]
         if (!exp) { skipped++; continue }
         const days = Math.max(0, Math.round((new Date(exp).getTime() - Date.now()) / 86400000))
-        r = await sendEmail({ to: [email], subject: `Your APS certificate expires ${exp}`, html: apsReminderHtml({ name, expiry: exp, days }) })
+        // Personal training link for volunteers already in APS (no bulk account creation).
+        const apsUser = apsKey && v.aps_user_id ? await getApsUser(apsKey, String(v.aps_user_id)) : null
+        r = await sendEmail({ to: [email], subject: `Your APS certificate expires ${exp}`, html: apsReminderHtml({ name, expiry: exp, days, enrollUrl: apsUser?.direct_login_url }) })
       }
       if (r.ok) emailed++
       else { failed++; if (r.error === 'no_api_key') emailDisabled = true }

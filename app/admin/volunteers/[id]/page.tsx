@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
+import { enrollApsTraining } from '@/lib/aps'
 import { volunteerBucket, VOLUNTEER_BUCKET_META } from '@/lib/volunteer-buckets'
 
 const SEASON = '2026-27'
@@ -126,18 +127,20 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
     }
     redirect(`/admin/volunteers/${id}`)
   }
-  async function sendApsReminder() {
+  async function enrollAps() {
     'use server'
     if (!(await getAdminProfile())) return
     const db = createAdminClient()
     const { data: row } = await db.from('volunteer_profile').select('guardian:guardian_id ( first_name, login_email )').eq('id', id).maybeSingle()
     const gg: any = row ? (Array.isArray((row as any).guardian) ? (row as any).guardian[0] : (row as any).guardian) : null
+    if (!gg?.login_email) redirect(`/admin/volunteers/${id}`)
     const { data: c } = await db.from('youth_protection_cert').select('expiration_date').eq('volunteer_id', id).order('expiration_date', { ascending: false }).limit(1).maybeSingle()
-    if (gg?.login_email) {
-      const exp = c?.expiration_date ?? ''
-      const days = exp ? Math.max(0, Math.round((new Date(exp).getTime() - Date.now()) / 86400000)) : undefined
-      await sendEmail({ to: [gg.login_email], subject: 'Renew your APS Mandated Reporter training — Placer Robotics', html: apsReminderHtml({ name: gg.first_name ?? '', expiry: exp, days }) })
-    }
+    const exp = c?.expiration_date ?? ''
+    const days = exp ? Math.max(0, Math.round((new Date(exp).getTime() - Date.now()) / 86400000)) : undefined
+    // Enroll via the APS API (creates the APS user if needed) → personal training link.
+    const apiKey = process.env.APS_API_KEY
+    const r = apiKey ? await enrollApsTraining(db, apiKey, id) : { ok: false, url: undefined as string | undefined }
+    await sendEmail({ to: [gg.login_email], subject: 'Your APS Mandated Reporter training — Placer Robotics', html: apsReminderHtml({ name: gg.first_name ?? '', expiry: exp, days, enrollUrl: r.url }) })
     redirect(`/admin/volunteers/${id}`)
   }
 
@@ -186,7 +189,7 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
           <ClearRow label="DOJ Background Check" ok={(steps ?? []).some((s: any) => s.step === 'background_check' && s.status === 'complete')} detail="One-time background clearance" />
           <ClearRow label="APS Training" ok={!!cert?.expiration_date && cert.expiration_date >= APS_VALID_THROUGH} detail={apsLabel} action={
             <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <form action={sendApsReminder}><button style={{ ...smallBtn, backgroundColor: 'transparent', color: 'var(--color-navy-deep)', border: '1px solid var(--color-border)' }}>Email training link</button></form>
+              <form action={enrollAps}><button style={{ ...smallBtn, backgroundColor: 'transparent', color: 'var(--color-navy-deep)', border: '1px solid var(--color-border)' }}>Enroll &amp; email training</button></form>
               <form action={setAps} style={{ display: 'flex', gap: '0.4rem' }}><input type="date" name="expiry" style={{ padding: '5px 8px', fontSize: '0.8125rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit' }} /><button style={smallBtn}>Set</button></form>
             </span>} />
           <ClearRow label="Robotics Center Quiz" ok={!!clearance?.rc_quiz_passed} detail={clearance?.rc_quiz_passed ? `Passed ${clearance.rc_quiz_passed_date ?? ''}` : 'Not passed this season'} action={!clearance?.rc_quiz_passed ? <form action={markQuiz}><input type="hidden" name="which" value="rc" /><button style={smallBtn}>Mark passed</button></form> : undefined} />

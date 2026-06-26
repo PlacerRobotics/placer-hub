@@ -238,13 +238,16 @@ export function volunteerAdminNotifyHtml({ name, email, programs, role, season, 
 // The self-enroll link to the free CA Mandated Reporter (AB 506) course at APS.
 const APS_TRAINING_URL = 'https://safetysystem.abusepreventionsystems.com/training_assignments/overview/california'
 
-export function apsReminderHtml({ name, expiry, days }: { name: string; expiry: string; days?: number }): string {
+// enrollUrl = the volunteer's personal APS direct_login_url (one click into their
+// own training); falls back to the generic self-enroll course when not provided.
+export function apsReminderHtml({ name, expiry, days, enrollUrl }: { name: string; expiry: string; days?: number; enrollUrl?: string }): string {
   const when = expiry ? `expires on <strong>${expiry}</strong>${days != null ? ` (about ${days} days)` : ''}` : 'is required before you can be cleared to volunteer'
+  const url = enrollUrl || APS_TRAINING_URL
   return emailShell('Renew your APS Mandated Reporter training', `
     <p style="${P}">Hi ${name || 'volunteer'}, your APS Mandated Reporter (CA AB 506) certificate ${when}.</p>
-    <p style="${P}">It only takes a few minutes and the course is free. Click below to enroll and complete it — your certificate then syncs to the Hub automatically.</p>
-    ${emailButton(APS_TRAINING_URL, 'Enroll &amp; complete training →')}
-    <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">If the button doesn't work, go to <a href="${APS_TRAINING_URL}" style="color:#0E2558;">${APS_TRAINING_URL}</a>. Already a member? Sign in at <a href="https://safetysystem.abusepreventionsystems.com/auth/sign_in" style="color:#0E2558;">safetysystem.abusepreventionsystems.com</a>.</p>`)
+    <p style="${P}">It only takes a few minutes and the course is free. ${enrollUrl ? 'You’re enrolled — click below to start (or finish) your training.' : 'Click below to enroll and complete it.'} Your certificate then syncs to the Hub automatically.</p>
+    ${emailButton(url, enrollUrl ? 'Start my training →' : 'Enroll &amp; complete training →')}
+    <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">If the button doesn't work, copy this address into your browser:<br/><a href="${url}" style="color:#0E2558;word-break:break-all;">${url}</a></p>`)
 }
 
 export function volunteerWaiverReminderHtml({ name, season, waiverUrl }: { name: string; season: string; waiverUrl: string }): string {
