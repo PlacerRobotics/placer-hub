@@ -133,8 +133,18 @@ export async function POST(request: NextRequest) {
 
       const progs = detectPrograms(g(r, 'Final Program'), g(r, 'Which programs are you interested in?'))
       const program = progs.includes('vex_v5') && progs.includes('combat') ? 'both' : (progs[0] ?? 'not_sure')
-      const team = g(r, '26-27 Team')
-      const noteParts = [team ? `Team: ${team}` : null, g(r, 'Review Comments') || null].filter(Boolean)
+      // Resolve "26-27 Team" to an auto-placement pointer within the student's program
+      // (IQ and V5 share numbers). Unresolved values (e.g. "MS New1" placeholders) stay
+      // a free-text note for manual assignment.
+      const teamRef = g(r, '26-27 Team')
+      let teamNote: string | null = teamRef ? `Team: ${teamRef}` : null
+      if (teamRef) {
+        const teamProgram = program === 'vex_iq' ? 'vex_iq' : program === 'combat' ? 'combat' : 'vex_v5'
+        let t = (await db.from('team').select('id, program').eq('season', SEASON).eq('program', teamProgram).eq('team_number', teamRef).maybeSingle()).data
+        if (!t) t = (await db.from('team').select('id, program').eq('season', SEASON).eq('program', teamProgram).ilike('team_name', teamRef).maybeSingle()).data
+        if (t) teamNote = `${t.program === 'vex_iq' ? 'iq_team' : 'team'}:${t.id}`
+      }
+      const noteParts = [teamNote, g(r, 'Review Comments') || null].filter(Boolean)
 
       await db.from('student_application').insert({
         family_id: familyId, student_id: studentId, season: SEASON,

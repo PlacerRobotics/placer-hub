@@ -53,16 +53,24 @@ export default async function AdminRegistrationsPage() {
     ? await supabase.from('team_member').select('student_id, team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('student_id', studentIds)
     : { data: [] as any[] }
   const teamIdByStudent: Record<string, string> = Object.fromEntries((tms ?? []).map((t: any) => [t.student_id, t.team_id]))
-  const teamIds = [...new Set(Object.values(teamIdByStudent))]
+
+  const { data: apps } = studentIds.length
+    ? await supabase.from('student_application').select('student_id, program_interest, triage_notes').eq('season', SEASON).in('student_id', studentIds)
+    : { data: [] as any[] }
+  const progByStudent: Record<string, string> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.program_interest]))
+  // Pending team: assigned at import via a triage_notes pointer (team:/iq_team:<uuid>),
+  // materialized into team_member only when the student registers. Show it meanwhile.
+  const pendingTeamIdByStudent: Record<string, string> = {}
+  for (const a of (apps ?? []) as any[]) {
+    const mt = String(a.triage_notes ?? '').match(/(?:iq_team|team):([0-9a-f-]{36})/i)
+    if (mt) pendingTeamIdByStudent[a.student_id] = mt[1]
+  }
+
+  const teamIds = [...new Set([...Object.values(teamIdByStudent), ...Object.values(pendingTeamIdByStudent)])]
   const { data: teamRows } = teamIds.length
     ? await supabase.from('team').select('id, team_number, team_name').in('id', teamIds)
     : { data: [] as any[] }
   const teamById: Record<string, any> = Object.fromEntries((teamRows ?? []).map((t: any) => [t.id, t]))
-
-  const { data: apps } = studentIds.length
-    ? await supabase.from('student_application').select('student_id, program_interest').eq('season', SEASON).in('student_id', studentIds)
-    : { data: [] as any[] }
-  const progByStudent: Record<string, string> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.program_interest]))
 
   const { data: allTeams } = await supabase
     .from('team')
@@ -74,8 +82,10 @@ export default async function AdminRegistrationsPage() {
     const fs = fsByFamily[s.family_id] ?? {}
     const enr = enrByStudent[s.id]
     const g = gByFamily[s.family_id]
-    const teamId = teamIdByStudent[s.id] ?? null
+    const materializedTeamId = teamIdByStudent[s.id] ?? null
+    const teamId = materializedTeamId ?? pendingTeamIdByStudent[s.id] ?? null
     const team = teamId ? teamById[teamId] : null
+    const teamPending = !materializedTeamId && !!pendingTeamIdByStudent[s.id]
     const grade = Number(s.grade ?? 0)
     const division = enr?.division ?? (grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS')
     // Two enrollment programs (vex_v5 + combat) collapse to the 'both' label.
@@ -89,7 +99,7 @@ export default async function AdminRegistrationsPage() {
       program,
       division,
       teamId,
-      teamLabel: team ? team.team_number || team.team_name || '—' : '—',
+      teamLabel: team ? `${team.team_number || team.team_name || '—'}${teamPending ? ' (pending)' : ''}` : '—',
       school: s.school?.name ?? s.school_raw ?? '—',
       guardianEmail: g?.login_email ?? '—',
       guardianLoggedIn: !!g?.last_login_at,
