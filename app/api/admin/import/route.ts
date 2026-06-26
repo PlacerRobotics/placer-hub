@@ -53,7 +53,9 @@ export async function POST(request: NextRequest) {
     const r = rows[i]
     const rowNo = i + 1
     const studentName = `${(r.student_first_name ?? '').trim()} ${(r.student_last_name ?? '').trim()}`.trim() || 'Unknown'
-    const action = String(r.import_action ?? 'invite').trim().toLowerCase()
+    // Default to 'invite' when the column is blank — note `??` doesn't catch an empty
+    // string, so coalesce explicitly (this is why blank rows wrongly became 'applied').
+    const action = String(r.import_action ?? '').trim().toLowerCase() || 'invite'
 
     if (action === 'skip') {
       skipped++
