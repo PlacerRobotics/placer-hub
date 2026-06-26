@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { sendMagicLinkEmail } from '@/lib/email'
+import { sendMagicLinkEmail, sendEmail, apsReminderHtml } from '@/lib/email'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
@@ -126,6 +126,20 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
     }
     redirect(`/admin/volunteers/${id}`)
   }
+  async function sendApsReminder() {
+    'use server'
+    if (!(await getAdminProfile())) return
+    const db = createAdminClient()
+    const { data: row } = await db.from('volunteer_profile').select('guardian:guardian_id ( first_name, login_email )').eq('id', id).maybeSingle()
+    const gg: any = row ? (Array.isArray((row as any).guardian) ? (row as any).guardian[0] : (row as any).guardian) : null
+    const { data: c } = await db.from('youth_protection_cert').select('expiration_date').eq('volunteer_id', id).order('expiration_date', { ascending: false }).limit(1).maybeSingle()
+    if (gg?.login_email) {
+      const exp = c?.expiration_date ?? ''
+      const days = exp ? Math.max(0, Math.round((new Date(exp).getTime() - Date.now()) / 86400000)) : undefined
+      await sendEmail({ to: [gg.login_email], subject: 'Renew your APS Mandated Reporter training — Placer Robotics', html: apsReminderHtml({ name: gg.first_name ?? '', expiry: exp, days }) })
+    }
+    redirect(`/admin/volunteers/${id}`)
+  }
 
   const apsCertLink = cert?.aps_cert_id
     ? <> · {cert.cert_url
@@ -170,7 +184,11 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
         <h3 className="text-card-title" style={{ marginBottom: '0.875rem' }}>{SEASON} clearance</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', marginBottom: '1.5rem' }}>
           <ClearRow label="DOJ Background Check" ok={(steps ?? []).some((s: any) => s.step === 'background_check' && s.status === 'complete')} detail="One-time background clearance" />
-          <ClearRow label="APS Training" ok={!!cert?.expiration_date && cert.expiration_date >= APS_VALID_THROUGH} detail={apsLabel} action={<form action={setAps} style={{ display: 'flex', gap: '0.4rem' }}><input type="date" name="expiry" style={{ padding: '5px 8px', fontSize: '0.8125rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit' }} /><button style={smallBtn}>Set</button></form>} />
+          <ClearRow label="APS Training" ok={!!cert?.expiration_date && cert.expiration_date >= APS_VALID_THROUGH} detail={apsLabel} action={
+            <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <form action={sendApsReminder}><button style={{ ...smallBtn, backgroundColor: 'transparent', color: 'var(--color-navy-deep)', border: '1px solid var(--color-border)' }}>Email training link</button></form>
+              <form action={setAps} style={{ display: 'flex', gap: '0.4rem' }}><input type="date" name="expiry" style={{ padding: '5px 8px', fontSize: '0.8125rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit' }} /><button style={smallBtn}>Set</button></form>
+            </span>} />
           <ClearRow label="Robotics Center Quiz" ok={!!clearance?.rc_quiz_passed} detail={clearance?.rc_quiz_passed ? `Passed ${clearance.rc_quiz_passed_date ?? ''}` : 'Not passed this season'} action={!clearance?.rc_quiz_passed ? <form action={markQuiz}><input type="hidden" name="which" value="rc" /><button style={smallBtn}>Mark passed</button></form> : undefined} />
           <ClearRow label="Youth Protection Quiz" ok={!!clearance?.yp_quiz_passed} detail={clearance?.yp_quiz_passed ? `Passed ${clearance.yp_quiz_passed_date ?? ''}` : 'Not passed this season'} action={!clearance?.yp_quiz_passed ? <form action={markQuiz}><input type="hidden" name="which" value="yp" /><button style={smallBtn}>Mark passed</button></form> : undefined} />
           <ClearRow label="Annual Waiver" ok={!!clearance?.waiver_signed_date} detail={clearance?.waiver_signed_date ? `Signed — ${clearance.waiver_signature_text ?? ''}` : 'Not signed this season'} />

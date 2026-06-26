@@ -235,10 +235,16 @@ export function volunteerAdminNotifyHtml({ name, email, programs, role, season, 
     <p style="${P}"><a href="${hubUrl}/admin/volunteers" style="color:#0E2558;font-weight:700;">Review at the Hub &rarr;</a></p>`)
 }
 
-export function apsReminderHtml({ name, expiry, days }: { name: string; expiry: string; days: number }): string {
-  return emailShell('Your APS certificate is expiring', `
-    <p style="${P}">Hi ${name || 'volunteer'}, your APS Mandated Reporter certificate expires on <strong>${expiry}</strong> (about ${days} days).</p>
-    <p style="${P}">Renew the free course at <a href="https://abusepreventionsystems.com" style="color:#0E2558;font-weight:700;">abusepreventionsystems.com</a> to stay cleared to volunteer.</p>`)
+// The self-enroll link to the free CA Mandated Reporter (AB 506) course at APS.
+const APS_TRAINING_URL = 'https://safetysystem.abusepreventionsystems.com/training_assignments/overview/california'
+
+export function apsReminderHtml({ name, expiry, days }: { name: string; expiry: string; days?: number }): string {
+  const when = expiry ? `expires on <strong>${expiry}</strong>${days != null ? ` (about ${days} days)` : ''}` : 'is required before you can be cleared to volunteer'
+  return emailShell('Renew your APS Mandated Reporter training', `
+    <p style="${P}">Hi ${name || 'volunteer'}, your APS Mandated Reporter (CA AB 506) certificate ${when}.</p>
+    <p style="${P}">It only takes a few minutes and the course is free. Click below to enroll and complete it — your certificate then syncs to the Hub automatically.</p>
+    ${emailButton(APS_TRAINING_URL, 'Enroll &amp; complete training →')}
+    <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">If the button doesn't work, go to <a href="${APS_TRAINING_URL}" style="color:#0E2558;">${APS_TRAINING_URL}</a>. Already a member? Sign in at <a href="https://safetysystem.abusepreventionsystems.com/auth/sign_in" style="color:#0E2558;">safetysystem.abusepreventionsystems.com</a>.</p>`)
 }
 
 export function volunteerWaiverReminderHtml({ name, season, waiverUrl }: { name: string; season: string; waiverUrl: string }): string {

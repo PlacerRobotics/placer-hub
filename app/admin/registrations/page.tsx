@@ -13,7 +13,7 @@ export default async function AdminRegistrationsPage() {
     .from('family_season')
     .select('id, family_id, status, magic_link_sent, updated_at, fundraising_method, fundraising_methods')
     .eq('season', SEASON)
-    .in('status', ['cleared_to_register', 'registered', 'cancelled'])
+    .in('status', ['cleared_to_register', 'registered', 'cancelled', 'applied', 'suspended'])
   const fsList = (fseasons ?? []) as any[]
   const familyIds = fsList.map((f) => f.family_id)
   const fsByFamily: Record<string, any> = Object.fromEntries(fsList.map((f) => [f.family_id, f]))

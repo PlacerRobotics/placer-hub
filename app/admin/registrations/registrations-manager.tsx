@@ -50,10 +50,10 @@ const PROGRAM_LABELS: Record<string, string> = {
   vex_v5: 'VEX V5', combat: 'Combat', both: 'VEX V5 & Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure',
 }
 const STATUS_LABELS: Record<string, string> = {
-  cleared_to_register: 'Cleared to Register', registered: 'Registered', cancelled: 'Cancelled',
+  cleared_to_register: 'Cleared to Register', registered: 'Registered', cancelled: 'Cancelled', applied: 'Applied', suspended: 'Suspended',
 }
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = {
-  cleared_to_register: 'info', registered: 'success', cancelled: 'neutral',
+  cleared_to_register: 'info', registered: 'success', cancelled: 'neutral', applied: 'warning', suspended: 'error',
 }
 
 const sel: React.CSSProperties = { padding: '7px 9px', fontSize: '0.8125rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', backgroundColor: 'var(--color-surface)' }
@@ -182,7 +182,7 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
       {/* Filter bar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
         <input placeholder="Search name or email…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...sel, minWidth: 200 }} />
-        <select style={sel} value={fStatus} onChange={(e) => setFStatus(e.target.value)}><option value="all">All statuses</option><option value="cleared_to_register">Cleared to Register</option><option value="registered">Registered</option><option value="cancelled">Cancelled</option></select>
+        <select style={sel} value={fStatus} onChange={(e) => setFStatus(e.target.value)}><option value="all">All statuses</option><option value="cleared_to_register">Cleared to Register</option><option value="registered">Registered</option><option value="applied">Applied</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select>
         <select style={sel} value={fProgram} onChange={(e) => setFProgram(e.target.value)}><option value="all">All programs</option><option value="vex_v5">VEX V5</option><option value="combat">Combat</option><option value="both">Both</option><option value="vex_iq">VEX IQ</option></select>
         <select style={sel} value={fDivision} onChange={(e) => setFDivision(e.target.value)}><option value="all">All divisions</option><option value="ES">ES</option><option value="MS">MS</option><option value="HS">HS</option></select>
         <select style={sel} value={fTeam} onChange={(e) => setFTeam(e.target.value)}><option value="all">All teams</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
