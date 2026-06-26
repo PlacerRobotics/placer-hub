@@ -79,9 +79,17 @@ export async function enrollApsTraining(db: any, apiKey: string, volunteerId: st
   }
 
   if (!g?.login_email) return { ok: false, error: 'No email on file for this volunteer.' }
-  const created = await createApsUser(apiKey, { first_name: g.first_name ?? '', last_name: g.last_name ?? '', email: g.login_email, external_id: vp.aps_external_id || undefined })
+  // New APS users get a sequential external_id starting at 200000 (kept separate from
+  // the legacy 1000xx range), unless the volunteer already has one on file.
+  let externalId: string | undefined = vp.aps_external_id ? String(vp.aps_external_id) : undefined
+  if (!externalId) {
+    const { data: rows } = await db.from('volunteer_profile').select('aps_external_id').not('aps_external_id', 'is', null)
+    const max = Math.max(199999, ...((rows ?? []).map((r: any) => parseInt(String(r.aps_external_id), 10)).filter((n: number) => Number.isFinite(n) && n >= 200000)))
+    externalId = String(max + 1)
+  }
+  const created = await createApsUser(apiKey, { first_name: g.first_name ?? '', last_name: g.last_name ?? '', email: g.login_email, external_id: externalId })
   if (!created?.id) return { ok: false, error: 'APS user creation failed.' }
-  await db.from('volunteer_profile').update({ aps_user_id: String(created.id), aps_training_url: created.direct_login_url ?? null }).eq('id', volunteerId)
+  await db.from('volunteer_profile').update({ aps_user_id: String(created.id), aps_external_id: externalId, aps_training_url: created.direct_login_url ?? null }).eq('id', volunteerId)
   return { ok: true, url: created.direct_login_url, created: true }
 }
 
