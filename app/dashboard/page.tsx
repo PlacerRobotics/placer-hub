@@ -21,6 +21,13 @@ function apsDisplay(state: string, expiry: string | null): { color: string; text
 // Fallback so "Pay Now via Zeffy" always works even if season_config is unset.
 const ZEFFY_REGISTRATION_URL = 'https://www.zeffy.com/en-US/ticketing/2026-27-placer-robotics-mshs-registration'
 
+// Family resources (account-agnostic links — no /u/N). Drives + IQ addendum are shown
+// per the family's programs; the handbook is for everyone.
+const RES_HANDBOOK = 'https://docs.google.com/document/d/1HXsC2LHMADf5a2svsOZLaGUPRkMhUH2JvzGBkGD38dc/edit'
+const RES_IQ_ADDENDUM = 'https://docs.google.com/document/d/17MtNftPsKIWnS-_yn3xxZD3wGdX2tJTE/edit'
+const RES_V5_DRIVE = 'https://drive.google.com/drive/folders/0AMHpvFT5atYCUk9PVA'
+const RES_COMBAT_DRIVE = 'https://drive.google.com/drive/folders/0AJWmYed6tfyuUk9PVA'
+
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
 type CheckState = 'done' | 'todo' | 'na'
 type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean; fundMethods: string[]; fundTarget: number; fundDeadline: string; fundReceivedAt: string | null }
@@ -530,6 +537,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </div>
         </div>
       </section>
+
+      {/* RESOURCES */}
+      {(() => {
+        const hasV5 = studentCards.some((c) => /v5/i.test(c.program))
+        const hasCombat = studentCards.some((c) => /combat/i.test(c.program))
+        const hasIq = studentCards.some((c) => c.isIqKid)
+        const res = [
+          { label: 'Parent Handbook', href: RES_HANDBOOK, show: true },
+          { label: 'IQ Parent Handbook — Addendum A', href: RES_IQ_ADDENDUM, show: hasIq },
+          { label: 'V5 Members Drive', href: RES_V5_DRIVE, show: hasV5 || !studentCards.length },
+          { label: 'Combat Members Drive', href: RES_COMBAT_DRIVE, show: hasCombat || !studentCards.length },
+        ].filter((r) => r.show)
+        return (
+          <section style={section}>
+            <h2 className="text-section-title" style={sectionTitle}>Resources</h2>
+            <div style={panel}>
+              {res.map((r, i) => (
+                <div key={r.href} style={{ ...rowFlex, borderBottom: i < res.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                  <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{r.label}</span>
+                  <a href={r.href} target="_blank" rel="noopener noreferrer" style={smallLink}>Open →</a>
+                </div>
+              ))}
+            </div>
+          </section>
+        )
+      })()}
 
       {/* MY HOUSEHOLD */}
       {guardian && (
