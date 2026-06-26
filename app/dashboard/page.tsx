@@ -39,7 +39,7 @@ const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Comb
 const DIVISION_LABELS: Record<string, string> = { ES: 'Elementary', MS: 'Middle school', HS: 'High school' }
 const TSHIRT_LABELS: Record<string, string> = { ym: 'Youth Medium', yl: 'Youth Large', xs: 'Adult XS', s: 'Adult Small', m: 'Adult Medium', l: 'Adult Large', xl: 'Adult XL', xxl: 'Adult 2XL', xxxl: 'Adult 3XL' }
 const AID_DISPLAY: Record<string, [string, Variant]> = { not_requested: ['Not requested', 'neutral'], pending: ['Requested', 'info'], approved: ['Approved', 'success'], denied: ['Denied', 'error'], withdrawn: ['Withdrawn', 'neutral'] }
-const IQ_STATUS: Record<string, [string, Variant]> = { pending_payment: ['Awaiting payment', 'warning'], pending_admin_confirmation: ['Under review', 'info'], active: ['Active', 'success'], suspended: ['Suspended', 'error'], pending: ['Pending', 'warning'] }
+const IQ_STATUS: Record<string, [string, Variant]> = { pending_payment: ['Awaiting payment', 'warning'], pending_admin_confirmation: ['In process', 'info'], active: ['Active', 'success'], suspended: ['Suspended', 'error'], pending: ['Pending', 'warning'] }
 
 const CHECK_COLOR: Record<CheckState, string> = { done: 'var(--color-success)', todo: '#C9971B', na: 'var(--color-text-muted)' }
 const CHECK_GLYPH: Record<CheckState, string> = { done: '✓', todo: '✗', na: '–' }

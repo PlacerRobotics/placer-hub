@@ -8,7 +8,7 @@ import IqRosterBuilder from './roster-builder'
 const SEASON = '2026-27'
 const STATUS: Record<string, [string, 'success' | 'warning' | 'info' | 'error' | 'neutral']> = {
   pending_payment: ['Awaiting payment', 'warning'],
-  pending_admin_confirmation: ['Under review', 'info'],
+  pending_admin_confirmation: ['In process', 'info'],
   active: ['Active', 'success'],
   suspended: ['Suspended', 'error'],
 }
