@@ -27,6 +27,14 @@ function epochToIso(created: any): string | null {
   const d = new Date(ms)
   return isNaN(d.getTime()) ? null : d.toISOString()
 }
+// First non-empty answer in one question array whose label contains any fragment.
+function answerIn(questions: any[] | undefined, fragments: string[]): string {
+  for (const f of fragments) {
+    const m = (questions ?? []).find((q: any) => String(q?.question || '').toLowerCase().includes(f))
+    if (m?.answer != null && String(m.answer).trim()) return String(m.answer).trim()
+  }
+  return ''
+}
 
 // Registration campaign → enrollments, matched by guardian email + student name + program.
 export async function syncRegistrationPayments(db: any, { apply, adminId }: { apply: boolean; adminId: string | null }): Promise<SyncResult> {
@@ -61,21 +69,36 @@ export async function syncRegistrationPayments(db: any, { apply, adminId }: { ap
 
       let enrollment: any = null
       let reason = ''
-      if (!guardianEmail) reason = 'no guardian email on ticket'
-      else {
-        const { data: g } = await db.from('guardian').select('family_id').ilike('login_email', guardianEmail).maybeSingle()
-        if (!g) reason = `no family for ${guardianEmail}`
+      let via = 'email+name'
+
+      // 1. Most reliable: the optional Payment Reference Number, when the parent pasted it.
+      // Prefer a per-ticket answer; fall back to a buyer-level one only on single-ticket orders.
+      const refCode = answerIn(item.questions, ['payment reference', 'reference']) || ((p.items?.length ?? 0) <= 1 ? answerIn(p.buyer_questions, ['payment reference', 'reference']) : '')
+      if (refCode) {
+        const { data: enrByRef } = await db.from('enrollment')
+          .select('id, family_id, program, registration_fee_amount, registration_fee_status, fundraising_target, fundraising_methods, fundraising_received_at')
+          .ilike('payment_reference_code', refCode).eq('season', SEASON).maybeSingle()
+        if (enrByRef) { enrollment = enrByRef; via = 'reference' }
+      }
+
+      // 2. Fallback: guardian email + student name + program.
+      if (!enrollment) {
+        if (!guardianEmail) reason = 'no guardian email on ticket'
         else {
-          const { data: studs } = await db.from('student').select('id, first_name, last_name').eq('family_id', g.family_id)
-          const stu = (studs ?? []).find((s: any) => normName(`${s.first_name} ${s.last_name}`) === normName(studentName))
-          if (!stu) reason = `no student "${studentName}" in that family`
+          const { data: g } = await db.from('guardian').select('family_id').ilike('login_email', guardianEmail).maybeSingle()
+          if (!g) reason = `no family for ${guardianEmail}`
           else {
-            const { data: enrs } = await db.from('enrollment')
-              .select('id, family_id, program, registration_fee_amount, registration_fee_status, fundraising_target, fundraising_methods, fundraising_received_at')
-              .eq('student_id', stu.id).eq('season', SEASON)
-            const list = (enrs ?? []) as any[]
-            enrollment = (program && list.find((e) => e.program === program)) || list.find((e) => Number(e.registration_fee_amount) > 0) || list[0] || null
-            if (!enrollment) reason = 'student is not registered (no enrollment)'
+            const { data: studs } = await db.from('student').select('id, first_name, last_name').eq('family_id', g.family_id)
+            const stu = (studs ?? []).find((s: any) => normName(`${s.first_name} ${s.last_name}`) === normName(studentName))
+            if (!stu) reason = `no student "${studentName}" in that family`
+            else {
+              const { data: enrs } = await db.from('enrollment')
+                .select('id, family_id, program, registration_fee_amount, registration_fee_status, fundraising_target, fundraising_methods, fundraising_received_at')
+                .eq('student_id', stu.id).eq('season', SEASON)
+              const list = (enrs ?? []) as any[]
+              enrollment = (program && list.find((e) => e.program === program)) || list.find((e) => Number(e.registration_fee_amount) > 0) || list[0] || null
+              if (!enrollment) reason = 'student is not registered (no enrollment)'
+            }
           }
         }
       }
@@ -85,7 +108,7 @@ export async function syncRegistrationPayments(db: any, { apply, adminId }: { ap
       const feeOpen = !(enrollment.registration_fee_status === 'paid' || enrollment.registration_fee_status === 'waived') && !claimed.has(enrollment.id)
       const ptype = feeOpen ? 'registration_fee' : 'fundraising'
       matched++
-      results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'matched', enrollmentId: enrollment.id, type: ptype })
+      results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'matched', enrollmentId: enrollment.id, type: ptype, via })
 
       if (apply) {
         const amt = (Number(item.amount ?? p.amount ?? 0) || 0) / 100
