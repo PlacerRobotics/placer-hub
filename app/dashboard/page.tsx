@@ -516,6 +516,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </section>
       )}
 
+      {/* LAB CALENDAR & EVENTS */}
+      <section style={section}>
+        <h2 className="text-section-title" style={sectionTitle}>Lab calendar &amp; events</h2>
+        <div style={panel}>
+          <div style={{ ...rowFlex, borderBottom: '1px solid var(--color-border)' }}>
+            <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Lab hours, practices &amp; camps</span>
+            <Link href="/calendar" style={smallLink}>View calendar →</Link>
+          </div>
+          <div style={rowFlex}>
+            <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Competition events we’re attending</span>
+            <a href="https://placerrobotics.org/events" target="_blank" rel="noopener noreferrer" style={smallLink}>placerrobotics.org/events →</a>
+          </div>
+        </div>
+      </section>
+
       {/* MY HOUSEHOLD */}
       {guardian && (
         <section style={section}>
