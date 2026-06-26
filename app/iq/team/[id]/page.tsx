@@ -2,8 +2,8 @@ import { redirect, notFound, unstable_rethrow } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendMagicLinkEmail } from '@/lib/email'
-import { FamilyShell, PageHeader, FormSection, FormField, TextInput, PrimaryButton, StatusBadge, InfoAlert } from '@/components/ui'
+import { FamilyShell, PageHeader, FormSection, TextInput, PrimaryButton, StatusBadge, InfoAlert } from '@/components/ui'
+import IqRosterBuilder from './roster-builder'
 
 const SEASON = '2026-27'
 const STATUS: Record<string, [string, 'success' | 'warning' | 'info' | 'error' | 'neutral']> = {
@@ -13,8 +13,6 @@ const STATUS: Record<string, [string, 'success' | 'warning' | 'info' | 'error' |
   suspended: ['Suspended', 'error'],
 }
 const cell: React.CSSProperties = { padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }
-const selectStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: '0.875rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
-const lbl: React.CSSProperties = { display: 'block', fontSize: '0.8125rem', fontWeight: 500, marginBottom: '0.25rem' }
 
 // Resolve the signed-in coach for this team. Returns the coach's guardian id +
 // family id, or null if they aren't this team's coach.
@@ -60,6 +58,7 @@ async function CoachTeamView(id: string) {
   const db = createAdminClient()
   const { data: team } = await db.from('team').select('id, team_name, team_number, status, program').eq('id', id).maybeSingle()
   if (!team || team.program !== 'vex_iq') notFound()
+  const { data: schools } = await db.from('school').select('id, name, grade_min, grade_max').order('name')
 
   const { data: apps } = await db.from('student_application').select('family_id, student_id, student:student_id ( first_name, last_name, grade )').eq('season', SEASON).ilike('triage_notes', `%iq_team:${id}%`)
   const famIds = [...new Set((apps ?? []).map((a: any) => a.family_id))]
@@ -82,50 +81,6 @@ async function CoachTeamView(id: string) {
   const [sl, sv] = STATUS[team.status] ?? ['—', 'neutral']
 
   // ---- Coach server actions ----
-  async function addMember(formData: FormData) {
-    'use server'
-    const c = await coachFor(id); if (!c) return
-    const sFirst = String(formData.get('student_first') ?? '').trim()
-    const sLast = String(formData.get('student_last') ?? '').trim()
-    const grade = Number(formData.get('grade'))
-    const pEmail = String(formData.get('parent_email') ?? '').trim().toLowerCase()
-    const pLast = String(formData.get('parent_last') ?? '').trim() || sLast
-    const pFirst = String(formData.get('parent_first') ?? '').trim()
-    if (!sFirst || !sLast || !pEmail) return
-    const adb = createAdminClient()
-    const { data: teamRow } = await adb.from('team').select('status').eq('id', id).maybeSingle()
-    // Parent family.
-    let familyId: string
-    const pg = (await adb.from('guardian').select('id, family_id').ilike('login_email', pEmail).maybeSingle()).data
-    if (pg) familyId = pg.family_id
-    else {
-      const fam = (await adb.from('family').insert({ primary_email: pEmail, display_name: pLast }).select('id').single()).data
-      familyId = fam!.id
-      await adb.from('guardian').insert({ family_id: familyId, first_name: pFirst || pLast, last_name: pLast, login_email: pEmail, phone: '', role: 'primary' })
-    }
-    // Student + application linked to the team.
-    let stu = (await adb.from('student').select('id').eq('family_id', familyId).ilike('first_name', sFirst).ilike('last_name', sLast).maybeSingle()).data
-    if (!stu) stu = (await adb.from('student').insert({ family_id: familyId, first_name: sFirst, last_name: sLast, city: 'Unknown', zip_code: '00000', grade: grade > 0 ? grade : 0, status: 'active' }).select('id').single()).data!
-    const { data: fsRow } = await adb.from('family_season').select('id').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
-    if (!fsRow) await adb.from('family_season').insert({ family_id: familyId, season: SEASON, status: teamRow?.status === 'active' ? 'cleared_to_register' : 'applied' })
-    await adb.from('student_application').upsert({ family_id: familyId, student_id: stu.id, season: SEASON, program_interest: 'vex_iq', status: 'accepted', source: 'admin_import', triage_notes: `iq_team:${id}` }, { onConflict: 'student_id,season' })
-    // If the team is already active, clear + invite the new family now.
-    if (teamRow?.status === 'active') {
-      await adb.from('family_season').update({ status: 'cleared_to_register', magic_link_sent: true }).eq('family_id', familyId).eq('season', SEASON)
-      try {
-        await sendMagicLinkEmail({
-          email: pEmail,
-          redirectPath: '/register',
-          subject: 'You’re invited to register — Placer Robotics 2026-27',
-          heading: 'You’re invited to register',
-          intro: "Your student has been added to a VEX IQ team. Click below to sign in and complete their registration for the 2026-27 season.",
-          buttonLabel: 'Sign in to register →',
-          preheader: 'Sign in to complete your Placer Robotics registration.',
-        })
-      } catch (e) { console.error('[iq coach add] invite failed:', e) }
-    }
-    redirect(`/iq/team/${id}`)
-  }
   async function dropMember(formData: FormData) {
     'use server'
     const c = await coachFor(id); if (!c) return
@@ -171,19 +126,7 @@ async function CoachTeamView(id: string) {
         </table>
       </FormSection>
 
-      <FormSection title="Add a member" description="They’ll get a registration invite once your team is approved (or right away if it’s already active).">
-        <form action={addMember}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.625rem' }}>
-            <FormField label="Student first" htmlFor="sf" required><TextInput id="sf" name="student_first" /></FormField>
-            <FormField label="Student last" htmlFor="sln" required><TextInput id="sln" name="student_last" /></FormField>
-            <div><label style={lbl}>Grade</label><select name="grade" style={selectStyle} defaultValue=""><option value="">—</option>{[3, 4, 5, 6].map((g) => <option key={g} value={g}>{g}</option>)}</select></div>
-            <FormField label="Parent first" htmlFor="pf"><TextInput id="pf" name="parent_first" /></FormField>
-            <FormField label="Parent last" htmlFor="pl"><TextInput id="pl" name="parent_last" /></FormField>
-            <FormField label="Parent email" htmlFor="pe" required><TextInput id="pe" name="parent_email" type="email" /></FormField>
-          </div>
-          <div style={{ marginTop: '0.75rem' }}><PrimaryButton type="submit">Add member</PrimaryButton></div>
-        </form>
-      </FormSection>
+      <IqRosterBuilder teamId={id} schools={schools ?? []} teamActive={team.status === 'active'} />
 
       <div style={{ marginBottom: '1rem' }}><InfoAlert title="Need other changes?">For your team number or anything else, contact the IQ Coordinator at registrar@placerrobotics.org.</InfoAlert></div>
       <Link href="/dashboard" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>← Back to dashboard</Link>
