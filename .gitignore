@@ -31,3 +31,6 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+
+# Data/PII drop-files (never commit student/family data; migrations are .sql only)
+supabase/migrations/*.csv

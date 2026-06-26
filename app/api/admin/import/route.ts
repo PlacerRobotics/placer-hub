@@ -176,8 +176,11 @@ export async function POST(request: NextRequest) {
       const teamRef = String(r.team_26_27 ?? '').trim()
       let teamNote: string | null = teamRef ? `Team: ${teamRef}` : null
       if (teamRef) {
-        let t = (await db.from('team').select('id, program').eq('season', SEASON).eq('team_number', teamRef).maybeSingle()).data
-        if (!t) t = (await db.from('team').select('id, program').eq('season', SEASON).ilike('team_name', teamRef).maybeSingle()).data
+        // Match within the student's program — IQ and V5 share the 295-series numbers,
+        // so number alone is ambiguous. 'both' places on the V5 team.
+        const teamProgram = program === 'vex_iq' ? 'vex_iq' : program === 'combat' ? 'combat' : 'vex_v5'
+        let t = (await db.from('team').select('id, program').eq('season', SEASON).eq('program', teamProgram).eq('team_number', teamRef).maybeSingle()).data
+        if (!t) t = (await db.from('team').select('id, program').eq('season', SEASON).eq('program', teamProgram).ilike('team_name', teamRef).maybeSingle()).data
         if (t) teamNote = `${t.program === 'vex_iq' ? 'iq_team' : 'team'}:${t.id}`
       }
       const noteParts = [teamNote, String(r.notes ?? '').trim() || null].filter(Boolean)
