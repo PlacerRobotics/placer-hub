@@ -277,6 +277,7 @@ export function registrationConfirmationHtml({
   season,
   guardianNames,
   teamNumber,
+  requiresPayment = true,
 }: {
   studentName: string
   programLabel: string
@@ -285,6 +286,7 @@ export function registrationConfirmationHtml({
   season: string
   guardianNames?: string
   teamNumber?: string | null
+  requiresPayment?: boolean
 }): string {
   const details = emailKeyValues([
     { label: 'Student', value: studentName },
@@ -297,6 +299,14 @@ export function registrationConfirmationHtml({
          <a href="${zeffyUrl}" style="display:inline-block;padding:13px 28px;color:#0E2558;font-size:15px;font-weight:700;text-decoration:none;">Pay online via Zeffy &rarr;</a>
        </td></tr></table>`
     : `<p style="margin:0;color:#3a4a63;font-size:14px;">A secure online payment link will be provided shortly.</p>`
+  // VEX IQ campers don't pay individually — the coach pays one $1,200 team fee. Only
+  // V5/Combat registrations carry an individual fee + payment step.
+  const paymentSection = requiresPayment === false
+    ? `<p style="margin:0;color:#3a4a63;font-size:15px;line-height:1.6;">Your VEX IQ team coach handles the team fee — there is <strong>no individual payment</strong> for your camper. You're all set for the ${season} season!</p>`
+    : `<p style="margin:0 0 8px;color:#3a4a63;font-size:15px;line-height:1.6;">Your spot is secured once payment is received. Include this payment reference with your payment:</p>
+        <p style="margin:0 0 20px;"><span style="display:inline-block;background-color:#f4f6fb;border:1px solid #e6eaf1;border-radius:6px;padding:8px 14px;color:#0E2558;font-size:16px;font-weight:700;letter-spacing:0.04em;">${paymentRef}</span></p>
+        ${payBlock}
+        <p style="margin:20px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">To pay by check, make it payable to Placer Advanced Robotics and Technology and mail to 9182 Cedar Ridge Drive, Granite Bay, CA 95746, with your reference code in the memo.</p>`
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background-color:#eef1f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef1f7;padding:24px 0;"><tr><td align="center">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;">
@@ -308,10 +318,7 @@ export function registrationConfirmationHtml({
         <h1 style="margin:0 0 12px;color:#0E2558;font-size:20px;font-weight:700;">Registration received</h1>
         <p style="margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.6;">We've received the ${season} registration. Thank you!</p>
         ${details}
-        <p style="margin:0 0 8px;color:#3a4a63;font-size:15px;line-height:1.6;">Your spot is secured once payment is received. Include this payment reference with your payment:</p>
-        <p style="margin:0 0 20px;"><span style="display:inline-block;background-color:#f4f6fb;border:1px solid #e6eaf1;border-radius:6px;padding:8px 14px;color:#0E2558;font-size:16px;font-weight:700;letter-spacing:0.04em;">${paymentRef}</span></p>
-        ${payBlock}
-        <p style="margin:20px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">To pay by check, make it payable to Placer Advanced Robotics and Technology and mail to 9182 Cedar Ridge Drive, Granite Bay, CA 95746, with your reference code in the memo.</p>
+        ${paymentSection}
       </td></tr>
       <tr><td style="padding:20px 32px;border-top:1px solid #e6eaf1;">
         <p style="margin:0;color:#9aa6ba;font-size:12px;">Placer Advanced Robotics &amp; Technology &middot; Roseville, CA &middot; 501(c)(3) nonprofit</p>

@@ -37,16 +37,31 @@ export default async function AdminRegistrationsPage() {
   }
 
   const { data: enrollments } = studentIds.length
-    ? await supabase.from('enrollment').select('student_id, program, division').eq('season', SEASON).in('student_id', studentIds)
+    ? await supabase.from('enrollment').select('student_id, program, division, registration_fee_status, registration_fee_amount, payment_reference_code').eq('season', SEASON).in('student_id', studentIds)
     : { data: [] as any[] }
   // A student with program 'both' has TWO enrollment rows (vex_v5 + combat), so
   // group by student rather than assuming one row each.
-  const enrByStudent: Record<string, { programs: string[]; division: string | null }> = {}
+  const enrByStudent: Record<string, { programs: string[]; division: string | null; feeStatuses: string[]; feeAmount: number; refCodes: string[] }> = {}
   for (const e of (enrollments ?? []) as any[]) {
-    const cur = enrByStudent[e.student_id] ?? { programs: [], division: null }
+    const cur = enrByStudent[e.student_id] ?? { programs: [], division: null, feeStatuses: [], feeAmount: 0, refCodes: [] }
     if (e.program && !cur.programs.includes(e.program)) cur.programs.push(e.program)
     if (!cur.division && e.division) cur.division = e.division
+    if (e.registration_fee_status) cur.feeStatuses.push(e.registration_fee_status)
+    cur.feeAmount += Number(e.registration_fee_amount ?? 0)
+    if (e.payment_reference_code) cur.refCodes.push(String(e.payment_reference_code).toUpperCase())
     enrByStudent[e.student_id] = cur
+  }
+
+  // Matched payments — amounts paid, keyed by enrollment reference code (and a
+  // per-family fallback). matched_status has only auto_matched / manually_matched.
+  const { data: payments } = familyIds.length
+    ? await supabase.from('payment_transaction').select('family_id, amount, matched_status, payment_reference_code').in('family_id', familyIds)
+    : { data: [] as any[] }
+  const paidByRef: Record<string, number> = {}
+  for (const p of (payments ?? []) as any[]) {
+    if (p.matched_status !== 'auto_matched' && p.matched_status !== 'manually_matched') continue
+    const rc = p.payment_reference_code ? String(p.payment_reference_code).toUpperCase() : null
+    if (rc) paidByRef[rc] = (paidByRef[rc] ?? 0) + Number(p.amount ?? 0)
   }
 
   const { data: tms } = studentIds.length
@@ -92,6 +107,22 @@ export default async function AdminRegistrationsPage() {
     const program = enr
       ? enr.programs.length > 1 ? 'both' : (enr.programs[0] ?? '—')
       : progByStudent[s.id] ?? '—'
+    // Payment: VEX IQ campers pay nothing individually (coach pays the team fee) → n/a.
+    // Otherwise derive from the enrollment fee status; amount = matched payments.
+    let payment: RegRow['payment']
+    if (program === 'vex_iq') {
+      payment = { state: 'na', amount: null }
+    } else if (!enr || !enr.feeStatuses.length) {
+      payment = { state: 'unpaid', amount: null }
+    } else {
+      const ss = enr.feeStatuses
+      const state = ss.every((x) => x === 'paid') ? 'paid'
+        : ss.every((x) => x === 'waived') ? 'waived'
+        : ss.includes('paid') ? 'partial'
+        : 'unpaid'
+      const amount = enr.refCodes.reduce((sum, rc) => sum + (paidByRef[rc] ?? 0), 0)
+      payment = { state, amount: amount || null }
+    }
     return {
       familySeasonId: fs.id ?? '',
       studentId: s.id,
@@ -108,6 +139,7 @@ export default async function AdminRegistrationsPage() {
       lastUpdated: fs.updated_at ?? null,
       fundraisingMethod: fs.fundraising_method ?? null,
       fundraisingMethods: (fs.fundraising_methods ?? []) as string[],
+      payment,
     }
   })
 

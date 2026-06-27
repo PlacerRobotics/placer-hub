@@ -353,10 +353,11 @@ export async function POST(request: NextRequest) {
       studentName,
       programLabel: PROGRAM_LABELS[program] ?? program,
       paymentRef,
-      zeffyUrl: config?.zeffy_student_url ?? null,
+      zeffyUrl: isIq ? null : (config?.zeffy_student_url ?? null),
       season: SEASON,
       guardianNames,
       teamNumber,
+      requiresPayment: !isIq,
     })
     const sent = await sendEmail({ to: recipients, subject, html })
     const status = sent.ok ? 'sent' : sent.error === 'no_api_key' ? 'skipped' : 'failed'

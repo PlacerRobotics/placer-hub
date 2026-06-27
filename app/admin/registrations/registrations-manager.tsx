@@ -20,8 +20,24 @@ export type RegRow = {
   lastUpdated: string | null
   fundraisingMethod: string | null
   fundraisingMethods: string[]
+  payment: { state: 'paid' | 'partial' | 'unpaid' | 'waived' | 'na'; amount: number | null }
 }
 export type TeamOpt = { id: string; label: string }
+
+// Payment state → badge. Amount (when known) shows $40 vs the full online donation.
+const PAY_META: Record<string, { label: string; bg: string; fg: string }> = {
+  paid: { label: 'Paid', bg: '#E3F4E8', fg: '#1E7C3D' },
+  partial: { label: 'Partial', bg: '#FBF1D6', fg: '#8A6D1A' },
+  unpaid: { label: 'Unpaid', bg: '#FBE9E9', fg: '#B23A3A' },
+  waived: { label: 'Waived', bg: '#ECECEC', fg: '#555555' },
+}
+function payCell(p: RegRow['payment']) {
+  if (p.state === 'na') return <span title="VEX IQ — coach pays the team fee" style={{ color: 'var(--color-text-muted)' }}>—</span>
+  const m = PAY_META[p.state]
+  const amt = (p.state === 'paid' || p.state === 'partial') && p.amount != null ? ` $${Number(p.amount).toLocaleString()}` : ''
+  return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: '0.6875rem', fontWeight: 700, backgroundColor: m.bg, color: m.fg }}>{m.label}{amt}</span>
+}
+const PAY_FILTERS: [string, string][] = [['all', 'Payment: all'], ['paid', 'Paid'], ['partial', 'Partial'], ['unpaid', 'Unpaid'], ['waived', 'Waived'], ['na', 'IQ (coach pays)']]
 
 // Fundraising method → compact badge (colors per spec: Direct blue, Match purple,
 // Sponsor gold, Check gray, Aid yellow). Custom palette — StatusBadge lacks purple/gold.
@@ -71,6 +87,7 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
   const [fMagic, setFMagic] = useState('all')
   const [fLogin, setFLogin] = useState('all')
   const [fFund, setFFund] = useState('all')
+  const [fPay, setFPay] = useState('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [assignTeam, setAssignTeam] = useState('')
@@ -91,13 +108,14 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
         if (fLogin === 'never' && r.guardianLoggedIn) return false
         if (fFund === 'not_selected' && r.fundraisingMethods.length) return false
         if (fFund !== 'all' && fFund !== 'not_selected' && !r.fundraisingMethods.includes(fFund)) return false
+        if (fPay !== 'all' && r.payment.state !== fPay) return false
         if (search.trim()) {
           const q = search.toLowerCase()
           if (!r.name.toLowerCase().includes(q) && !r.guardianEmail.toLowerCase().includes(q)) return false
         }
         return true
       }),
-    [rows, fStatus, fProgram, fDivision, fTeam, fSchool, fMagic, fLogin, fFund, search]
+    [rows, fStatus, fProgram, fDivision, fTeam, fSchool, fMagic, fLogin, fFund, fPay, search]
   )
 
   const selectedRows = filtered.filter((r) => selected.has(r.studentId))
@@ -150,12 +168,14 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
   }
 
   function exportCsv() {
-    const headers = ['Student', 'Program', 'Division', 'Team', 'School', 'Guardian Email', 'Status', 'Fundraising', 'Magic Link', 'Login', 'Last Updated']
+    const headers = ['Student', 'Program', 'Division', 'Team', 'School', 'Guardian Email', 'Status', 'Fundraising', 'Paid', 'Amount Paid', 'Magic Link', 'Login', 'Last Updated']
     const lines = [headers.join(',')]
     for (const r of filtered) {
       const vals = [
         r.name, PROGRAM_LABELS[r.program] ?? r.program, r.division, r.teamLabel, r.school, r.guardianEmail,
         STATUS_LABELS[r.status] ?? r.status, r.fundraisingMethods.length ? r.fundraisingMethods.map((m) => FUND_BADGE[m]?.label ?? m).join(' + ') : 'Not selected',
+        r.payment.state === 'na' ? 'IQ (coach pays)' : (PAY_META[r.payment.state]?.label ?? r.payment.state),
+        r.payment.amount != null ? r.payment.amount : '',
         r.magicLinkSent ? 'Sent' : 'Not sent',
         r.guardianLoggedIn ? 'Logged in' : r.magicLinkSent ? 'Invited' : 'Not invited',
         r.lastUpdated ? new Date(r.lastUpdated).toLocaleDateString() : '',
@@ -190,6 +210,7 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
         <select style={sel} value={fMagic} onChange={(e) => setFMagic(e.target.value)}><option value="all">Magic link: all</option><option value="sent">Sent</option><option value="not_sent">Not sent</option></select>
         <select style={sel} value={fLogin} onChange={(e) => setFLogin(e.target.value)}><option value="all">Login: all</option><option value="logged_in">Logged in</option><option value="never">Never</option></select>
         <select style={sel} value={fFund} onChange={(e) => setFFund(e.target.value)}>{FUND_FILTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}</select>
+        <select style={sel} value={fPay} onChange={(e) => setFPay(e.target.value)}>{PAY_FILTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}</select>
         <button type="button" onClick={exportCsv} style={{ ...btn, padding: '7px 12px' }}>Export Filtered</button>
       </div>
 
@@ -213,12 +234,12 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
           <thead>
             <tr>
               <th style={{ ...th, width: 28 }}><input type="checkbox" checked={allChecked} onChange={toggleAll} /></th>
-              <th style={th}>Student</th><th style={th}>Program</th><th style={th}>Div</th><th style={th}>Team</th><th style={th}>School</th><th style={th}>Guardian</th><th style={th}>Status</th><th style={th}>Fundraising</th><th style={th}>Magic Link</th><th style={th}>Login</th><th style={th}>Updated</th><th style={th}>Actions</th>
+              <th style={th}>Student</th><th style={th}>Program</th><th style={th}>Div</th><th style={th}>Team</th><th style={th}>School</th><th style={th}>Guardian</th><th style={th}>Status</th><th style={th}>Fundraising</th><th style={th}>Paid</th><th style={th}>Magic Link</th><th style={th}>Login</th><th style={th}>Updated</th><th style={th}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td style={cell} colSpan={13}>No registrations match these filters.</td></tr>
+              <tr><td style={cell} colSpan={14}>No registrations match these filters.</td></tr>
             ) : filtered.map((r) => (
               <tr key={r.studentId}>
                 <td style={cell}><input type="checkbox" checked={selected.has(r.studentId)} onChange={() => toggle(r.studentId)} /></td>
@@ -230,6 +251,7 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
                 <td style={cell}>{r.guardianEmail}</td>
                 <td style={cell}><StatusBadge label={STATUS_LABELS[r.status] ?? r.status} variant={STATUS_VARIANT[r.status] ?? 'neutral'} /></td>
                 <td style={cell}>{fundBadges(r.fundraisingMethods)}</td>
+                <td style={cell}>{payCell(r.payment)}</td>
                 <td style={cell}>{r.magicLinkSent ? 'Sent' : 'Not sent'}</td>
                 <td style={cell}>{dot(r)}</td>
                 <td style={cell}>{r.lastUpdated ? new Date(r.lastUpdated).toLocaleDateString() : '—'}</td>
