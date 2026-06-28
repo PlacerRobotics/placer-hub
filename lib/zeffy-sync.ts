@@ -81,24 +81,41 @@ export async function syncRegistrationPayments(db: any, { apply, adminId }: { ap
         if (enrByRef) { enrollment = enrByRef; via = 'reference' }
       }
 
-      // 2. Fallback: guardian email + student name + program.
+      // 2. Fallback: guardian email → family. Use the named student's open enrollment
+      // when we can; otherwise distribute to the family's next unpaid registration
+      // enrollment, so two same-amount sibling donations don't both land on one child.
       if (!enrollment) {
         if (!guardianEmail) reason = 'no guardian email on ticket'
         else {
           const { data: g } = await db.from('guardian').select('family_id').ilike('login_email', guardianEmail).maybeSingle()
           if (!g) reason = `no family for ${guardianEmail}`
           else {
-            const { data: studs } = await db.from('student').select('id, first_name, last_name').eq('family_id', g.family_id)
-            const stu = (studs ?? []).find((s: any) => normName(`${s.first_name} ${s.last_name}`) === normName(studentName))
-            if (!stu) reason = `no student "${studentName}" in that family`
-            else {
-              const { data: enrs } = await db.from('enrollment')
-                .select('id, family_id, program, registration_fee_amount, registration_fee_status, fundraising_target, fundraising_methods, fundraising_received_at')
-                .eq('student_id', stu.id).eq('season', SEASON)
-              const list = (enrs ?? []) as any[]
-              enrollment = (program && list.find((e) => e.program === program)) || list.find((e) => Number(e.registration_fee_amount) > 0) || list[0] || null
-              if (!enrollment) reason = 'student is not registered (no enrollment)'
+            const { data: famEnrs } = await db.from('enrollment')
+              .select('id, student_id, family_id, program, registration_fee_amount, registration_fee_status, fundraising_target, fundraising_methods, fundraising_received_at')
+              .eq('family_id', g.family_id).eq('season', SEASON)
+            const famList = (famEnrs ?? []) as any[]
+            const isOpen = (e: any) => e.registration_fee_status !== 'paid' && e.registration_fee_status !== 'waived' && !claimed.has(e.id)
+            const withFee = famList.filter((e) => Number(e.registration_fee_amount) > 0)
+
+            if (studentName) {
+              const { data: studs } = await db.from('student').select('id, first_name, last_name').eq('family_id', g.family_id)
+              const stu = (studs ?? []).find((s: any) => normName(`${s.first_name} ${s.last_name}`) === normName(studentName))
+              if (stu) {
+                const sList = famList.filter((e) => e.student_id === stu.id)
+                // named student's open enrollment → else any open sibling (distribution)
+                // → else the named student's enrollment (extra payment = fundraising).
+                enrollment = (program && sList.find((e) => e.program === program && isOpen(e)))
+                  || sList.find(isOpen) || withFee.find(isOpen) || sList[0] || null
+                if (enrollment) via = 'email+name'
+              }
             }
+            if (!enrollment) {
+              // No usable student name → first unpaid fee enrollment, else any fee
+              // enrollment (extra contribution → fundraising), else the first row.
+              enrollment = withFee.find(isOpen) || withFee[0] || famList[0] || null
+              if (enrollment) via = 'email+family'
+            }
+            if (!enrollment) reason = famList.length ? `no matchable enrollment for ${guardianEmail}` : `${studentName || guardianEmail} has no enrollment`
           }
         }
       }
@@ -107,6 +124,9 @@ export async function syncRegistrationPayments(db: any, { apply, adminId }: { ap
 
       const feeOpen = !(enrollment.registration_fee_status === 'paid' || enrollment.registration_fee_status === 'waived') && !claimed.has(enrollment.id)
       const ptype = feeOpen ? 'registration_fee' : 'fundraising'
+      // Reserve this enrollment's fee so the next same-family payment falls to a sibling
+      // (consistent in both preview and apply runs).
+      if (ptype === 'registration_fee') claimed.add(enrollment.id)
       matched++
       results.push({ itemId, studentName, guardianEmail, program: programRaw, status: 'matched', enrollmentId: enrollment.id, type: ptype, via })
 
@@ -119,7 +139,6 @@ export async function syncRegistrationPayments(db: any, { apply, adminId }: { ap
         }).select('id').single()
         if (!error && pay) {
           await linkPaymentToEnrollment(db, { paymentId: pay.id, enrollment, paymentType: ptype, adminId })
-          if (ptype === 'registration_fee') claimed.add(enrollment.id)
           applied++
           const fee = Number(enrollment.registration_fee_amount) || 40
           const target = Number(enrollment.fundraising_target) || 0

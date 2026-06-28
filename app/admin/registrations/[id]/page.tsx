@@ -12,6 +12,7 @@ const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Comb
 const STATUS_LABELS: Record<string, string> = { cleared_to_register: 'Cleared to Register', registered: 'Registered', cancelled: 'Cancelled' }
 const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { cleared_to_register: 'info', registered: 'success', cancelled: 'neutral' }
 const FUND_LABELS: Record<string, string> = { direct_donation: 'Direct contribution', corporate_match: 'Employer / corporate match', sponsored: 'Business sponsorship', paper_check: 'Paper check', pending: 'Financial assistance' }
+const PAYMENT_TYPE_LABELS: Record<string, string> = { registration_fee: 'Registration fee', fundraising: 'Fundraising', iq_team_fee: 'IQ team fee' }
 
 export default async function RegistrationDetailPage({
   params,
@@ -83,7 +84,19 @@ export default async function RegistrationDetailPage({
   const { data: ec } = student
     ? await supabase.from('emergency_contact').select('first_name, last_name, phone').eq('student_id', student.id).eq('priority', 1).maybeSingle()
     : { data: null as any }
-  const { data: pay } = await supabase.from('payment_transaction').select('amount, source, matched_status, payment_reference_code').eq('family_id', fs.family_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const { data: pays } = await supabase.from('payment_transaction').select('id, amount, source, payment_type, matched_status, payment_reference_code, donor_name, donor_email, received_at, enrollment_id').eq('family_id', fs.family_id).order('received_at', { ascending: false })
+  const payList = (pays ?? []) as any[]
+  const pay = payList[0] ?? null
+  // Resolve each payment's enrollment → student name (payments are family-level).
+  const payEnrIds = [...new Set(payList.map((p) => p.enrollment_id).filter(Boolean))]
+  const { data: payEnrs } = payEnrIds.length
+    ? await supabase.from('enrollment').select('id, program, student:student_id ( first_name, last_name )').in('id', payEnrIds)
+    : { data: [] as any[] }
+  const studentByEnr: Record<string, string> = {}
+  for (const e of (payEnrs ?? []) as any[]) {
+    const st = Array.isArray(e.student) ? e.student[0] : e.student
+    studentByEnr[e.id] = st ? `${st.first_name} ${st.last_name}`.trim() : ''
+  }
   const { data: audit } = await supabase.from('registration_audit_log').select('field_changed, old_value, new_value, changed_at, notes').eq('family_season_id', id).order('changed_at', { ascending: false })
   const { data: allTeams } = await supabase.from('team').select('id, team_number, team_name, program, division').eq('season', SEASON).eq('active', true).order('team_number', { ascending: true })
 
@@ -187,6 +200,32 @@ export default async function RegistrationDetailPage({
           />
         </div>
       )}
+
+      <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden', marginBottom: '1.25rem' }}>
+        <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-light)' }}>
+          <h3 className="text-card-title">Payments</h3>
+        </div>
+        {payList.length === 0 ? (
+          <p className="text-help" style={{ padding: '1.25rem' }}>No payments on file for this family.</p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr>{['Date', 'Student', 'Amount', 'Type', 'Status', 'Reference', 'Donor'].map((h) => <th key={h} style={{ padding: '0.6rem 1.25rem', textAlign: 'left', fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {payList.map((p: any) => (
+                <tr key={p.id}>
+                  <td style={{ padding: '0.6rem 1.25rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>{p.received_at ? new Date(p.received_at).toLocaleDateString() : '—'}</td>
+                  <td style={{ padding: '0.6rem 1.25rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)' }}>{p.enrollment_id ? (studentByEnr[p.enrollment_id] || '—') : <span style={{ color: 'var(--color-text-muted)' }}>unlinked</span>}</td>
+                  <td style={{ padding: '0.6rem 1.25rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', fontWeight: 600, whiteSpace: 'nowrap' }}>${Number(p.amount).toLocaleString()}</td>
+                  <td style={{ padding: '0.6rem 1.25rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>{PAYMENT_TYPE_LABELS[p.payment_type] ?? p.payment_type ?? '—'}</td>
+                  <td style={{ padding: '0.6rem 1.25rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>{(p.matched_status ?? '').replace(/_/g, ' ') || '—'}{p.source ? ` · ${p.source}` : ''}</td>
+                  <td style={{ padding: '0.6rem 1.25rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap' }}>{p.payment_reference_code ?? '—'}</td>
+                  <td style={{ padding: '0.6rem 1.25rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)' }}>{p.donor_name || p.donor_email || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', overflow: 'hidden' }}>
         <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg-light)' }}>
