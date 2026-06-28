@@ -55,16 +55,15 @@ export async function POST(request: NextRequest) {
   // 3. Standard steps; policy_acknowledgment is complete (they signed).
   await db.from('volunteer_step').upsert(STANDARD_STEPS.map((step, i) => ({ volunteer_id: profileId, step, status: step === 'policy_acknowledgment' ? 'complete' : 'pending', completed_at: step === 'policy_acknowledgment' ? new Date().toISOString() : null, sort_order: i })), { onConflict: 'volunteer_id,step' })
 
-  // 4. Per-season clearance.
+  // 4. Per-season clearance. Door/key-card access is NOT collected at apply time —
+  // it's handled later as part of clearance (key_access_requested stays 'none').
   const programs: string[] = Array.isArray(b.programs) ? b.programs : []
-  const keyReq = ['card', 'phone'].includes(b.key_access_request) ? b.key_access_request : b.key_access_request === 'renew' ? 'card' : 'none'
   const notes = [
     programs.length ? `Programs: ${programs.join(', ')}` : '',
     b.primary_role ? `Role: ${b.primary_role}` : '',
     b.is_returning ? 'Returning volunteer' : '',
     b.aps_choice === 'have' ? 'APS: has a current certificate (verify via APS sync)' : b.aps_choice === 'enroll' ? 'APS: needs enrollment' : '',
     (b.street_address || b.city) ? `Address: ${[b.street_address, b.city, b.state, b.zip].filter(Boolean).join(', ')}` : '',
-    b.has_door_access ? `Has door access: ${b.door_access_type ?? 'yes'}` : '',
   ].filter(Boolean).join(' · ') || null
   // NOTE: the application's policy acknowledgment + signature gate the application
   // (recorded as the policy_acknowledgment step above). The annual signed agreements
@@ -74,7 +73,7 @@ export async function POST(request: NextRequest) {
   await db.from('volunteer_clearance').upsert({
     volunteer_id: profileId, season: SEASON, status: 'pending',
     application_submitted_at: new Date().toISOString(), application_source: 'hub',
-    key_access_requested: keyReq,
+    key_access_requested: 'none',
     notes,
   }, { onConflict: 'volunteer_id,season' })
 

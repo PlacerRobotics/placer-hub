@@ -168,7 +168,8 @@ export default function LoginPage() {
 
       <div style={{ marginTop: '1.5rem' }}>
         <InfoAlert title="New to Placer Robotics?">
-          You&apos;ll need to <Link href="/apply">apply first</Link> before you can sign in.
+          Registering a student? <Link href="/apply">Apply here</Link> first. Want to help out?{' '}
+          <Link href="/volunteer/apply">Apply to be a Registered Volunteer</Link> — no student required.
         </InfoAlert>
       </div>
     </PublicShell>
