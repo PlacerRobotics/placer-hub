@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui'
 
 type Variant = 'success' | 'warning' | 'info' | 'error' | 'neutral'
 export type IqRow = {
-  id: string; label: string; teamNumber: string; kit: string; coach: string; students: number; waivers: string
+  id: string; label: string; teamNumber: string; kit: string; coach: string; coachEmail: string; coachLoggedIn: boolean; students: number; waivers: string
   status: string; statusLabel: string; statusVariant: Variant; fee: string; feeState: string; feeAmount: number; feeTotal: number; feeSource: string
   events: boolean; created: string; createdRaw: string
 }
@@ -51,6 +51,20 @@ export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: 
   const [sortKey, setSortKey] = useState('teamNumber')
   const [dir, setDir] = useState<1 | -1>(1)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [inviteBusy, setInviteBusy] = useState<string | null>(null)
+  const [inviteMsg, setInviteMsg] = useState<Record<string, string>>({})
+
+  async function inviteCoach(r: IqRow) {
+    if (inviteBusy) return
+    if (!confirm(`Send a sign-in invite to ${r.coach} (${r.coachEmail})?`)) return
+    setInviteBusy(r.id)
+    try {
+      const res = await fetch(`/api/admin/iq-teams/${r.id}/invite-coach`, { method: 'POST' })
+      const d = await res.json().catch(() => ({}))
+      setInviteMsg((m) => ({ ...m, [r.id]: res.ok ? 'Invite sent ✓' : (d.error || 'Failed') }))
+    } catch { setInviteMsg((m) => ({ ...m, [r.id]: 'Network error' })) }
+    finally { setInviteBusy(null) }
+  }
 
   function sortBy(key: string) {
     if (key === sortKey) setDir((d) => (d === 1 ? -1 : 1))
@@ -124,7 +138,17 @@ export default function IqTeamsTable({ rows, canAct }: { rows: IqRow[]; canAct: 
                   )}
                 </td>
                 <td style={cell}>{r.events ? '✓' : '—'}</td>
-                <td style={cell}><Link href={`/admin/iq-teams/${r.id}`} style={linkStyle}>Manage →</Link></td>
+                <td style={cell}>
+                  <span style={{ display: 'flex', gap: '0.625rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Link href={`/admin/iq-teams/${r.id}`} style={linkStyle}>Manage →</Link>
+                    {canAct && r.coachEmail && (
+                      inviteMsg[r.id]
+                        ? <span style={{ fontSize: '0.75rem', color: inviteMsg[r.id].includes('✓') ? 'var(--color-success)' : 'var(--color-error)' }}>{inviteMsg[r.id]}</span>
+                        : <button type="button" disabled={inviteBusy === r.id} onClick={() => inviteCoach(r)} title={`Invite ${r.coachEmail}`} style={{ padding: '4px 10px', fontSize: '0.75rem', fontWeight: 600, border: '1px solid var(--color-border)', borderRadius: 5, background: 'var(--color-surface)', cursor: 'pointer', fontFamily: 'inherit' }}>{inviteBusy === r.id ? 'Sending…' : r.coachLoggedIn ? 'Resend invite' : 'Send invite'}</button>
+                    )}
+                    {canAct && r.coachLoggedIn && <span title="Coach has signed in" style={{ fontSize: '0.6875rem', color: 'var(--color-success)' }}>✓ signed in</span>}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -29,14 +29,20 @@ export default async function IqTeamsPage() {
   const teamIds = teams.map((t) => t.id)
 
   const coachMap: Record<string, string> = {}
+  const coachEmailMap: Record<string, string> = {}
+  const coachLoginMap: Record<string, boolean> = {}
   const countMap: Record<string, number> = {}
   const teamStudents: Record<string, string[]> = {}
   const signed = new Set<string>()
   if (teamIds.length) {
-    const { data: coaches } = await supabase.from('team_member').select('team_id, guardian:guardian_id ( first_name, last_name )').in('team_id', teamIds).eq('team_role', 'coach').is('revoked_at', null)
+    const { data: coaches } = await supabase.from('team_member').select('team_id, guardian:guardian_id ( first_name, last_name, login_email, last_login_at )').in('team_id', teamIds).eq('team_role', 'coach').is('revoked_at', null)
     for (const c of (coaches ?? []) as any[]) {
       const g = Array.isArray(c.guardian) ? c.guardian[0] : c.guardian
-      if (g) coachMap[c.team_id] = `${g.first_name} ${g.last_name}`.trim()
+      if (g) {
+        coachMap[c.team_id] = `${g.first_name} ${g.last_name}`.trim()
+        if (g.login_email) coachEmailMap[c.team_id] = g.login_email
+        coachLoginMap[c.team_id] = !!g.last_login_at
+      }
     }
     const { data: apps } = await supabase.from('student_application').select('triage_notes, student_id').eq('season', SEASON).ilike('triage_notes', '%iq_team:%')
     for (const a of (apps ?? []) as any[]) {
@@ -76,6 +82,8 @@ export default async function IqTeamsPage() {
       teamNumber: t.team_number ?? '',
       kit: t.kit_number ?? '',
       coach: coachMap[t.id] || '—',
+      coachEmail: coachEmailMap[t.id] || '',
+      coachLoggedIn: !!coachLoginMap[t.id],
       students: total,
       waivers: `${signedN}/${total}`,
       status: t.status,
