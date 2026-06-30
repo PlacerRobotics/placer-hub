@@ -209,10 +209,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     coachTeams = (coachTms ?? []).map((c: any) => (Array.isArray(c.team) ? c.team[0] : c.team)).filter(Boolean)
     if (coachTeams.length) {
       const ids = coachTeams.map((t: any) => t.id)
-      const { data: rosters } = await adb.from('team_member').select('team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('team_id', ids)
-      for (const r of rosters ?? []) teamCount[r.team_id] = (teamCount[r.team_id] ?? 0) + 1
-      const { data: iqApps } = await adb.from('student_application').select('triage_notes').eq('season', SEASON).ilike('triage_notes', '%iq_team:%')
-      for (const a of iqApps ?? []) { const m = String(a.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i); if (m && ids.includes(m[1])) teamCount[m[1]] = (teamCount[m[1]] ?? 0) + 1 }
+      // Distinct students per team across both sources: materialized team_member rows
+      // (registered) AND the application pointer (not yet registered). A registered
+      // student has BOTH, so dedupe by student_id instead of summing the two counts.
+      const memberIds: Record<string, Set<string>> = {}
+      const addMember = (tid: string, sid: string | null) => { if (sid) (memberIds[tid] ??= new Set<string>()).add(sid) }
+      const { data: rosters } = await adb.from('team_member').select('team_id, student_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('team_id', ids)
+      for (const r of rosters ?? []) addMember(r.team_id, r.student_id)
+      const { data: iqApps } = await adb.from('student_application').select('student_id, triage_notes').eq('season', SEASON).ilike('triage_notes', '%iq_team:%')
+      for (const a of iqApps ?? []) { const m = String(a.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i); if (m && ids.includes(m[1])) addMember(m[1], a.student_id) }
+      for (const tid of ids) teamCount[tid] = memberIds[tid]?.size ?? 0
     }
     const { data: cfg } = await supabase.from('season_config').select('zeffy_iq_team_url, zeffy_student_url').eq('season', SEASON).maybeSingle()
     zeffyIqUrl = cfg?.zeffy_iq_team_url ?? null
