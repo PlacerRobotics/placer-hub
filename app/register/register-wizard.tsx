@@ -638,10 +638,7 @@ export default function RegisterWizard({
             <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', fontWeight: 700, margin: '0 0 0.5rem' }}>1 · Registration fee (required)</div>
             <div style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '1rem 1.25rem', fontSize: '0.9375rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
               <p style={{ margin: '0 0 0.75rem' }}>A <strong>$40 registration fee</strong> is required for every student and <strong>must be paid via Zeffy</strong>. It is non-refundable and not tax-deductible.</p>
-              <a href={payUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '10px 20px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
-                Pay the $40 fee via Zeffy →
-              </a>
-              <p style={{ margin: '0.625rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>You can pay now or after you submit — your spot is confirmed once we receive it.</p>
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>You&apos;ll pay <strong>after you submit</strong> — the next screen has your Zeffy payment link. Your spot is confirmed once we receive it.</p>
               <ZeffyMethodsNote />
             </div>
           </FormSection>
