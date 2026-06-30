@@ -102,11 +102,12 @@ export default async function AdminRegistrationsPage() {
     const team = teamId ? teamById[teamId] : null
     const teamPending = !materializedTeamId && !!pendingTeamIdByStudent[s.id]
     const grade = Number(s.grade ?? 0)
-    const division = enr?.division ?? (grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS')
     // Two enrollment programs (vex_v5 + combat) collapse to the 'both' label.
     const program = enr
       ? enr.programs.length > 1 ? 'both' : (enr.programs[0] ?? '—')
       : progByStudent[s.id] ?? '—'
+    // VEX IQ is always Elementary regardless of grade.
+    const division = program === 'vex_iq' ? 'ES' : enr?.division ?? (grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS')
     // Payment: VEX IQ campers pay nothing individually (coach pays the team fee) → n/a.
     // Otherwise derive from the enrollment fee status; amount = matched payments.
     let payment: RegRow['payment']

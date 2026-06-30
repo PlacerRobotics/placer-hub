@@ -70,8 +70,9 @@ export async function POST(request: NextRequest) {
 
   const s = body.student ?? {}
   const grade = Number(s.grade)
-  const division = grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS'
   const program: string = body.program ?? 'vex_v5'
+  // VEX IQ is always Elementary regardless of grade; V5/Combat derive from grade.
+  const division = program === 'vex_iq' ? 'ES' : grade <= 5 ? 'ES' : grade <= 8 ? 'MS' : 'HS'
 
   // Consent / COPPA enforcement (server-side). Parental consent is required for
   // grade 6/7 or under-13 students; Slack consent is blocked entirely under 13.
