@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
@@ -19,7 +20,10 @@ const STATUS: Record<string, [string, IqRow['statusVariant']]> = {
 export default async function IqTeamsPage() {
   const supabase = await createClient()
   const admin = await getAdminProfile()
+  // IQ Teams is role-scoped: only the IQ coordinator (and super/payment/registration
+  // admins) may view it. Other admins are bounced — read-only viewing isn't allowed.
   const canAct = admin ? await hasAnyRole(createAdminClient(), admin.id, ROLES) : false
+  if (!canAct) redirect('/admin')
 
   const { data: teamData } = await supabase
     .from('team')
