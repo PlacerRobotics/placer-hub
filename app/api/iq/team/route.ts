@@ -59,10 +59,23 @@ export async function POST(req: NextRequest) {
 
   const db = createAdminClient()
 
+  // Guard: a coach-entered "returning number" is only a request (real numbers are
+  // assigned by the IQ Coordinator from RobotEvents). If it already belongs to a team,
+  // steer them there instead of spawning a duplicate.
+  const requestedNumber = String(body.returning_number ?? '').trim()
+  if (requestedNumber) {
+    const { data: dupNum } = await db.from('team').select('id').eq('program', 'vex_iq').eq('season', SEASON).ilike('team_number', requestedNumber).maybeSingle()
+    if (dupNum) return NextResponse.json({ error: `Team #${requestedNumber} already exists. If that's your returning team, contact the IQ Coordinator (registrar@placerrobotics.org) to be added — please don't create a duplicate.` }, { status: 409 })
+  }
+
   // 1. Coach guardian + family (create if new).
   let guardian = (await db.from('guardian').select('id, family_id').ilike('login_email', coachEmail).maybeSingle()).data
   let coachFamilyId: string
   if (guardian) {
+    // Guard: one IQ team per coach per season — don't let an existing coach spin up a second.
+    const { data: coachTms } = await db.from('team_member').select('team:team_id ( id, program, season, team_name, team_number )').eq('guardian_id', guardian.id).eq('team_role', 'coach').is('revoked_at', null)
+    const mine = (coachTms ?? []).map((r: any) => (Array.isArray(r.team) ? r.team[0] : r.team)).find((t: any) => t && t.program === 'vex_iq' && t.season === SEASON)
+    if (mine) return NextResponse.json({ error: `You already coach an IQ team (${mine.team_name || mine.team_number || 'your team'}). Manage it from your dashboard instead of creating a new one.` }, { status: 409 })
     coachFamilyId = guardian.family_id
     await db.from('guardian').update({ first_name: String(coach.first_name).trim(), last_name: String(coach.last_name).trim(), phone: String(coach.phone ?? '').trim() || undefined }).eq('id', guardian.id)
   } else {
@@ -89,7 +102,9 @@ export async function POST(req: NextRequest) {
 
   const { data: team, error: tErr } = await db.from('team').insert({
     season: SEASON, program: 'vex_iq', division: 'ES',
-    team_number: String(body.returning_number ?? '').trim() || null,
+    // Number is NOT taken from coach input — the IQ Coordinator assigns/verifies it
+    // (RobotEvents). The requested number is kept in notes for them to reconcile.
+    team_number: null,
     team_name: String(body.team_name ?? '').trim() || null,
     school_org: 'Placer Robotics',
     team_fee_amount: fee, team_fee_status: 'unpaid',

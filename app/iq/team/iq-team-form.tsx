@@ -15,7 +15,7 @@ const lbl: React.CSSProperties = { display: 'block', fontSize: '0.8125rem', font
 const grid2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }
 const GRADES = [3, 4, 5, 6]
 
-export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee }: { email: string; coach: { first_name: string; last_name: string; phone: string }; schools: School[]; zeffyUrl: string | null; fee: number }) {
+export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, takenNumbers = [] }: { email: string; coach: { first_name: string; last_name: string; phone: string }; schools: School[]; zeffyUrl: string | null; fee: number; takenNumbers?: string[] }) {
   const router = useRouter()
   const [cFirst, setCFirst] = useState(coach.first_name)
   const [cLast, setCLast] = useState(coach.last_name)
@@ -33,7 +33,8 @@ export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee }: { e
   const completeOthers = roster.filter(rowComplete).length
   const ownCount = ocFirst.trim() && ocLast.trim() && ocGrade ? 1 : 0
   const totalMembers = ownCount + completeOthers
-  const valid = cFirst.trim() && cLast.trim() && feeAck && totalMembers >= 3
+  const numberTaken = !!returning.trim() && takenNumbers.includes(returning.trim().toUpperCase())
+  const valid = cFirst.trim() && cLast.trim() && feeAck && totalMembers >= 3 && !numberTaken
 
   function setRow(i: number, k: keyof RosterRow, v: string) {
     setRoster((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
@@ -156,8 +157,13 @@ export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee }: { e
 
       <FormSection title="Team" description="All Placer Robotics IQ teams are Elementary (ES). Team name/number are assigned later from RobotEvents.">
         <div style={grid2}>
-          <FormField label="Returning team number (optional)" htmlFor="rn" helpText="Had a number last season? Enter it. New teams: leave blank.">
+          <FormField label="Returning team number (optional)" htmlFor="rn" helpText="Had a number last season? Enter it so we can match you — the IQ Coordinator confirms/assigns the official number. New teams: leave blank.">
             <TextInput id="rn" value={returning} onChange={(e) => setReturning(e.target.value)} placeholder="e.g. 295Y" />
+            {numberTaken && (
+              <p style={{ margin: '0.4rem 0 0', fontSize: '0.8125rem', color: 'var(--color-error)', fontWeight: 600 }}>
+                Team #{returning.trim().toUpperCase()} already exists. If that&apos;s your team, don&apos;t create a new one — contact the IQ Coordinator at registrar@placerrobotics.org to be added.
+              </p>
+            )}
           </FormField>
           <div>
             <label htmlFor="co" style={lbl}>Compete outside the Placer League?</label>
