@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
@@ -105,7 +106,11 @@ export default async function IqTeamsPage() {
 
   return (
     <AdminShell>
-      <PageHeader title="IQ Teams" subtitle={`${teams.length} teams · ${counts('pending_payment')} pending payment · ${counts('pending_admin_confirmation')} pending approval · ${counts('active')} active`} />
+      <PageHeader
+        title="IQ Teams"
+        subtitle={`${teams.length} teams · ${counts('pending_payment')} pending payment · ${counts('pending_admin_confirmation')} pending approval · ${counts('active')} active`}
+        actions={<Link href="/admin/iq-teams/members" style={{ padding: '8px 14px', backgroundColor: 'var(--color-navy-deep)', color: '#fff', borderRadius: 6, fontWeight: 600, fontSize: '0.8125rem', textDecoration: 'none' }}>Member registrations &amp; waivers →</Link>}
+      />
       {canAct && <IqZeffySync />}
       {teams.length === 0 ? (
         <EmptyState title="No IQ teams yet" description="Teams appear here when a coach creates one at /iq/team." />
