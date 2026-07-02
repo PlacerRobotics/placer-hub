@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader } from '@/components/ui'
 import FamiliesTable, { type FamilyRow } from './families-table'
 
 const SEASON = '2026-27'
 
 export default async function AdminFamiliesPage() {
+  await requireSection('/admin/families')
   const supabase = await createClient()
 
   const { data: families } = await supabase.from('family').select('id, display_name, primary_email')

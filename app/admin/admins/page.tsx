@@ -1,4 +1,5 @@
 import { getAdminProfile } from '@/lib/auth/admin'
+import { requireSection } from '@/lib/auth/admin-access'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSuperAdmin } from '@/lib/auth/roles'
@@ -6,6 +7,7 @@ import { AdminShell, PageHeader, WarningAlert } from '@/components/ui'
 import RolesManager, { type AdminRow } from './roles-manager'
 
 export default async function AdminsPage() {
+  await requireSection('/admin/admins')
   const admin = await getAdminProfile()
   const supabase = await createClient()
 

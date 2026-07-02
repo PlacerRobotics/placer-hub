@@ -7,8 +7,9 @@ import { supporterLevel } from '@/lib/supporter'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
 import { volunteerBucket, VOLUNTEER_BUCKET_META } from '@/lib/volunteer-buckets'
 import { fundraisingDeadline } from '@/lib/fundraising'
+import { getAdminAccess } from '@/lib/auth/admin-access'
+import { adminHome } from '@/lib/auth/roles'
 
-const ADMIN_EMAIL = 'kevin.miller@placerrobotics.org'
 const SEASON = '2026-27'
 
 const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
@@ -51,7 +52,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const { notice } = await searchParams
   const email = user.email ?? 'your account'
-  const isAdmin = user.email === ADMIN_EMAIL
+  // Any provisioned admin (by role, not just the bootstrap email) gets an entry into
+  // the admin area, landing on the home their roles permit (e.g. an IQ coordinator
+  // goes straight to IQ Teams).
+  const adminAccess = await getAdminAccess()
+  const isAdmin = !!adminAccess
+  const adminHref = adminAccess ? adminHome(adminAccess.roles, adminAccess.isSuper) : '/admin'
 
   const { data: guardian } = await supabase.from('guardian').select('id, family_id, first_name, last_name').ilike('login_email', user.email ?? '').maybeSingle()
   const familyLabel = guardian?.last_name ? `${guardian.last_name} Family` : email
@@ -331,7 +337,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   return (
     <FamilyShell familyName={familyLabel} maxWidth="lg">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-        {isAdmin ? <Link href="/admin" style={smallLink}>Admin dashboard →</Link> : <span />}
+        {isAdmin ? <Link href={adminHref} style={smallLink}>Admin dashboard →</Link> : <span />}
         <Link href="/dashboard/edit" style={smallLink}>My Account →</Link>
       </div>
 

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader, EmptyState } from '@/components/ui'
 import { TeamRows } from './team-rows'
 
@@ -8,6 +9,7 @@ const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.875rem'
 const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: '0.9375rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
 
 export default async function TeamsPage() {
+  await requireSection('/admin/teams')
   const supabase = await createClient()
   const { data } = await supabase
     .from('team')

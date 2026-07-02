@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader } from '@/components/ui'
 import PaymentRecordForm from './payment-record-form'
 import UnmatchedQueue, { type UnmatchedPayment } from './unmatched-queue'
@@ -6,6 +7,7 @@ import PaymentsTable, { type PaymentRow } from './payments-table'
 import ZeffySync from './zeffy-sync'
 
 export default async function AdminPaymentsPage() {
+  await requireSection('/admin/payments')
   const supabase = await createClient()
 
   // Full ledger — every payment, for the segmented per-type view.

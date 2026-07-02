@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader, StatusBadge, EmptyState } from '@/components/ui'
 
 const SEASON = '2026-27'
@@ -15,6 +16,7 @@ const goldBtn: React.CSSProperties = { padding: '6px 14px', backgroundColor: 'va
 const dangerBtn: React.CSSProperties = { padding: '6px 14px', backgroundColor: 'var(--color-error)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 
 export default async function FinancialAidPage() {
+  await requireSection('/admin/financial-aid')
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('financial_aid')

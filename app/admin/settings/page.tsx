@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader, StatusBadge } from '@/components/ui'
 
 const SEASON = '2026-27'
@@ -12,6 +13,7 @@ const FLAGS: { key: string; label: string; help: string }[] = [
 const ALLOWED = FLAGS.map((f) => f.key)
 
 export default async function SettingsPage() {
+  await requireSection('/admin/settings')
   const supabase = await createClient()
   const { data: config, error } = await supabase
     .from('season_config')

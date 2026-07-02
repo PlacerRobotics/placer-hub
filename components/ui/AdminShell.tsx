@@ -7,6 +7,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { canAccessAdmin } from '@/lib/auth/roles'
+import { useAdminAccess } from './admin-access-context'
 
 interface AdminShellProps {
   children: React.ReactNode
@@ -35,6 +37,8 @@ const NAV_ITEMS = [
 
 export function AdminShell({ children, activePath = '/admin' }: AdminShellProps) {
   const [open, setOpen] = useState(false)
+  const { roles, isSuper } = useAdminAccess()
+  const navItems = NAV_ITEMS.filter((item) => canAccessAdmin(roles, isSuper, item.href))
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--color-bg-light)' }}>
@@ -111,7 +115,7 @@ export function AdminShell({ children, activePath = '/admin' }: AdminShellProps)
             flexShrink: 0,
           }}
         >
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = activePath === item.href
             return (
               <Link

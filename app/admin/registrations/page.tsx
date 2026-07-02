@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader } from '@/components/ui'
 import RosterDownload from './roster-download'
 import RegistrationsManager, { type RegRow, type TeamOpt } from './registrations-manager'
@@ -6,6 +7,7 @@ import RegistrationsManager, { type RegRow, type TeamOpt } from './registrations
 const SEASON = '2026-27'
 
 export default async function AdminRegistrationsPage() {
+  await requireSection('/admin/registrations')
   const supabase = await createClient()
 
   // Family-season lifecycle rows for the season.

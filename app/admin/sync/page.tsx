@@ -1,10 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader, StatusBadge, EmptyState } from '@/components/ui'
 
 const inputStyle: React.CSSProperties = { flex: 1, padding: '8px 10px', fontSize: '0.9375rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
 
 export default async function SyncPage() {
+  await requireSection('/admin/sync')
   const supabase = await createClient()
   const { data: logs } = await supabase
     .from('sync_log')

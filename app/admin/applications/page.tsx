@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader } from '@/components/ui'
 import ApplicationsQueue, { type QueueItem } from './applications-queue'
 
 export default async function AdminApplicationsPage() {
+  await requireSection('/admin/applications')
   const supabase = await createClient()
 
   const { data, error } = await supabase

@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader } from '@/components/ui'
 import VolunteersDashboard, { type VolRow } from './volunteers-dashboard'
 import ApsSyncButton from './aps-sync-button'
@@ -10,6 +11,7 @@ import { volunteerBucket } from '@/lib/volunteer-buckets'
 export const dynamic = 'force-dynamic'
 
 export default async function AdminVolunteersPage() {
+  await requireSection('/admin/volunteers')
   const db = createAdminClient()
   const today = new Date().toISOString().slice(0, 10)
 

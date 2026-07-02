@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader, StatusBadge, EmptyState } from '@/components/ui'
 
 const SEASON = '2026-27'
@@ -28,6 +29,7 @@ export default async function SponsorsPage({
 }: {
   searchParams: Promise<{ filter?: string }>
 }) {
+  await requireSection('/admin/sponsors')
   const { filter = 'all' } = await searchParams
   const supabase = await createClient()
 

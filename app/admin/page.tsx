@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader } from '@/components/ui'
 import NeedsAttentionQueue, { type Queue } from './needs-attention-queue'
 
 const SEASON = '2026-27'
 
 export default async function AdminHomePage() {
+  await requireSection('/admin')
   const supabase = await createClient()
   const n = async (q: any) => ((await q).count ?? 0) as number
 
