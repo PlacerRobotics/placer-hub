@@ -72,10 +72,6 @@ export async function POST(req: NextRequest) {
   let guardian = (await db.from('guardian').select('id, family_id').ilike('login_email', coachEmail).maybeSingle()).data
   let coachFamilyId: string
   if (guardian) {
-    // Guard: one IQ team per coach per season — don't let an existing coach spin up a second.
-    const { data: coachTms } = await db.from('team_member').select('team:team_id ( id, program, season, team_name, team_number )').eq('guardian_id', guardian.id).eq('team_role', 'coach').is('revoked_at', null)
-    const mine = (coachTms ?? []).map((r: any) => (Array.isArray(r.team) ? r.team[0] : r.team)).find((t: any) => t && t.program === 'vex_iq' && t.season === SEASON)
-    if (mine) return NextResponse.json({ error: `You already coach an IQ team (${mine.team_name || mine.team_number || 'your team'}). Manage it from your dashboard instead of creating a new one.` }, { status: 409 })
     coachFamilyId = guardian.family_id
     await db.from('guardian').update({ first_name: String(coach.first_name).trim(), last_name: String(coach.last_name).trim(), phone: String(coach.phone ?? '').trim() || undefined }).eq('id', guardian.id)
   } else {
