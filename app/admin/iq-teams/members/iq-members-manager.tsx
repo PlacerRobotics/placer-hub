@@ -7,11 +7,13 @@ export type TeamOpt = { id: string; label: string }
 export type IqMemberRow = {
   studentId: string
   name: string
+  lastFirst: string
   grade: number | null
   school: string
   teamId: string
   teamLabel: string
   coach: string
+  parentName: string
   parentEmail: string
   regStatus: 'complete' | 'waiver_pending' | 'form_pending' | 'not_started'
   signed: boolean
@@ -59,21 +61,29 @@ export default function IqMembersManager({ rows, teams }: { rows: IqMemberRow[];
   const [fTeam, setFTeam] = useState('all')
   const [fReg, setFReg] = useState('all')
   const [fWaiver, setFWaiver] = useState('all')
+  const [sort, setSort] = useState<'team' | 'student'>('team')
 
-  const filtered = useMemo(() => rows.filter((r) => {
-    if (fTeam !== 'all' && r.teamId !== fTeam) return false
-    if (fReg !== 'all' && r.regStatus !== fReg) return false
-    if (fWaiver === 'signed' && !r.signed) return false
-    if (fWaiver === 'unsigned' && r.signed) return false
-    if (search.trim()) { const q = search.toLowerCase(); if (!r.name.toLowerCase().includes(q) && !r.parentEmail.toLowerCase().includes(q) && !r.teamLabel.toLowerCase().includes(q)) return false }
-    return true
-  }), [rows, search, fTeam, fReg, fWaiver])
+  const filtered = useMemo(() => {
+    const out = rows.filter((r) => {
+      if (fTeam !== 'all' && r.teamId !== fTeam) return false
+      if (fReg !== 'all' && r.regStatus !== fReg) return false
+      if (fWaiver === 'signed' && !r.signed) return false
+      if (fWaiver === 'unsigned' && r.signed) return false
+      if (search.trim()) { const q = search.toLowerCase(); if (!r.name.toLowerCase().includes(q) && !r.parentName.toLowerCase().includes(q) && !r.parentEmail.toLowerCase().includes(q) && !r.teamLabel.toLowerCase().includes(q)) return false }
+      return true
+    })
+    const cmp = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+    out.sort((a, b) => sort === 'student'
+      ? cmp(a.lastFirst, b.lastFirst)
+      : cmp(a.teamLabel, b.teamLabel) || cmp(a.lastFirst, b.lastFirst))
+    return out
+  }, [rows, search, fTeam, fReg, fWaiver, sort])
 
   const today = new Date().toISOString().slice(0, 10)
   function exportView() {
     download(`iq-members-${today}.csv`,
-      ['Student', 'Grade', 'School', 'Team', 'Coach', 'Parent email', 'Registration', 'Waiver'],
-      filtered.map((r) => [r.name, String(r.grade ?? ''), r.school, r.teamLabel, r.coach, r.parentEmail, REG_META[r.regStatus].label, r.signed ? 'signed' : 'not signed']))
+      ['Student', 'Grade', 'School', 'Team', 'Coach', 'Parent', 'Parent email', 'Registration', 'Waiver'],
+      filtered.map((r) => [r.name, String(r.grade ?? ''), r.school, r.teamLabel, r.coach, r.parentName, r.parentEmail, REG_META[r.regStatus].label, r.signed ? 'signed' : 'not signed']))
   }
   function exportMaster() {
     download(`iq-master-${today}.csv`, MASTER_COLS.map((c) => c[1]), filtered.map((r) => MASTER_COLS.map((c) => r.master[c[0]] ?? '')))
@@ -86,6 +96,7 @@ export default function IqMembersManager({ rows, teams }: { rows: IqMemberRow[];
         <select style={sel} value={fTeam} onChange={(e) => setFTeam(e.target.value)}><option value="all">All teams</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
         <select style={sel} value={fReg} onChange={(e) => setFReg(e.target.value)}><option value="all">Registration: all</option><option value="complete">Complete</option><option value="waiver_pending">Waiver pending</option><option value="form_pending">Form pending</option><option value="not_started">Not started</option></select>
         <select style={sel} value={fWaiver} onChange={(e) => setFWaiver(e.target.value)}><option value="all">Waiver: all</option><option value="signed">Signed</option><option value="unsigned">Not signed</option></select>
+        <select style={sel} value={sort} onChange={(e) => setSort(e.target.value as 'team' | 'student')}><option value="team">Sort: Team #, then student</option><option value="student">Sort: Student (last, first)</option></select>
         <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{filtered.length} of {rows.length}</span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
           <button type="button" onClick={exportView} style={btn}>Export view</button>
@@ -96,7 +107,7 @@ export default function IqMembersManager({ rows, teams }: { rows: IqMemberRow[];
       <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--color-surface)' }}>
           <thead><tr>
-            <th style={th}>Student</th><th style={th}>Grade</th><th style={th}>School</th><th style={th}>Team</th><th style={th}>Coach</th><th style={th}>Parent email</th><th style={th}>Registration</th><th style={th}>Waiver</th>
+            <th style={th}>Student</th><th style={th}>Grade</th><th style={th}>School</th><th style={th}>Team</th><th style={th}>Coach</th><th style={th}>Parent</th><th style={th}>Registration</th><th style={th}>Waiver</th>
           </tr></thead>
           <tbody>
             {filtered.length === 0 ? (
@@ -108,7 +119,7 @@ export default function IqMembersManager({ rows, teams }: { rows: IqMemberRow[];
                 <td style={cell}>{r.school}</td>
                 <td style={cell}>{r.teamLabel}</td>
                 <td style={cell}>{r.coach}</td>
-                <td style={cell}>{r.parentEmail}</td>
+                <td style={cell}>{r.parentName}{r.parentEmail && r.parentEmail !== '—' && <div style={{ fontSize: '0.6875rem', color: 'var(--color-text-muted)' }}>{r.parentEmail}</div>}</td>
                 <td style={cell}><StatusBadge label={REG_META[r.regStatus].label} variant={REG_META[r.regStatus].variant} /></td>
                 <td style={{ ...cell, color: r.signed ? 'var(--color-success)' : 'var(--color-text-muted)', fontWeight: 600 }}>{r.signed ? '✓ signed' : 'not yet'}</td>
               </tr>

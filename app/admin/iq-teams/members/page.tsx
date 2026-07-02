@@ -69,11 +69,13 @@ export default async function IqMembersPage() {
     return {
       studentId: a.student_id,
       name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim(),
+      lastFirst: `${s.last_name ?? ''} ${s.first_name ?? ''}`.trim().toLowerCase(),
       grade: s.grade ?? null,
       school: schoolName || '—',
       teamId: tid ?? '',
       teamLabel,
       coach: coach?.name ?? '—',
+      parentName: p1 ? `${p1.first_name ?? ''} ${p1.last_name ?? ''}`.trim() : '—',
       parentEmail: p1?.login_email ?? '—',
       regStatus,
       signed: isSigned,
