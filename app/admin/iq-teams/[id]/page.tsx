@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 import { AdminShell, PageHeader, StatusBadge } from '@/components/ui'
+import { sendMagicLinkEmail } from '@/lib/email'
 import IqApproveButton from '../iq-approve-button'
 
 const SEASON = '2026-27'
@@ -80,6 +81,37 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
       team_number: String(formData.get('team_number') ?? '').trim() || null,
       events_vex_com_registered: formData.get('events') === 'on',
     }).eq('id', id)
+    redirect(`/admin/iq-teams/${id}`)
+  }
+  async function assignCoach(formData: FormData) {
+    'use server'
+    const a = await getAdminProfile(); if (!a) return
+    const adb = createAdminClient()
+    if (!(await hasAnyRole(adb, a.id, ROLES))) return
+    const first = String(formData.get('first') ?? '').trim()
+    const last = String(formData.get('last') ?? '').trim()
+    const em = String(formData.get('email') ?? '').trim().toLowerCase()
+    if (!first || !last || !em.includes('@')) return
+    // Find or create the coach's account (stub), then attach as coach + invite.
+    let gg = (await adb.from('guardian').select('id, family_id').ilike('login_email', em).maybeSingle()).data
+    if (!gg) {
+      const { data: fam } = await adb.from('family').insert({ primary_email: em, display_name: last }).select('id').single()
+      gg = (await adb.from('guardian').insert({ family_id: fam!.id, first_name: first, last_name: last, login_email: em, phone: '', role: 'primary' }).select('id, family_id').single()).data!
+    } else {
+      await adb.from('guardian').update({ first_name: first, last_name: last }).eq('id', gg.id)
+    }
+    const existing = (await adb.from('team_member').select('id').eq('team_id', id).eq('guardian_id', gg.id).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()).data
+    if (!existing) await adb.from('team_member').insert({ team_id: id, guardian_id: gg.id, season: SEASON, team_role: 'coach', program: 'vex_iq' })
+    try {
+      await sendMagicLinkEmail({
+        email: em, redirectPath: '/dashboard',
+        subject: 'Set up your VEX IQ team — Placer Robotics',
+        heading: 'Welcome — set up your VEX IQ team',
+        intro: `You've been assigned as the coach of ${teamLabel}. Click below to sign in and finish setting up your team — add your roster and complete the steps to get it registered for the ${SEASON} season.`,
+        buttonLabel: 'Sign in to set up my team →',
+        preheader: 'Sign in to set up your VEX IQ team.',
+      })
+    } catch (e) { console.error('[iq assign coach] invite failed:', e) }
     redirect(`/admin/iq-teams/${id}`)
   }
   async function updateKit(formData: FormData) {
@@ -185,6 +217,16 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
         <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
           Coach: {coachName || '—'} · {coach?.login_email || '—'} · {coach?.phone || 'no phone'} · ref {team.team_payment_reference_code || '—'}
         </div>
+        {canAct && !coach && (
+          <form action={assignCoach} style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.875rem', padding: '0.875rem 1rem', background: 'var(--color-bg-light)', borderRadius: 8 }}>
+            <div style={{ flexBasis: '100%', fontSize: '0.8125rem', fontWeight: 700 }}>Assign a coach</div>
+            <div><label style={lbl}>First name</label><input name="first" required style={{ ...input, width: 130 }} /></div>
+            <div><label style={lbl}>Last name</label><input name="last" required style={{ ...input, width: 130 }} /></div>
+            <div><label style={lbl}>Email</label><input name="email" type="email" required style={{ ...input, width: 220 }} /></div>
+            <button style={btn}>Assign &amp; invite</button>
+            <p style={{ flexBasis: '100%', fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>Creates the coach&apos;s account if they don&apos;t have one and emails them a sign-in invite to set up this team.</p>
+          </form>
+        )}
         {canAct ? (
           <>
           <form action={updateTeam} style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>

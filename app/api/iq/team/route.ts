@@ -35,10 +35,11 @@ async function addMemberStub(db: any, familyId: string, sFirst: string, sLast: s
   return { ok: true }
 }
 
-// POST /api/iq/team — a signed-in coach creates an IQ team. The team starts in
-// 'pending_payment'; once the $1,200 fee is paid (Zeffy webhook) it moves to
-// 'pending_admin_confirmation', and the IQ Coordinator approves it to 'active'.
-// Member stubs are created now; invites go out only after approval.
+// POST /api/iq/team — a signed-in coach CLAIMS an existing, coach-less IQ team from
+// the season's list (coaches don't create new teams). It moves to 'pending_payment';
+// once the $1,200 fee is paid it goes to 'pending_admin_confirmation', and the IQ
+// Coordinator approves it to 'active'. Member stubs are created now; invites go out
+// only after approval.
 export async function POST(req: NextRequest) {
   const session = await createClient()
   const { data: { user } } = await session.auth.getUser()
@@ -59,14 +60,14 @@ export async function POST(req: NextRequest) {
 
   const db = createAdminClient()
 
-  // Guard: a coach-entered "returning number" is only a request (real numbers are
-  // assigned by the IQ Coordinator from RobotEvents). If it already belongs to a team,
-  // steer them there instead of spawning a duplicate.
-  const requestedNumber = String(body.returning_number ?? '').trim()
-  if (requestedNumber) {
-    const { data: dupNum } = await db.from('team').select('id').eq('program', 'vex_iq').eq('season', SEASON).ilike('team_number', requestedNumber).maybeSingle()
-    if (dupNum) return NextResponse.json({ error: `Team #${requestedNumber} already exists. If that's your returning team, contact the IQ Coordinator (registrar@placerrobotics.org) to be added — please don't create a duplicate.` }, { status: 409 })
-  }
+  // Claim an EXISTING, coach-less IQ team from the season's list. Coaches never create
+  // new teams — the IQ Coordinator manages the team list + numbers (RobotEvents).
+  const teamId = String(body.team_id ?? '').trim()
+  if (!teamId) return NextResponse.json({ error: 'Please select your team from the list.' }, { status: 400 })
+  const { data: selTeam } = await db.from('team').select('id, program, season, team_payment_reference_code, team_name, notes').eq('id', teamId).maybeSingle()
+  if (!selTeam || selTeam.program !== 'vex_iq' || selTeam.season !== SEASON) return NextResponse.json({ error: 'That team is not available.' }, { status: 400 })
+  const { data: existingCoach } = await db.from('team_member').select('id').eq('team_id', teamId).eq('team_role', 'coach').is('revoked_at', null).limit(1)
+  if ((existingCoach ?? []).length) return NextResponse.json({ error: 'That team already has a coach — pick an available team or contact the IQ Coordinator.' }, { status: 409 })
 
   // 1. Coach guardian + family (create if new).
   let guardian = (await db.from('guardian').select('id, family_id').ilike('login_email', coachEmail).maybeSingle()).data
@@ -82,33 +83,27 @@ export async function POST(req: NextRequest) {
     guardian = g; coachFamilyId = g.family_id
   }
 
-  // 2. Team — pending payment. IQ is always ES + Placer Robotics.
+  // 2. Attach the coach + set fee/status on the selected team (its number stays as the
+  // IQ Coordinator assigned it). Moves to pending_payment until the $1,200 fee is paid.
   const { data: config } = await db.from('season_config').select('iq_team_fee, zeffy_iq_team_url').eq('season', SEASON).maybeSingle()
   const fee = config?.iq_team_fee ?? 1200
-  const paymentRef = `IQT-${globalThis.crypto.randomUUID().slice(0, 8).toUpperCase()}`
+  const paymentRef = selTeam.team_payment_reference_code || `IQT-${globalThis.crypto.randomUUID().slice(0, 8).toUpperCase()}`
   const asst = body.assistant ?? {}
   const asstLine = asst.first_name ? `Assistant: ${asst.first_name} ${asst.last_name ?? ''} ${asst.email ?? ''} ${asst.phone ?? ''}`.trim() : 'Assistant: none'
-  const notes = [
-    `IQ team application (${new Date().toISOString().slice(0, 10)}).`,
+  const claimNote = [
+    `Coach ${String(coach.first_name).trim()} ${String(coach.last_name).trim()} claimed this team (${new Date().toISOString().slice(0, 10)}).`,
     `Competes outside Placer League: ${body.competes_outside ?? 'unsure'}.`,
-    `Returning team #: ${String(body.returning_number ?? '').trim() || '(new — assign)'}.`,
     asstLine,
     `Coach acknowledged collecting the $${fee} IQ program fee + reviewing league policies.`,
   ].join('\n')
-
-  const { data: team, error: tErr } = await db.from('team').insert({
-    season: SEASON, program: 'vex_iq', division: 'ES',
-    // Number is NOT taken from coach input — the IQ Coordinator assigns/verifies it
-    // (RobotEvents). The requested number is kept in notes for them to reconcile.
-    team_number: null,
-    team_name: String(body.team_name ?? '').trim() || null,
-    school_org: 'Placer Robotics',
+  const notes = selTeam.notes ? `${selTeam.notes}\n${claimNote}` : claimNote
+  const { error: tErr } = await db.from('team').update({
+    team_name: String(body.team_name ?? '').trim() || selTeam.team_name || null,
     team_fee_amount: fee, team_fee_status: 'unpaid',
     team_payment_reference_code: paymentRef,
     status: 'pending_payment', active: false, notes,
-  }).select('id').single()
-  if (tErr) return NextResponse.json({ error: `Could not create team: ${tErr.message}` }, { status: 500 })
-  const teamId = team.id
+  }).eq('id', teamId)
+  if (tErr) return NextResponse.json({ error: `Could not claim team: ${tErr.message}` }, { status: 500 })
 
   // 3. Coach team_member.
   await db.from('team_member').insert({ team_id: teamId, guardian_id: guardian.id, season: SEASON, team_role: 'coach', program: 'vex_iq' })
@@ -148,7 +143,7 @@ export async function POST(req: NextRequest) {
   // 5. Email the coach the payment reference + Zeffy link (best-effort).
   try {
     const html = iqTeamSubmittedHtml({ coachName: `${String(coach.first_name).trim()} ${String(coach.last_name).trim()}`.trim(), teamName: String(body.team_name ?? '').trim() || null, season: SEASON, paymentRef, zeffyUrl: config?.zeffy_iq_team_url ?? null, fee })
-    await sendEmail({ to: [coachEmail], subject: `IQ team created — payment needed (Placer Robotics ${SEASON})`, html })
+    await sendEmail({ to: [coachEmail], subject: `IQ team — payment needed (Placer Robotics ${SEASON})`, html })
   } catch (e) { console.error('[iq/team] coach submit email failed:', e) }
 
   return NextResponse.json({ ok: true, teamId, paymentRef, members: results })

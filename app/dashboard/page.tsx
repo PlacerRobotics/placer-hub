@@ -509,7 +509,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <div style={{ ...panel, marginTop: '0.75rem' }}>
               <div style={rowFlex}>
                 <span style={{ fontSize: '0.9375rem' }}>Coaching a VEX IQ team this season?</span>
-                <Link href="/iq/team" style={smallLink}>Create a team →</Link>
+                <Link href="/iq/team" style={smallLink}>Set up your team →</Link>
               </div>
             </div>
           )}

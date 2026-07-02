@@ -15,13 +15,13 @@ const lbl: React.CSSProperties = { display: 'block', fontSize: '0.8125rem', font
 const grid2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }
 const GRADES = [3, 4, 5, 6]
 
-export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, takenNumbers = [] }: { email: string; coach: { first_name: string; last_name: string; phone: string }; schools: School[]; zeffyUrl: string | null; fee: number; takenNumbers?: string[] }) {
+export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, availableTeams = [] }: { email: string; coach: { first_name: string; last_name: string; phone: string }; schools: School[]; zeffyUrl: string | null; fee: number; availableTeams?: { id: string; label: string }[] }) {
   const router = useRouter()
   const [cFirst, setCFirst] = useState(coach.first_name)
   const [cLast, setCLast] = useState(coach.last_name)
   const [cPhone, setCPhone] = useState(coach.phone)
   const [aFirst, setAFirst] = useState(''); const [aLast, setALast] = useState(''); const [aEmail, setAEmail] = useState(''); const [aPhone, setAPhone] = useState('')
-  const [returning, setReturning] = useState('')
+  const [teamId, setTeamId] = useState('')
   const [competes, setCompetes] = useState('unsure')
   const [ocFirst, setOcFirst] = useState(''); const [ocLast, setOcLast] = useState(''); const [ocGrade, setOcGrade] = useState(''); const [ocSchoolId, setOcSchoolId] = useState(''); const [ocSchoolOther, setOcSchoolOther] = useState('')
   const [feeAck, setFeeAck] = useState(false)
@@ -33,8 +33,7 @@ export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, taken
   const completeOthers = roster.filter(rowComplete).length
   const ownCount = ocFirst.trim() && ocLast.trim() && ocGrade ? 1 : 0
   const totalMembers = ownCount + completeOthers
-  const numberTaken = !!returning.trim() && takenNumbers.includes(returning.trim().toUpperCase())
-  const valid = cFirst.trim() && cLast.trim() && feeAck && totalMembers >= 3 && !numberTaken
+  const valid = cFirst.trim() && cLast.trim() && !!teamId && feeAck && totalMembers >= 3
 
   function setRow(i: number, k: keyof RosterRow, v: string) {
     setRoster((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)))
@@ -49,7 +48,7 @@ export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, taken
         body: JSON.stringify({
           coach: { first_name: cFirst.trim(), last_name: cLast.trim(), phone: cPhone.trim() },
           assistant: aFirst.trim() ? { first_name: aFirst.trim(), last_name: aLast.trim(), email: aEmail.trim(), phone: aPhone.trim() } : null,
-          returning_number: returning.trim(), competes_outside: competes,
+          team_id: teamId, competes_outside: competes,
           own_child: ownCount ? { first_name: ocFirst.trim(), last_name: ocLast.trim(), grade: ocGrade, school_id: ocSchoolId && ocSchoolId !== OTHER_SCHOOL ? ocSchoolId : '', school: ocSchoolId === OTHER_SCHOOL ? ocSchoolOther.trim() : '' } : {},
           fee_ack: feeAck,
           roster: roster.filter(rowComplete).map((r) => ({
@@ -69,8 +68,8 @@ export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, taken
   if (result) {
     return (
       <>
-        <PageHeader title="IQ team created" subtitle="One more step — pay your team fee." />
-        <SuccessAlert title="Team created — payment needed">
+        <PageHeader title="Team set up" subtitle="One more step — pay your team fee." />
+        <SuccessAlert title="Team set up — payment needed">
           Pay your <strong>${fee.toLocaleString()}</strong> team fee now to start the review. Once it’s confirmed, the IQ
           Coordinator reviews your team; after approval, each family is invited to register. We also emailed you this link.
         </SuccessAlert>
@@ -133,7 +132,7 @@ export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, taken
 
   return (
     <>
-      <PageHeader title="Create your IQ team" subtitle="Coach application for the 2026–27 VEX IQ season (Elementary)." />
+      <PageHeader title="Set up your IQ team" subtitle="Claim your VEX IQ team for the 2026–27 season (Elementary) and add your roster." />
       {error && <div style={{ marginBottom: '1.25rem' }}><ErrorAlert title="Couldn’t submit">{error}</ErrorAlert></div>}
 
       <FormSection title="Coach" description={`Signed in as ${email}.`}>
@@ -155,16 +154,15 @@ export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, taken
         </div>
       </FormSection>
 
-      <FormSection title="Team" description="All Placer Robotics IQ teams are Elementary (ES). Team name/number are assigned later from RobotEvents.">
+      <FormSection title="Team" description="All Placer Robotics IQ teams are Elementary (ES). Pick your team from the list — numbers are assigned by the IQ Coordinator. Don't see yours? Contact registrar@placerrobotics.org.">
         <div style={grid2}>
-          <FormField label="Returning team number (optional)" htmlFor="rn" helpText="Had a number last season? Enter it so we can match you — the IQ Coordinator confirms/assigns the official number. New teams: leave blank.">
-            <TextInput id="rn" value={returning} onChange={(e) => setReturning(e.target.value)} placeholder="e.g. 295Y" />
-            {numberTaken && (
-              <p style={{ margin: '0.4rem 0 0', fontSize: '0.8125rem', color: 'var(--color-error)', fontWeight: 600 }}>
-                Team #{returning.trim().toUpperCase()} already exists. If that&apos;s your team, don&apos;t create a new one — contact the IQ Coordinator at registrar@placerrobotics.org to be added.
-              </p>
-            )}
-          </FormField>
+          <div>
+            <label htmlFor="tm" style={lbl}>Select your team <span style={{ color: 'var(--color-error)' }}>*</span></label>
+            <select id="tm" style={selectStyle} value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">Choose a team…</option>
+              {availableTeams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </div>
           <div>
             <label htmlFor="co" style={lbl}>Compete outside the Placer League?</label>
             <select id="co" style={selectStyle} value={competes} onChange={(e) => setCompetes(e.target.value)}>
@@ -213,7 +211,7 @@ export default function IqTeamForm({ email, coach, schools, zeffyUrl, fee, taken
       </FormSection>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-        <PrimaryButton loading={busy} disabled={!valid} onClick={submit}>Create team</PrimaryButton>
+        <PrimaryButton loading={busy} disabled={!valid} onClick={submit}>Set up team</PrimaryButton>
       </div>
     </>
   )
