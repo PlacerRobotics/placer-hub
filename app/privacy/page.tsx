@@ -31,7 +31,12 @@ export default function PrivacyPage() {
       <p style={p}>To register participants, campers, and teams; manage attendance, check-in, and authorized pickup; place students on teams; process registration fees and fundraising; communicate schedules, events, and safety information; respond to allergies, medical needs, and emergencies; screen and clear volunteers; and meet legal and insurance requirements.</p>
 
       <h2 style={h2}>Children&rsquo;s privacy</h2>
-      <p style={p}>Our participants are minors. We collect a child&rsquo;s information only with the consent of a parent or legal guardian, and only what is needed to run the program safely. In our elementary VEX IQ program we do not collect any email or online account for the child — all access and messaging goes through the parent. A parent may review or request deletion of their child&rsquo;s information at any time (see Contact below). Slack and similar tools require users to be 13 or older; students under 13 are not invited to them.</p>
+      <p style={p}>Our participants are minors. We collect a child&rsquo;s information only with the consent of a parent or legal guardian, and only what is needed to run the program safely. In our elementary VEX IQ program we do not collect any email or online account for the child — all access and messaging goes through the parent. A parent may review or request deletion of their child&rsquo;s information at any time (see Contact below). Slack and similar tools require users to be 13 or older; students under 13 are not invited to them. Students ages 13&ndash;17 may access Placer Robotics Slack only with parent/guardian consent; access is optional and may be limited or revoked at any time.</p>
+
+      <h2 style={h2}>Facility audio and video recording</h2>
+      <p style={p}>Placer Robotics facilities are designed as open program spaces for visibility, supervision, safety, and youth protection. Common program areas may use posted audio and video recording for safety, security, incident review, and facility operations. Recording does not occur in restrooms or other areas where there is a reasonable expectation of privacy.</p>
+      <p style={p}>Our facility is intentionally designed as open, visible program space for youth protection; private one-on-one spaces are limited by design.</p>
+      <p style={p}>Notice of recording is posted at the facility. Audio and video recordings are reviewed only when needed for safety, incident review, insurance, legal compliance, or related operational purposes; audio is not routinely monitored. Recordings may be shared with Placer Robotics leadership, insurers, legal advisors, law enforcement, or emergency responders when appropriate, and are retained for a limited period unless preserved for safety, insurance, legal, or operational needs.</p>
 
       <h2 style={h2}>How we share it</h2>
       <p style={p}>We share information only with service providers that help us operate, and only as needed to provide those services. Examples include registration and payment tools (such as Zeffy), background-check and youth-protection providers (such as Abuse Prevention Systems), email or messaging platforms, workspace tools (such as Slack and Google), and cloud storage providers. We may also use or share limited information when needed to protect a participant&rsquo;s health or safety, respond to an emergency, comply with law, or work with our insurers or legal advisors. We do not sell or rent personal information.</p>
@@ -42,7 +47,7 @@ export default function PrivacyPage() {
       <h2 style={h2}>Your choices</h2>
       <p style={p}>You may review, correct, or request deletion of your family&rsquo;s information, and opt out of non-essential communications, by contacting us. Some information is required to participate; if it is removed, we may be unable to keep a participant enrolled.</p>
 
-      <h2 style={h2}>Contact</h2>
+      <h2 style={h2}>Contact us</h2>
       <p style={p}>Questions or requests: <a href="mailto:registrar@placerrobotics.org" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>registrar@placerrobotics.org</a>.</p>
 
       <div style={{ marginTop: '2rem' }}><Link href="/" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>&larr; Back to Placer Robotics</Link></div>
