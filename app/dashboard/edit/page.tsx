@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader } from '@/components/ui'
+import { ageFromDob } from '@/lib/compliance'
 import AccountForm, { type AccountData } from './account-form'
 
 const SEASON = '2026-27'
@@ -21,7 +22,7 @@ export default async function AccountPage() {
 
   const { data: studs } = await supabase
     .from('student')
-    .select('id, first_name, last_name, tshirt_size, communication_email, fusion_education_email, slack_email')
+    .select('id, first_name, last_name, tshirt_size, communication_email, fusion_education_email, slack_email, birthdate')
     .eq('family_id', familyId)
     .order('created_at', { ascending: true })
   const students = studs ?? []
@@ -72,11 +73,15 @@ export default async function AccountPage() {
       const ec = ecByStudent[s.id]
       const enrsS = enrByStudent[s.id] ?? []
       const isIq = enrsS.some((e: any) => e.program === 'vex_iq')
+      const age = ageFromDob(s.birthdate ?? '')
+      // No student emails for IQ or under-13 — parent-managed.
+      const emailLocked = isIq || (age != null && age < 13)
       const sp = sponsorByStudent[s.id]
       return {
         id: s.id,
         name: `${s.first_name} ${s.last_name}`.trim(),
         tshirt_size: s.tshirt_size ?? '',
+        emailLocked,
         communication_email: s.communication_email ?? '',
         fusion_education_email: s.fusion_education_email ?? '',
         slack_email: s.slack_email ?? '',

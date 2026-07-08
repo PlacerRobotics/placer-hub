@@ -12,7 +12,7 @@ const TSHIRT_OPTIONS: [string, string][] = [
 export type AccountData = {
   guardian1: { name: string; email: string; communication_email: string; slack_email: string; street_address: string; city: string; state: string; zip_code: string; phone: string }
   students: {
-    id: string; name: string; tshirt_size: string; communication_email: string; fusion_education_email: string; slack_email: string
+    id: string; name: string; tshirt_size: string; emailLocked: boolean; communication_email: string; fusion_education_email: string; slack_email: string
     ec_first: string; ec_last: string; ec_phone: string; ec_relationship: string
     fund: {
       show: boolean; locked: boolean; methods: string[]; target: number
@@ -123,9 +123,17 @@ function StudentSection({ student, onSaved }: { student: AccountData['students']
           {TSHIRT_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
       </div>
-      <FormField label="Google Workspace email" htmlFor={`comm-${student.id}`} helpText={WORKSPACE_HELP}><TextInput id={`comm-${student.id}`} type="email" value={commEmail} onChange={(e) => setCommEmail(e.target.value)} /></FormField>
-      <FormField label="Fusion Education email" htmlFor={`fus-${student.id}`} helpText="Your student's Fusion account email, if they have one."><TextInput id={`fus-${student.id}`} type="email" value={fusion} onChange={(e) => setFusion(e.target.value)} /></FormField>
-      <SlackField id={`slack-${student.id}`} value={slack} onChange={setSlack} locked={slackLocked} />
+      {student.emailLocked ? (
+        <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0.25rem 0' }}>
+          Students under 13 (and all VEX IQ members) don&apos;t have a student email or Slack — we communicate with you (the parent/guardian). Nothing to enter here.
+        </p>
+      ) : (
+        <>
+          <FormField label="Google Workspace email" htmlFor={`comm-${student.id}`} helpText={WORKSPACE_HELP}><TextInput id={`comm-${student.id}`} type="email" value={commEmail} onChange={(e) => setCommEmail(e.target.value)} /></FormField>
+          <FormField label="Fusion Education email" htmlFor={`fus-${student.id}`} helpText="Your student's Fusion account email, if they have one."><TextInput id={`fus-${student.id}`} type="email" value={fusion} onChange={(e) => setFusion(e.target.value)} /></FormField>
+          <SlackField id={`slack-${student.id}`} value={slack} onChange={setSlack} locked={slackLocked} />
+        </>
+      )}
       <FormField label="Emergency contact first name" htmlFor={`ecf-${student.id}`}><TextInput id={`ecf-${student.id}`} value={ecFirst} onChange={(e) => setEcFirst(e.target.value)} /></FormField>
       <FormField label="Emergency contact last name" htmlFor={`ecl-${student.id}`}><TextInput id={`ecl-${student.id}`} value={ecLast} onChange={(e) => setEcLast(e.target.value)} /></FormField>
       <FormField label="Emergency contact phone" htmlFor={`ecp-${student.id}`}><TextInput id={`ecp-${student.id}`} type="tel" value={ecPhone} onChange={(e) => setEcPhone(e.target.value)} /></FormField>
