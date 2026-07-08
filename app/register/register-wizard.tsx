@@ -272,9 +272,10 @@ export default function RegisterWizard({
   }, [visibleSchools, schoolId])
 
   const studentAge = ageFromDob(dob)
-  // Guard against typo'd/impossible birthdates (future dates, wrong year). Members run
-  // from elementary to high school, so a real DOB puts the student roughly age 4–20.
-  const dobPlausible = studentAge != null && studentAge >= 4 && studentAge <= 20
+  // Guard against typo'd/impossible birthdates (future dates, wrong year). The youngest
+  // program is 3rd grade (VEX IQ ES) and the oldest are high schoolers, so a real DOB
+  // puts the student roughly age 7 (rising 3rd grader) to 20.
+  const dobPlausible = studentAge != null && studentAge >= 7 && studentAge <= 20
   const isUnder13 = studentAge != null && studentAge < 13
   const needsCoppa = Number(grade) === 6 || Number(grade) === 7 || isUnder13
   const emailProvided = studentEmail.trim().length > 0
@@ -445,7 +446,7 @@ export default function RegisterWizard({
               <TextInput id="dob" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
               {dob && !dobPlausible && (
                 <p style={{ margin: '0.4rem 0 0', fontSize: '0.8125rem', color: 'var(--color-error)', fontWeight: 600 }}>
-                  Please double-check the date of birth — it should be a real date (a student roughly age 4–20).
+                  Please double-check the date of birth — the year looks off. Our students range from about 3rd grade (age 7) to age 20.
                 </p>
               )}
             </FormField>
