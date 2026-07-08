@@ -109,8 +109,10 @@ export async function POST(request: NextRequest) {
       school_id: s.school_id || null,
       school_raw: s.school_raw || null,
       tshirt_size: s.tshirt_size || null,
-      fusion_education_email: s.fusion_education_email || null,
-      communication_email: s.communication_email || null,
+      // No student emails for VEX IQ or ANY under-13 participant (COPPA — parent-managed,
+      // regardless of grade; e.g. 12-year-old 7th graders). Enforced server-side.
+      fusion_education_email: (program === 'vex_iq' || under13) ? null : (s.fusion_education_email || null),
+      communication_email: (program === 'vex_iq' || under13) ? null : (s.communication_email || null),
       under_13_confirmed: under13,
       status: 'active',
     })

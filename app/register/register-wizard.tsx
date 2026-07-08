@@ -279,9 +279,9 @@ export default function RegisterWizard({
   const step1Valid =
     first.trim() && last.trim() && dob && grade && tshirt && (schoolId !== OTHER_SCHOOL || schoolOther.trim()) && schoolId &&
     (!needsCoppa || coppaConsent) &&
-    // Email + its certification checkbox are V5/Combat only. For IQ the field is hidden,
-    // so a pre-filled email must NOT gate Continue (the checkbox can't be shown/checked).
-    (program === 'vex_iq' || !emailProvided || (emailCertified && (!schoolDomainMatch || schoolEmailConfirmed)))
+    // Student email is collected only for 13+ V5/Combat participants. It's hidden for IQ
+    // and for anyone under 13 (COPPA), so a pre-filled email must NOT gate Continue there.
+    (program === 'vex_iq' || isUnder13 || !emailProvided || (emailCertified && (!schoolDomainMatch || schoolEmailConfirmed)))
   const step2Valid = ec1First.trim() && ec1Last.trim() && ec1Rel.trim() && ec1Phone.trim()
   const allWaiversAgreed = waivers.length > 0 ? waivers.every((w) => agreed[w.id]) : true
   const step3Valid = alreadySigned || (allWaiversAgreed && electronicConsent && !!studentSig.trim() && !!signature.trim())
@@ -317,10 +317,10 @@ export default function RegisterWizard({
         school_id: schoolId && schoolId !== OTHER_SCHOOL ? schoolId : null,
         school_raw: schoolId === OTHER_SCHOOL ? schoolOther.trim() : null,
         tshirt_size: tshirt || null,
-        // IQ is a young, team-managed program — no student emails collected; all
-        // access/comms go through the parent. Only V5/Combat persist student email.
-        fusion_education_email: program === 'vex_iq' ? null : (fusion.trim() || null),
-        communication_email: program === 'vex_iq' ? null : (studentEmail.trim() || null),
+        // No student emails for IQ or any under-13 participant (parent-managed). Only
+        // 13+ V5/Combat persist a student email.
+        fusion_education_email: (program === 'vex_iq' || isUnder13) ? null : (fusion.trim() || null),
+        communication_email: (program === 'vex_iq' || isUnder13) ? null : (studentEmail.trim() || null),
       },
       emergency: {
         first_name: ec1First.trim(),
@@ -470,8 +470,14 @@ export default function RegisterWizard({
                 ))}
               </select>
             </div>
-            {/* Email + Slack are V5/Combat only — IQ is an elementary, team-managed flow. */}
-            {program !== 'vex_iq' && (
+            {/* Student email + Slack are for 13+ V5/Combat only. Hidden for IQ and for
+                any under-13 student (COPPA) — those are parent-managed. */}
+            {program !== 'vex_iq' && isUnder13 && (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>
+                Students under 13 don&apos;t provide an email or use Slack — we&apos;ll send all communications to you (the parent/guardian).
+              </p>
+            )}
+            {program !== 'vex_iq' && !isUnder13 && (
               <>
                 <FormField label="Fusion Education email" htmlFor="fusion" helpText="Use your student Fusion account email if you have one.">
                   <TextInput id="fusion" type="email" value={fusion} onChange={(e) => setFusion(e.target.value)} />
