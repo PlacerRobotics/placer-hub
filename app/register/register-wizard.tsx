@@ -279,7 +279,9 @@ export default function RegisterWizard({
   const step1Valid =
     first.trim() && last.trim() && dob && grade && tshirt && (schoolId !== OTHER_SCHOOL || schoolOther.trim()) && schoolId &&
     (!needsCoppa || coppaConsent) &&
-    (!emailProvided || (emailCertified && (!schoolDomainMatch || schoolEmailConfirmed)))
+    // Email + its certification checkbox are V5/Combat only. For IQ the field is hidden,
+    // so a pre-filled email must NOT gate Continue (the checkbox can't be shown/checked).
+    (program === 'vex_iq' || !emailProvided || (emailCertified && (!schoolDomainMatch || schoolEmailConfirmed)))
   const step2Valid = ec1First.trim() && ec1Last.trim() && ec1Rel.trim() && ec1Phone.trim()
   const allWaiversAgreed = waivers.length > 0 ? waivers.every((w) => agreed[w.id]) : true
   const step3Valid = alreadySigned || (allWaiversAgreed && electronicConsent && !!studentSig.trim() && !!signature.trim())
