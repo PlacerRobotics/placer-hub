@@ -8,6 +8,16 @@ import { sendEmail, iqTeamPaidNotifyHtml } from '@/lib/email'
 type SyncResult = { ok: boolean; error?: string; fetched?: number; summary?: any; results?: any[] }
 
 const normName = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ')
+// A Zeffy payment stays status:'succeeded' after a refund — the refund lives in
+// `refunds[]` / `refund_status`. Treat a fully-refunded payment as void so it's never
+// recorded (or re-recorded after an admin removes it).
+function fullyRefunded(p: any): boolean {
+  const refunded = (Array.isArray(p?.refunds) ? p.refunds : []).reduce((s: number, r: any) => s + (Number(r?.amount) || 0), 0)
+  const gross = Number(p?.amount ?? p?.totalAmount ?? 0) || 0
+  if (gross > 0 && refunded >= gross) return true
+  const rs = String(p?.refund_status ?? '').toLowerCase()
+  return rs === 'refunded' || rs === 'full' || rs === 'fully_refunded'
+}
 function parseProgram(s: string): string | null {
   const t = s.toLowerCase()
   if (t.includes('combat')) return 'combat'
@@ -51,6 +61,7 @@ export async function syncRegistrationPayments(db: any, { apply, adminId }: { ap
 
   for (const p of payments) {
     if (p.status && p.status !== 'succeeded') continue
+    if (fullyRefunded(p)) continue
     const buyerEmail = (p.buyer?.email ?? '').trim()
     const signInEmail = zeffyAnswer(p.buyer_questions, 'sign-in email') || zeffyAnswer(p.buyer_questions, 'guardian email')
 
@@ -189,6 +200,7 @@ export async function syncIqPayments(db: any, { apply, adminId }: { apply: boole
 
   for (const p of payments as any[]) {
     if (p.status && p.status !== 'succeeded') continue
+    if (fullyRefunded(p)) continue
     const paymentId = String(p.id ?? '').trim()
     if (!paymentId) continue
     const buyerEmail = (p.buyer?.email ?? '').trim().toLowerCase()
