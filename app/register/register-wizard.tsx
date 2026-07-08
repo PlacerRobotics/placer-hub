@@ -317,8 +317,10 @@ export default function RegisterWizard({
         school_id: schoolId && schoolId !== OTHER_SCHOOL ? schoolId : null,
         school_raw: schoolId === OTHER_SCHOOL ? schoolOther.trim() : null,
         tshirt_size: tshirt || null,
-        fusion_education_email: fusion.trim() || null,
-        communication_email: studentEmail.trim() || null,
+        // IQ is a young, team-managed program — no student emails collected; all
+        // access/comms go through the parent. Only V5/Combat persist student email.
+        fusion_education_email: program === 'vex_iq' ? null : (fusion.trim() || null),
+        communication_email: program === 'vex_iq' ? null : (studentEmail.trim() || null),
       },
       emergency: {
         first_name: ec1First.trim(),
@@ -504,7 +506,7 @@ export default function RegisterWizard({
             {needsCoppa && (
               <label style={consentLabel}>
                 <input type="checkbox" checked={coppaConsent} onChange={(e) => setCoppaConsent(e.target.checked)} />
-                <span>I am the parent or legal guardian of this student and consent to the collection of their personal information as described in our Privacy Policy. Students under 13 may not use Slack.</span>
+                <span>I am the parent or legal guardian of this student and consent to the collection of their personal information as described in our <a href="/privacy" target="_blank" rel="noopener" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>Privacy Policy</a>. Students under 13 may not use Slack.</span>
               </label>
             )}
           </FormSection>
