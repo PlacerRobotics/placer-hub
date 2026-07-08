@@ -272,12 +272,15 @@ export default function RegisterWizard({
   }, [visibleSchools, schoolId])
 
   const studentAge = ageFromDob(dob)
+  // Guard against typo'd/impossible birthdates (future dates, wrong year). Members run
+  // from elementary to high school, so a real DOB puts the student roughly age 4–20.
+  const dobPlausible = studentAge != null && studentAge >= 4 && studentAge <= 20
   const isUnder13 = studentAge != null && studentAge < 13
   const needsCoppa = Number(grade) === 6 || Number(grade) === 7 || isUnder13
   const emailProvided = studentEmail.trim().length > 0
   const schoolDomainMatch = emailProvided && isSchoolDomain(studentEmail)
   const step1Valid =
-    first.trim() && last.trim() && dob && grade && tshirt && (schoolId !== OTHER_SCHOOL || schoolOther.trim()) && schoolId &&
+    first.trim() && last.trim() && dobPlausible && grade && tshirt && (schoolId !== OTHER_SCHOOL || schoolOther.trim()) && schoolId &&
     (!needsCoppa || coppaConsent) &&
     // Student email is collected only for 13+ V5/Combat participants. It's hidden for IQ
     // and for anyone under 13 (COPPA), so a pre-filled email must NOT gate Continue there.
@@ -440,6 +443,11 @@ export default function RegisterWizard({
             </FormField>
             <FormField label="Date of birth" htmlFor="dob" required>
               <TextInput id="dob" type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+              {dob && !dobPlausible && (
+                <p style={{ margin: '0.4rem 0 0', fontSize: '0.8125rem', color: 'var(--color-error)', fontWeight: 600 }}>
+                  Please double-check the date of birth — it should be a real date (a student roughly age 4–20).
+                </p>
+              )}
             </FormField>
             <div>
               <label htmlFor="grade" style={labelStyle}>Grade<span style={{ color: 'var(--color-error)', marginLeft: 3 }}>*</span></label>
