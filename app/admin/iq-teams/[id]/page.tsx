@@ -100,6 +100,8 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     } else {
       await adb.from('guardian').update({ first_name: first, last_name: last }).eq('id', gg.id)
     }
+    // Revoke any other active coach on this team (reassignment), then attach the new one.
+    await adb.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('team_id', id).eq('team_role', 'coach').is('revoked_at', null).neq('guardian_id', gg.id)
     const existing = (await adb.from('team_member').select('id').eq('team_id', id).eq('guardian_id', gg.id).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()).data
     if (!existing) await adb.from('team_member').insert({ team_id: id, guardian_id: gg.id, season: SEASON, team_role: 'coach', program: 'vex_iq' })
     try {
@@ -217,15 +219,29 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
         <div style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', marginBottom: '0.875rem' }}>
           Coach: {coachName || '—'} · {coach?.login_email || '—'} · {coach?.phone || 'no phone'} · ref {team.team_payment_reference_code || '—'}
         </div>
-        {canAct && !coach && (
-          <form action={assignCoach} style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.875rem', padding: '0.875rem 1rem', background: 'var(--color-bg-light)', borderRadius: 8 }}>
-            <div style={{ flexBasis: '100%', fontSize: '0.8125rem', fontWeight: 700 }}>Assign a coach</div>
-            <div><label style={lbl}>First name</label><input name="first" required style={{ ...input, width: 130 }} /></div>
-            <div><label style={lbl}>Last name</label><input name="last" required style={{ ...input, width: 130 }} /></div>
-            <div><label style={lbl}>Email</label><input name="email" type="email" required style={{ ...input, width: 220 }} /></div>
-            <button style={btn}>Assign &amp; invite</button>
-            <p style={{ flexBasis: '100%', fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>Creates the coach&apos;s account if they don&apos;t have one and emails them a sign-in invite to set up this team.</p>
-          </form>
+        {canAct && (
+          coach ? (
+            <details style={{ marginBottom: '0.875rem' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>Reassign coach…</summary>
+              <form action={assignCoach} style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', alignItems: 'flex-end', marginTop: '0.625rem', padding: '0.875rem 1rem', background: 'var(--color-bg-light)', borderRadius: 8 }}>
+                <div style={{ flexBasis: '100%', fontSize: '0.8125rem', fontWeight: 700 }}>Reassign coach</div>
+                <div><label style={lbl}>First name</label><input name="first" required style={{ ...input, width: 130 }} /></div>
+                <div><label style={lbl}>Last name</label><input name="last" required style={{ ...input, width: 130 }} /></div>
+                <div><label style={lbl}>Email</label><input name="email" type="email" required style={{ ...input, width: 220 }} /></div>
+                <button style={btn}>Reassign &amp; invite</button>
+                <p style={{ flexBasis: '100%', fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>Removes {coachName || 'the current coach'} as coach of this team and assigns the new coach in their place (creates their account if needed and emails them a sign-in invite).</p>
+              </form>
+            </details>
+          ) : (
+            <form action={assignCoach} style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.875rem', padding: '0.875rem 1rem', background: 'var(--color-bg-light)', borderRadius: 8 }}>
+              <div style={{ flexBasis: '100%', fontSize: '0.8125rem', fontWeight: 700 }}>Assign a coach</div>
+              <div><label style={lbl}>First name</label><input name="first" required style={{ ...input, width: 130 }} /></div>
+              <div><label style={lbl}>Last name</label><input name="last" required style={{ ...input, width: 130 }} /></div>
+              <div><label style={lbl}>Email</label><input name="email" type="email" required style={{ ...input, width: 220 }} /></div>
+              <button style={btn}>Assign &amp; invite</button>
+              <p style={{ flexBasis: '100%', fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0.25rem 0 0' }}>Creates the coach&apos;s account if they don&apos;t have one and emails them a sign-in invite to set up this team.</p>
+            </form>
+          )
         )}
         {canAct ? (
           <>
