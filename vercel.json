@@ -1,5 +1,5 @@
 {
-  "ignoreCommand": "[ \"$VERCEL_ENV\" != \"production\" ]",
+  "ignoreCommand": "[ \"$DEPLOY_ENV\" != \"production\" ]",
   "crons": [
     {
       "path": "/api/cron/volunteer-reminders",
