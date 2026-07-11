@@ -89,8 +89,10 @@ Use the next free number; validate with `pglast` before committing.
 - **0025** `waiver_signature.participant_typed_name` — **coupled with the register route**
   (student + parent dual signature); registration submit errors until it's applied
 
-Applied through **0024** this session (0016 + 0017 had silently never been applied and
-were fixed). **Confirm 0025 is applied** before relying on registration.
+Applied through **0047** (verified against the live DB 2026-07-10: 0025 waiver column,
+0026 volunteer_clearance, 0044 volunteer statuses, 0045 provisional Combat teams,
+0046 step_status 'needs_review', 0047 aps_enrollment_run all present). Historical
+note: 0016 + 0017 had once silently never been applied — always verify, don't assume.
 
 **Enum caveat:** `ALTER TYPE … ADD VALUE` can't be referenced in the same transaction.
 If the editor wraps a file in one transaction and errors on an `ADD VALUE` line, run
