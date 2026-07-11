@@ -1,5 +1,6 @@
-import { getAdminProfile } from '@/lib/auth/admin'
+import { getAdminAccess } from '@/lib/auth/admin-access'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { programScopeFor } from '@/lib/auth/roles'
 
 const SEASON = '2026-27'
 
@@ -35,15 +36,18 @@ function csvCell(v: unknown): string {
 }
 
 export async function GET() {
-  const admin = await getAdminProfile()
-  if (!admin) {
+  const access = await getAdminAccess()
+  if (!access) {
     return new Response('Forbidden', { status: 403 })
   }
+  // The export is the /admin/registrations table in CSV form — a program-scoped
+  // lead's download carries only their program's rows (D5).
+  const scope = programScopeFor(access, '/admin/registrations')
 
   const db = createAdminClient()
 
   // Confirmed registrations = enrollments that have been submitted this season.
-  const { data: enrollments, error } = await db
+  let eq = db
     .from('enrollment')
     .select(
       'id, family_id, student_id, program, payment_reference_code, registration_fee_status, submitted_at, created_at, student:student_id ( first_name, last_name, grade, tshirt_size, school_raw, school:school_id ( name ) )'
@@ -51,6 +55,8 @@ export async function GET() {
     .eq('season', SEASON)
     .not('submitted_at', 'is', null)
     .order('submitted_at', { ascending: true })
+  if (scope) eq = eq.in('program', scope)
+  const { data: enrollments, error } = await eq
 
   if (error) {
     return new Response(`Failed to build roster: ${error.message}`, { status: 500 })

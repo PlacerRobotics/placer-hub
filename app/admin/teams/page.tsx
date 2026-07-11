@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireSection } from '@/lib/auth/admin-access'
+import { programScopeFor, PROGRAM_SCOPE_LABELS } from '@/lib/auth/roles'
 import { AdminShell, PageHeader, EmptyState } from '@/components/ui'
 import { TeamRows } from './team-rows'
 
@@ -9,21 +10,34 @@ const labelStyle: React.CSSProperties = { display: 'block', fontSize: '0.875rem'
 const inputStyle: React.CSSProperties = { width: '100%', padding: '8px 10px', fontSize: '0.9375rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
 
 export default async function TeamsPage() {
-  await requireSection('/admin/teams')
+  const access = await requireSection('/admin/teams')
+  // Program-scoped leads (D5) see and create only their program's teams.
+  const scope = programScopeFor(access, '/admin/teams')
   const supabase = await createClient()
-  const { data } = await supabase
+  let tq = supabase
     .from('team')
     .select('id, team_name, team_number, program, division, season, school_org, active, is_provisional, notes, kit_number, kit_checkout_date, kit_return_date, kit_return_verified')
     .eq('season', SEASON)
     .order('created_at', { ascending: true })
+  if (scope) tq = tq.in('program', scope)
+  const { data } = await tq
   const teams = (data ?? []) as any[]
+
+  const programOptions = [
+    { value: 'vex_v5', label: 'VEX V5' },
+    { value: 'vex_iq', label: 'VEX IQ' },
+    { value: 'combat', label: 'Combat' },
+  ].filter((o) => !scope || scope.includes(o.value))
 
   async function createTeam(formData: FormData) {
     'use server'
+    const actor = await requireSection('/admin/teams')
+    const actorScope = programScopeFor(actor, '/admin/teams')
     const program = String(formData.get('program') ?? '')
     const division = String(formData.get('division') ?? '')
     const school_org = String(formData.get('school_org') ?? '').trim()
     if (!['vex_v5', 'vex_iq', 'combat'].includes(program)) return
+    if (actorScope && !actorScope.includes(program)) return
     if (!['ES', 'MS', 'HS'].includes(division)) return
     if (!school_org) return
     const db = await createClient()
@@ -41,10 +55,15 @@ export default async function TeamsPage() {
 
   return (
     <AdminShell activePath="/admin/teams">
-      <PageHeader title="Teams" subtitle={`VEX V5, VEX IQ and Combat teams for ${SEASON}.`} />
+      <PageHeader
+        title="Teams"
+        subtitle={scope
+          ? `${scope.map((p) => PROGRAM_SCOPE_LABELS[p] ?? p).join(' + ')} teams for ${SEASON} (your program scope).`
+          : `VEX V5, VEX IQ and Combat teams for ${SEASON}.`}
+      />
 
       <form action={createTeam} style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '1.25rem', marginBottom: '1.5rem', maxWidth: '640px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.875rem', alignItems: 'end' }}>
-        <div><label style={labelStyle}>Program</label><select name="program" style={inputStyle}><option value="vex_v5">VEX V5</option><option value="vex_iq">VEX IQ</option><option value="combat">Combat</option></select></div>
+        <div><label style={labelStyle}>Program</label><select name="program" style={inputStyle}>{programOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
         <div><label style={labelStyle}>Division</label><select name="division" defaultValue="HS" style={inputStyle}><option value="ES">Elementary</option><option value="MS">Middle</option><option value="HS">High</option></select></div>
         <div><label style={labelStyle}>Team name</label><input name="team_name" style={inputStyle} /></div>
         <div><label style={labelStyle}>Team number</label><input name="team_number" style={inputStyle} placeholder="95070X" /></div>

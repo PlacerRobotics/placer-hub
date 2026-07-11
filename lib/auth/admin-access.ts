@@ -1,18 +1,21 @@
 import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAdminProfile } from '@/lib/auth/admin'
-import { canAccessAdmin, adminHome } from '@/lib/auth/roles'
+import { canAccessAdmin, adminHome, type RoleGrant } from '@/lib/auth/roles'
 
-export type AdminAccess = { adminId: string; roles: string[]; isSuper: boolean }
+export type AdminAccess = { adminId: string; roles: string[]; grants: RoleGrant[]; isSuper: boolean }
 
-// Current admin's profile id + non-revoked role values (null if not an admin).
+// Current admin's profile id + non-revoked role grants (null if not an admin).
+// grants keeps each role's program_scope so programScopeFor() can limit
+// program-scoped roles; roles stays the flat list most checks use.
 export async function getAdminAccess(): Promise<AdminAccess | null> {
   const admin = await getAdminProfile()
   if (!admin) return null
   const db = createAdminClient()
-  const { data } = await db.from('admin_role_assignment').select('role').eq('admin_profile_id', admin.id).is('revoked_at', null)
-  const roles = [...new Set((data ?? []).map((r: any) => r.role))] as string[]
-  return { adminId: admin.id, roles, isSuper: roles.includes('super_admin') }
+  const { data } = await db.from('admin_role_assignment').select('role, program_scope').eq('admin_profile_id', admin.id).is('revoked_at', null)
+  const grants: RoleGrant[] = (data ?? []).map((r: any) => ({ role: r.role, programScope: r.program_scope ?? null }))
+  const roles = [...new Set(grants.map((g) => g.role))]
+  return { adminId: admin.id, roles, grants, isSuper: roles.includes('super_admin') }
 }
 
 // Page guard: non-admins → /dashboard; admins without access to this section → their

@@ -1,6 +1,9 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireSection } from '@/lib/auth/admin-access'
+import { programScopeFor, programInScope } from '@/lib/auth/roles'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 import RegistrationEdit from './edit-modal'
 import TeamAssign, { type AssignTeam } from './team-assign'
@@ -23,6 +26,8 @@ export default async function RegistrationDetailPage({
 }) {
   const { id } = await params
   const { student: studentParam } = await searchParams
+  const access = await requireSection('/admin/registrations')
+  const scope = programScopeFor(access, '/admin/registrations')
   const supabase = await createClient()
 
   const { data: fs } = await supabase
@@ -57,6 +62,17 @@ export default async function RegistrationDetailPage({
   const enrList = (enrs ?? []) as any[]
   const programVal = enrList.length > 1 ? 'both' : (enrList[0]?.program ?? '')
   const divisionVal = enrList[0]?.division ?? null
+
+  // A program-scoped lead (D5) can't open a student outside their program by URL.
+  // Before enrollment exists, the application's program interest decides.
+  if (scope) {
+    let scopeProgram = programVal
+    if (!scopeProgram && student) {
+      const { data: appn } = await supabase.from('student_application').select('program_interest').eq('student_id', student.id).eq('season', SEASON).maybeSingle()
+      scopeProgram = appn?.program_interest ?? ''
+    }
+    if (!programInScope(scopeProgram || null, scope)) redirect('/admin/registrations')
+  }
 
   let teamId: string | null = null
   let teamLabel = '—'

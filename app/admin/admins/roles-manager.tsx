@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ADMIN_ROLES, ROLE_LABEL } from '@/lib/auth/roles'
+import { ADMIN_ROLES, ROLE_LABEL, PROGRAM_SCOPED_ROLES, PROGRAM_SCOPE_LABELS } from '@/lib/auth/roles'
 
 export type AdminRow = {
   id: string
@@ -37,6 +37,7 @@ export default function RolesManager({ admins }: { admins: AdminRow[] }) {
   const [busy, setBusy] = useState(false)
   const [newEmail, setNewEmail] = useState('')
   const [newRole, setNewRole] = useState('registration_admin')
+  const [newScope, setNewScope] = useState('')
   const [impEmail, setImpEmail] = useState('')
   const [impMsg, setImpMsg] = useState('')
 
@@ -75,7 +76,8 @@ export default function RolesManager({ admins }: { admins: AdminRow[] }) {
           <select style={input} value={newRole} onChange={(e) => setNewRole(e.target.value)}>
             {ADMIN_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
-          <button type="button" style={navyBtn} disabled={busy || !newEmail.trim()} onClick={async () => { if (await post('/api/admin/admins/grant', { email: newEmail.trim(), role: newRole })) setNewEmail('') }}>
+          {PROGRAM_SCOPED_ROLES.has(newRole) && <ScopeSelect value={newScope} onChange={setNewScope} />}
+          <button type="button" style={navyBtn} disabled={busy || !newEmail.trim()} onClick={async () => { if (await post('/api/admin/admins/grant', { email: newEmail.trim(), role: newRole, program_scope: newScope || undefined })) setNewEmail('') }}>
             Grant role
           </button>
           {msg && <span style={{ fontSize: '0.8125rem', color: msg.includes('fail') || msg.includes('No account') || msg.includes('only') ? 'var(--color-error)' : 'var(--color-text-muted)' }}>{msg}</span>}
@@ -112,29 +114,43 @@ export default function RolesManager({ admins }: { admins: AdminRow[] }) {
             {a.roles.length === 0 ? <span style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>No roles.</span> :
               a.roles.map((r) => (
                 <span key={r.id} style={pill}>
-                  {ROLE_LABEL[r.role] ?? r.role}{r.program_scope ? ` · ${r.program_scope}` : ''}
+                  {ROLE_LABEL[r.role] ?? r.role}{r.program_scope ? ` · ${PROGRAM_SCOPE_LABELS[r.program_scope] ?? r.program_scope}` : ''}
                   <button type="button" title="Revoke" disabled={busy} onClick={() => post('/api/admin/admins/revoke', { assignment_id: r.id })}
                     style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--color-error)', fontWeight: 700, fontSize: '0.875rem', lineHeight: 1 }}>×</button>
                 </span>
               ))}
           </div>
-          <GrantToAdmin adminId={a.id} existing={new Set(a.roles.map((r) => r.role))} onGrant={(role) => post('/api/admin/admins/grant', { admin_profile_id: a.id, role })} busy={busy} />
+          <GrantToAdmin adminId={a.id} existing={new Set(a.roles.map((r) => r.role))} onGrant={(role, scope) => post('/api/admin/admins/grant', { admin_profile_id: a.id, role, program_scope: scope || undefined })} busy={busy} />
         </div>
       ))}
     </div>
   )
 }
 
-function GrantToAdmin({ adminId, existing, onGrant, busy }: { adminId: string; existing: Set<string>; onGrant: (role: string) => void; busy: boolean }) {
-  const available = ADMIN_ROLES.filter((r) => !existing.has(r.value))
+// All programs (empty) = an org-wide grant with no program_scope.
+function ScopeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <select style={input} value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">All programs</option>
+      {Object.entries(PROGRAM_SCOPE_LABELS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+    </select>
+  )
+}
+
+function GrantToAdmin({ adminId, existing, onGrant, busy }: { adminId: string; existing: Set<string>; onGrant: (role: string, scope: string) => void; busy: boolean }) {
+  // Program-scoped roles stay grantable even when held — a lead can hold e.g.
+  // VEX V5 + Combat as two grants (the API dedupes identical role+scope pairs).
+  const available = ADMIN_ROLES.filter((r) => !existing.has(r.value) || PROGRAM_SCOPED_ROLES.has(r.value))
   const [role, setRole] = useState(available[0]?.value ?? '')
+  const [scope, setScope] = useState('')
   if (available.length === 0) return null
   return (
-    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
       <select style={input} value={role} onChange={(e) => setRole(e.target.value)}>
         {available.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
       </select>
-      <button type="button" style={{ ...navyBtn, padding: '6px 12px' }} disabled={busy || !role} onClick={() => onGrant(role)}>Add role</button>
+      {PROGRAM_SCOPED_ROLES.has(role) && <ScopeSelect value={scope} onChange={setScope} />}
+      <button type="button" style={{ ...navyBtn, padding: '6px 12px' }} disabled={busy || !role} onClick={() => onGrant(role, scope)}>Add role</button>
     </div>
   )
 }
