@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { AdminShell, PageHeader, StatusBadge, ErrorAlert, SuccessAlert, InfoAlert } from '@/components/ui'
+import { AdminShell, PageHeader, StatusBadge, ErrorAlert, SuccessAlert, InfoAlert, WarningAlert } from '@/components/ui'
 
 // Flip to true ONLY after the end-to-end flow has been tested in production.
 const SEND_INVITES_ENABLED = false
@@ -175,6 +175,18 @@ export default function ImportPage() {
               {result.summary.errors} errors
             </SuccessAlert>
           </div>
+
+          {result.warnings?.length > 0 && (
+            <div style={{ marginBottom: '1.25rem' }}>
+              <WarningAlert title="Possible email typos">
+                <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+                  {result.warnings.map((w: any, i: number) => (
+                    <li key={i}>Row {w.row}: {w.message}</li>
+                  ))}
+                </ul>
+              </WarningAlert>
+            </div>
+          )}
 
           <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: '10px', marginBottom: '1.5rem' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--color-surface)' }}>

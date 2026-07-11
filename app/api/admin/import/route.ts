@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { nearMissDomain } from '@/lib/duplicates'
 
 const SEASON = '2026-27'
 
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
   let recordsCreated = 0
   let skipped = 0
   const errors: { row: number; message: string }[] = []
+  const warnings: { row: number; message: string }[] = []
   const results: { row: number; student: string; action: string; status: string }[] = []
 
   for (let i = 0; i < rows.length; i++) {
@@ -67,6 +69,13 @@ export async function POST(request: NextRequest) {
       const g1email = String(r.guardian1_email ?? '').trim().toLowerCase()
       if (!g1email) throw new Error('missing guardian1_email')
       const g1last = String(r.guardian1_last ?? '').trim()
+
+      // Typo'd provider domains (hotmil→hotmail) create phantom duplicate guardians
+      // because login_email is the only match key — warn, don't block.
+      for (const [label, email] of [['guardian1_email', g1email], ['guardian2_email', String(r.guardian2_email ?? '').trim().toLowerCase()]] as const) {
+        const miss = email ? nearMissDomain(email) : null
+        if (miss) warnings.push({ row: rowNo, message: `${label} "${email}" — did you mean @${miss.suggestion}? A typo'd domain creates a duplicate guardian.` })
+      }
 
       // Household address — captured on the family by default (and reused on the student).
       const street = [String(r.street_address ?? '').trim(), String(r.street_address_2 ?? '').trim()].filter(Boolean).join(' ') || null
@@ -221,8 +230,9 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    summary: { familiesCreated, studentsCreated, recordsCreated, skipped, errors: errors.length },
+    summary: { familiesCreated, studentsCreated, recordsCreated, skipped, errors: errors.length, warnings: warnings.length },
     errors,
+    warnings,
     results,
   })
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { nearMissDomain } from '@/lib/duplicates'
 
 const SEASON = '2026-27'
 
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
 
   let familiesCreated = 0, studentsCreated = 0, recordsCreated = 0, skipped = 0
   const errors: { row: number; message: string }[] = []
+  const warnings: { row: number; message: string }[] = []
   const results: { row: number; student: string; action: string; status: string }[] = []
 
   for (let i = 0; i < rows.length; i++) {
@@ -86,6 +88,11 @@ export async function POST(request: NextRequest) {
       const gEmail = pgEmailRaw ? firstEmail(pgEmailRaw) : g(r, 'Email Address').toLowerCase()
       if (!gEmail) throw new Error('missing guardian email')
       const gLast = g(r, 'Parent/Guardian Last Name')
+
+      // Typo'd provider domains (hotmil→hotmail) create phantom duplicate guardians
+      // because login_email is the only match key — warn, don't block.
+      const miss = nearMissDomain(gEmail)
+      if (miss) warnings.push({ row: rowNo, message: `guardian email "${gEmail}" — did you mean @${miss.suggestion}? A typo'd domain creates a duplicate guardian.` })
 
       // family
       let familyId: string
@@ -168,5 +175,5 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, summary: { familiesCreated, studentsCreated, recordsCreated, skipped, errors: errors.length }, errors, results })
+  return NextResponse.json({ ok: true, summary: { familiesCreated, studentsCreated, recordsCreated, skipped, errors: errors.length, warnings: warnings.length }, errors, warnings, results })
 }

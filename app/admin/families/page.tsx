@@ -1,6 +1,8 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requireSection } from '@/lib/auth/admin-access'
-import { AdminShell, PageHeader } from '@/components/ui'
+import { AdminShell, PageHeader, WarningAlert } from '@/components/ui'
+import { findDuplicateGroups, nearMissDomain } from '@/lib/duplicates'
 import FamiliesTable, { type FamilyRow } from './families-table'
 
 const SEASON = '2026-27'
@@ -13,7 +15,7 @@ export default async function AdminFamiliesPage() {
   const familyIds = (families ?? []).map((f: any) => f.id)
 
   const { data: guardians } = familyIds.length
-    ? await supabase.from('guardian').select('family_id, first_name, last_name, login_email, created_at').in('family_id', familyIds).order('created_at', { ascending: true })
+    ? await supabase.from('guardian').select('id, family_id, first_name, last_name, login_email, created_at').in('family_id', familyIds).order('created_at', { ascending: true })
     : { data: [] as any[] }
   const { data: students } = familyIds.length
     ? await supabase.from('student').select('family_id, first_name, last_name').in('family_id', familyIds)
@@ -51,9 +53,22 @@ export default async function AdminFamiliesPage() {
     }
   }).sort((a, b) => a.familyName.localeCompare(b.familyName))
 
+  // Duplicate-guardian signal for the banner (full report lives at /duplicates).
+  const dupGroups = findDuplicateGroups((guardians ?? []) as any[])
+  const typoCount = (guardians ?? []).filter((g: any) => nearMissDomain(g.login_email) != null).length
+
   return (
     <AdminShell activePath="/admin/families">
       <PageHeader title="Families" subtitle="Search and manage family accounts." />
+      {(dupGroups.length > 0 || typoCount > 0) && (
+        <div style={{ marginBottom: '1.25rem' }}>
+          <WarningAlert title="Suspected duplicate guardians">
+            {dupGroups.length > 0 && <>{dupGroups.length} name{dupGroups.length === 1 ? '' : 's'} appear{dupGroups.length === 1 ? 's' : ''} under different login emails. </>}
+            {typoCount > 0 && <>{typoCount} login email{typoCount === 1 ? ' has' : 's have'} a likely provider typo (e.g. hotmil → hotmail). </>}
+            <Link href="/admin/families/duplicates" style={{ fontWeight: 600, textDecoration: 'underline' }}>Review the report</Link>
+          </WarningAlert>
+        </div>
+      )}
       <FamiliesTable rows={rows} />
     </AdminShell>
   )
