@@ -14,10 +14,11 @@ const STEP_LABELS: Record<string, string> = {
   policy_acknowledgment: 'Policy Acknowledgment', background_check: 'Background Check', aps_youth_protection: 'APS Youth Protection',
   youth_protection_quiz: 'Youth Protection Quiz', lab_use_quiz: 'Lab Use Quiz', lab_orientation: 'Lab Orientation', custom: 'Additional requirement',
 }
-const STEP_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { complete: 'success', in_progress: 'info', pending: 'neutral', waived: 'neutral' }
+const STEP_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 'neutral'> = { complete: 'success', in_progress: 'info', needs_review: 'warning', pending: 'neutral', waived: 'neutral' }
 
 const smallBtn: React.CSSProperties = { padding: '6px 14px', backgroundColor: 'var(--color-navy-deep)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 const ghostBtn: React.CSSProperties = { ...smallBtn, backgroundColor: 'transparent', color: 'var(--color-error)', border: '1px solid var(--color-error)' }
+const outlineBtn: React.CSSProperties = { ...smallBtn, backgroundColor: 'transparent', color: 'var(--color-navy-deep)', border: '1px solid var(--color-border)' }
 
 async function ensureClearanceId(db: any, volunteerId: string): Promise<string> {
   const found = (await db.from('volunteer_clearance').select('id').eq('volunteer_id', volunteerId).eq('season', SEASON).maybeSingle()).data
@@ -55,11 +56,13 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
   const volunteerName = guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Unknown volunteer'
 
   // ---- Server actions (admin-gated) ----
-  async function markStepComplete(formData: FormData) {
+  async function setStepStatus(formData: FormData) {
     'use server'
     if (!(await getAdminProfile())) return
-    const stepId = String(formData.get('stepId') ?? ''); if (!stepId) return
-    await createAdminClient().from('volunteer_step').update({ status: 'complete', completed_at: new Date().toISOString() }).eq('id', stepId)
+    const stepId = String(formData.get('stepId') ?? '')
+    const to = String(formData.get('to') ?? '')
+    if (!stepId || !['pending', 'in_progress', 'needs_review', 'complete'].includes(to)) return
+    await createAdminClient().from('volunteer_step').update({ status: to, completed_at: to === 'complete' ? new Date().toISOString() : null }).eq('id', stepId)
     redirect(`/admin/volunteers/${id}`)
   }
   async function setAps(formData: FormData) {
@@ -205,7 +208,12 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
           {(steps ?? []).map((s: any) => (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.75rem 1rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}><span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{STEP_LABELS[s.step] ?? s.step}</span><StatusBadge label={s.status} variant={STEP_VARIANT[s.status] ?? 'neutral'} /></div>
-              {s.status !== 'complete' && <form action={markStepComplete}><input type="hidden" name="stepId" value={s.id} /><button type="submit" style={smallBtn}>Mark complete</button></form>}
+              <span style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {s.status !== 'complete' && s.status !== 'waived' && <form action={setStepStatus}><input type="hidden" name="stepId" value={s.id} /><input type="hidden" name="to" value="complete" /><button type="submit" style={smallBtn}>Mark complete</button></form>}
+                {(s.status === 'pending' || s.status === 'needs_review') && <form action={setStepStatus}><input type="hidden" name="stepId" value={s.id} /><input type="hidden" name="to" value="in_progress" /><button type="submit" style={outlineBtn}>Mark submitted</button></form>}
+                {(s.status === 'pending' || s.status === 'in_progress') && <form action={setStepStatus}><input type="hidden" name="stepId" value={s.id} /><input type="hidden" name="to" value="needs_review" /><button type="submit" style={outlineBtn}>Flag for attention</button></form>}
+                {s.status !== 'pending' && <form action={setStepStatus}><input type="hidden" name="stepId" value={s.id} /><input type="hidden" name="to" value="pending" /><button type="submit" style={outlineBtn}>Reset to pending</button></form>}
+              </span>
             </div>
           ))}
           {(steps ?? []).length === 0 && <p className="text-help" style={{ margin: 0 }}>No clearance steps on this profile.</p>}
