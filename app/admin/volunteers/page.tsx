@@ -28,7 +28,7 @@ export default async function AdminVolunteersPage() {
   // that array blows past PostgREST's URL-length limit and the request silently
   // returns nothing (which made every field read as ✗ on the dashboard).
   const { data: clears } = ids.length
-    ? await db.from('volunteer_clearance').select('volunteer_id, status, rc_quiz_passed, yp_quiz_passed, waiver_signed_date').eq('season', SEASON)
+    ? await db.from('volunteer_clearance').select('volunteer_id, status, rc_quiz_passed, yp_quiz_passed, waiver_signed_date, key_access_requested, key_access_granted').eq('season', SEASON)
     : { data: [] as any[] }
   const { data: certs } = ids.length
     ? await db.from('youth_protection_cert').select('volunteer_id, expiration_date').order('expiration_date', { ascending: false })
@@ -57,6 +57,18 @@ export default async function AdminVolunteersPage() {
 
     const bucket = volunteerBucket({ profileStatus: p.status, doj, apsState: aps, rc, yp, waiver })
 
+    // Operational cross-cuts (task 1.4), orthogonal to the clearance bucket:
+    // · Expiring soon — APS cert expires within 60 days (still valid, not yet lapsed).
+    // · Door access pending — card/phone access requested but not yet granted.
+    const apsDaysLeft = exp
+      ? Math.ceil((new Date(exp + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000)
+      : null
+    const expiringSoon = apsDaysLeft != null && apsDaysLeft >= 0 && apsDaysLeft <= 60
+    const keyReq: string | null = c?.key_access_requested ?? null
+    const keyGranted = !!c?.key_access_granted
+    const keyAccess = keyReq && keyReq !== 'none' ? keyReq : null
+    const doorPending = !!keyAccess && !keyGranted
+
     return {
       id: p.id,
       name: g ? `${g.first_name} ${g.last_name}`.trim() : 'Unknown volunteer',
@@ -64,6 +76,7 @@ export default async function AdminVolunteersPage() {
       status: c?.status ?? p.status ?? 'pending',
       bucket,
       doj, aps, apsExpiry: exp, rc, yp, waiver,
+      apsDaysLeft, expiringSoon, keyAccess, keyGranted, doorPending,
     }
   })
 

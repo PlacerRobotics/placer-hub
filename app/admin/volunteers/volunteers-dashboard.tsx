@@ -9,10 +9,18 @@ export type VolRow = {
   id: string; name: string; email: string; status: string; bucket: VolunteerBucket
   doj: boolean; aps: 'valid' | 'expiring' | 'expired' | 'none'; apsExpiry: string | null
   rc: boolean; yp: boolean; waiver: boolean
+  // Operational cross-cuts (task 1.4), independent of the clearance bucket.
+  apsDaysLeft: number | null; expiringSoon: boolean
+  keyAccess: string | null; keyGranted: boolean; doorPending: boolean
 }
 
 const GREEN = 'var(--color-success)', RED = 'var(--color-error)', YELLOW = '#C9971B', BLUE = 'var(--color-info)', GREY = 'var(--color-text-muted)'
-const matchTab = (r: VolRow, t: string) => t === 'all' || r.bucket === t
+// 'expiring_soon' and 'door_pending' are operational cross-cuts, not clearance buckets,
+// so they match on their own flags rather than r.bucket.
+const matchTab = (r: VolRow, t: string) =>
+  t === 'expiring_soon' ? r.expiringSoon
+  : t === 'door_pending' ? r.doorPending
+  : t === 'all' || r.bucket === t
 
 const cell: React.CSSProperties = { padding: '0.5rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left', whiteSpace: 'nowrap' }
 const th: React.CSSProperties = { ...cell, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', fontSize: '0.6875rem', color: 'var(--color-text-muted)' }
@@ -33,7 +41,12 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
 
   const count = (t: string) => rows.filter((r) => matchTab(r, t)).length
   const s = q.trim().toLowerCase()
-  const filtered = rows.filter((r) => matchTab(r, tab) && (!s || r.name.toLowerCase().includes(s) || r.email.toLowerCase().includes(s)))
+  const base = rows.filter((r) => matchTab(r, tab) && (!s || r.name.toLowerCase().includes(s) || r.email.toLowerCase().includes(s)))
+  // Expiring-soon view is sorted by soonest APS expiry (task 1.4). ISO date strings
+  // sort chronologically; missing dates sink to the bottom.
+  const filtered = tab === 'expiring_soon'
+    ? [...base].sort((a, b) => (a.apsExpiry ?? '9999-12-31').localeCompare(b.apsExpiry ?? '9999-12-31'))
+    : base
 
   const filteredIds = filtered.map((r) => r.id)
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => sel.has(id))
@@ -60,16 +73,26 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
     ['cleared', 'Cleared', GREEN],
     ['renewal_pending', 'Renewal pending', BLUE],
     ['in_progress', 'In progress', YELLOW],
+    ['expiring_soon', 'Expiring ≤60d', YELLOW],
+    ['door_pending', 'Door access', BLUE],
     ['denied', 'Denied', RED],
     ['deactivated', 'Deactivated', GREY],
   ]
 
   function aps(r: VolRow) {
     const d = r.apsExpiry ? new Date(r.apsExpiry).toLocaleDateString() : ''
-    if (r.aps === 'valid') return <span style={{ color: GREEN, fontWeight: 600 }}>✓ {d}</span>
-    if (r.aps === 'expiring') return <span style={{ color: YELLOW, fontWeight: 600 }}>⚠ {d}</span>
+    // Flag imminent expiry inline even when the season-level state is still "valid".
+    const soon = r.expiringSoon && r.apsDaysLeft != null ? ` · ${r.apsDaysLeft}d` : ''
+    if (r.aps === 'valid') return <span style={{ color: r.expiringSoon ? YELLOW : GREEN, fontWeight: 600 }}>✓ {d}{soon}</span>
+    if (r.aps === 'expiring') return <span style={{ color: YELLOW, fontWeight: 600 }}>⚠ {d}{soon}</span>
     if (r.aps === 'expired') return <span style={{ color: RED, fontWeight: 600 }}>✗ exp {d}</span>
     return <span style={{ color: RED, fontWeight: 600 }}>✗ none</span>
+  }
+
+  function keyAccess(r: VolRow) {
+    if (r.keyGranted) return <span style={{ color: GREEN, fontWeight: 600 }}>✓ {r.keyAccess ?? 'card'}</span>
+    if (r.doorPending) return <span style={{ color: YELLOW, fontWeight: 600 }}>⧗ {r.keyAccess} pending</span>
+    return <span style={{ color: GREY }}>—</span>
   }
 
   return (
@@ -90,7 +113,10 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
         style={{ width: '100%', maxWidth: 360, padding: '8px 11px', fontSize: '0.875rem', border: '1.5px solid var(--color-border)', borderRadius: 6, marginBottom: '0.75rem', fontFamily: 'inherit' }}
       />
       <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginBottom: '0.625rem' }}>
-        Showing {filtered.length} {tab === 'all' ? 'volunteers' : `· ${tab.replace(/_/g, ' ')}`} · APS must be valid through the season end (5/31/2027)
+        Showing {filtered.length} {tab === 'all' ? 'volunteers' : `· ${tab.replace(/_/g, ' ')}`}
+        {tab === 'expiring_soon' ? ' · APS expiring within 60 days, soonest first'
+          : tab === 'door_pending' ? ' · card/phone access requested, not yet granted'
+          : ' · APS must be valid through the season end (5/31/2027)'}
       </div>
 
       {sel.size > 0 && (
@@ -111,9 +137,9 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
 
       <div style={{ overflowX: 'auto', border: '1px solid var(--color-border)', borderRadius: 10 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'var(--color-surface)' }}>
-          <thead><tr><th style={th}><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /></th><th style={th}></th><th style={th}>Volunteer</th><th style={th}>Status</th><th style={th}>DOJ</th><th style={th}>APS</th><th style={th}>RC quiz</th><th style={th}>YP quiz</th><th style={th}>Waiver</th><th style={th}></th></tr></thead>
+          <thead><tr><th style={th}><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /></th><th style={th}></th><th style={th}>Volunteer</th><th style={th}>Status</th><th style={th}>DOJ</th><th style={th}>APS</th><th style={th}>RC quiz</th><th style={th}>YP quiz</th><th style={th}>Waiver</th><th style={th}>Key access</th><th style={th}></th></tr></thead>
           <tbody>
-            {filtered.length === 0 ? <tr><td style={cell} colSpan={10}>No volunteers in this view.</td></tr> : filtered.map((r) => (
+            {filtered.length === 0 ? <tr><td style={cell} colSpan={11}>No volunteers in this view.</td></tr> : filtered.map((r) => (
               <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/admin/volunteers/${r.id}`)}>
                 <td style={cell} onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggleSel(r.id)} aria-label={`Select ${r.name}`} /></td>
                 <td style={cell}><span style={{ display: 'inline-block', width: 11, height: 11, borderRadius: '50%', background: BUCKET_META[r.bucket].color }} /></td>
@@ -124,6 +150,7 @@ export default function VolunteersDashboard({ rows }: { rows: VolRow[] }) {
                 <td style={cell}>{flag(r.rc)}</td>
                 <td style={cell}>{flag(r.yp)}</td>
                 <td style={cell}>{flag(r.waiver)}</td>
+                <td style={cell}>{keyAccess(r)}</td>
                 <td style={cell}><span style={{ fontWeight: 600, color: 'var(--color-navy-deep)' }}>Review →</span></td>
               </tr>
             ))}
