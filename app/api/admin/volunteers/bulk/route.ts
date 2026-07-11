@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, apsReminderHtml, volunteerWaiverReminderHtml } from '@/lib/email'
 import { getApsUser } from '@/lib/aps'
@@ -11,7 +11,7 @@ const chunk = <T,>(a: T[], n: number): T[][] => { const o: T[][] = []; for (let 
 // POST /api/admin/volunteers/bulk — coordinator bulk actions on selected volunteers.
 // action: 'doj_complete' | 'notify_waiver' | 'notify_aps'. volunteerIds = profile ids.
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let body: any

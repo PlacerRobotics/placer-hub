@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSuperAdmin } from '@/lib/auth/roles'
 import { sendMagicLinkEmail } from '@/lib/email'
@@ -8,7 +8,7 @@ import { sendMagicLinkEmail } from '@/lib/email'
 // POST /api/admin/admins/send-link — super-admin sends an admin a branded sign-in
 // link (via Resend) so they can onboard. body: { admin_profile_id } or { email }
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const db = createAdminClient()
   if (!(await isSuperAdmin(db, admin.id))) return NextResponse.json({ error: 'Super admin only.' }, { status: 403 })

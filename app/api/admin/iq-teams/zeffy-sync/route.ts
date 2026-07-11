@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncIqPayments } from '@/lib/zeffy-sync'
@@ -10,7 +10,7 @@ import { syncIqPayments } from '@/lib/zeffy-sync'
 // previews; apply=true records the payment, marks the fee paid once it covers the
 // team fee, and advances pending_payment → pending_admin_confirmation.
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const db = createAdminClient()
   if (!(await hasAnyRole(db, admin.id, ['iq_coordinator', 'super_admin', 'payment_admin']))) {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { getAdminProfile, requireWriteAdmin } from '@/lib/auth/admin'
 import { enrollApsTraining, listApsRenewalCandidates } from '@/lib/aps'
 import { sendEmail, apsRenewalReadyHtml } from '@/lib/email'
 import { VOLUNTEER_SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
@@ -23,7 +23,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Not authorized.' }, { status: 401 })
   const apiKey = process.env.APS_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'APS_API_KEY is not set.' }, { status: 400 })

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sendMagicLinkEmail } from '@/lib/email'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const SEASON = '2026-27'
@@ -11,7 +11,7 @@ const SEASON = '2026-27'
  * disabled by default; enable it only after end-to-end testing.
  */
 export async function POST() {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const db = createAdminClient()

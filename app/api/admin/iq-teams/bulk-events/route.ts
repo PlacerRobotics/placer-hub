@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 
 const ROLES = ['iq_coordinator', 'super_admin', 'payment_admin', 'registration_admin']
@@ -9,7 +9,7 @@ const ROLES = ['iq_coordinator', 'super_admin', 'payment_admin', 'registration_a
 // POST /api/admin/iq-teams/bulk-events — set events_vex_com_registered for many IQ
 // teams at once. Body: { teamIds: string[], value: boolean }.
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Not authorized.' }, { status: 401 })
   const db = createAdminClient()
   if (!(await hasAnyRole(db, admin.id, ROLES))) return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })

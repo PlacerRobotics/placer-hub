@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
 
 const DEFAULT_SEASON = '2026-27'
@@ -16,7 +16,7 @@ const dateOrNull = (v: any) => { const s = String(v ?? '').trim(); if (!s) retur
 // youth_protection_cert (APS), volunteer_step (background_check = DOJ).
 // Team assignments are NOT touched — those live in team_member. No magic links.
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Not authorized.' }, { status: 401 })
 
   let body: any
