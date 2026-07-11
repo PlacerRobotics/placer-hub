@@ -510,9 +510,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                       return (
                         <div key={tm.id} style={{ ...rowFlex, borderBottom: i < coachedTeams.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
                           <div>
-                            {tm.isIq
-                              ? <Link href={`/iq/team/${tm.id}`} style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>{tm.label}</Link>
-                              : <span style={{ fontSize: '0.9375rem', fontWeight: 600 }}>{tm.label}</span>}
+                            <Link href={tm.isIq ? `/iq/team/${tm.id}` : '/coach'} style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--color-navy-deep)' }}>{tm.label}</Link>
                             <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{tm.programLabel} · {tm.divisionLabel} · {tm.count} {tm.count === 1 ? 'student' : 'students'}</div>
                             {tm.isIq && tm.status !== 'active' && (
                               <div style={{ fontSize: '0.8125rem', color: '#C9971B', fontWeight: 600, marginTop: '0.25rem' }}>
@@ -523,7 +521,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                           <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             {tm.status ? <StatusBadge label={lbl} variant={variant} /> : null}
                             {tm.isIq && tm.feeStatus !== 'paid' && tm.feeStatus !== 'not_applicable' && zeffyIqUrl && <Link href={zeffyIqUrl} target="_blank" style={smallLink}>Pay ${(tm.feeAmount || 1200).toLocaleString()} →</Link>}
-                            {tm.isIq && <Link href={`/iq/team/${tm.id}`} style={smallLink}>{tm.status === 'active' ? 'Manage →' : 'Set up team →'}</Link>}
+                            {tm.isIq
+                              ? <Link href={`/iq/team/${tm.id}`} style={smallLink}>{tm.status === 'active' ? 'Manage →' : 'Set up team →'}</Link>
+                              : <Link href="/coach" style={smallLink}>Coach dashboard →</Link>}
                           </span>
                         </div>
                       )
