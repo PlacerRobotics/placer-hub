@@ -61,6 +61,7 @@ export default async function RegistrationDetailPage({
   let teamId: string | null = null
   let teamLabel = '—'
   let teamPending = false
+  let teamProvisional = false
   if (student) {
     const { data: tms } = await supabase.from('team_member').select('team_id').eq('student_id', student.id).eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null)
     const teamIds = [...new Set(((tms ?? []) as any[]).map((t) => t.team_id).filter(Boolean))]
@@ -73,8 +74,9 @@ export default async function RegistrationDetailPage({
       if (mt) { teamId = mt[1]; teamPending = true }
     }
     if (teamId) {
-      const { data: t0 } = await supabase.from('team').select('team_number, team_name').eq('id', teamId).maybeSingle()
+      const { data: t0 } = await supabase.from('team').select('team_number, team_name, is_provisional').eq('id', teamId).maybeSingle()
       teamLabel = t0 ? (`${t0.team_number ?? ''}${t0.team_name ? ` · ${t0.team_name}` : ''}`.trim() || '—') + (teamPending ? ' (pending)' : '') : '—'
+      teamProvisional = !!t0?.is_provisional
     }
   }
 
@@ -98,7 +100,7 @@ export default async function RegistrationDetailPage({
     studentByEnr[e.id] = st ? `${st.first_name} ${st.last_name}`.trim() : ''
   }
   const { data: audit } = await supabase.from('registration_audit_log').select('field_changed, old_value, new_value, changed_at, notes').eq('family_season_id', id).order('changed_at', { ascending: false })
-  const { data: allTeams } = await supabase.from('team').select('id, team_number, team_name, program, division').eq('season', SEASON).eq('active', true).order('team_number', { ascending: true })
+  const { data: allTeams } = await supabase.from('team').select('id, team_number, team_name, program, division, is_provisional').eq('season', SEASON).eq('active', true).order('team_number', { ascending: true })
 
   // Fundraising (Part 5) — method on family_season; employer-match on family;
   // sponsorship interest in family_sponsor_interest. Read via service role (admin).
@@ -111,7 +113,7 @@ export default async function RegistrationDetailPage({
   const fundMethods = [...new Set(enrList.flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))]
 
   const name = student ? `${student.first_name} ${student.last_name}` : 'Registration'
-  const assignTeams: AssignTeam[] = (allTeams ?? []).map((t: any) => ({ id: t.id, number: t.team_number ?? '', name: t.team_name ?? '', program: t.program }))
+  const assignTeams: AssignTeam[] = (allTeams ?? []).map((t: any) => ({ id: t.id, number: t.team_number ?? '', name: t.team_name ?? '', program: t.program, provisional: !!t.is_provisional }))
 
   const studentFields = [
     { label: 'Name', value: name },
@@ -119,7 +121,7 @@ export default async function RegistrationDetailPage({
     { label: 'School', value: student?.school?.name ?? student?.school_raw ?? '—' },
     { label: 'Program', value: PROGRAM_LABELS[programVal] ?? programVal ?? '—' },
     { label: 'Division', value: divisionVal ?? '—' },
-    { label: 'Team', value: student ? <TeamAssign familySeasonId={fs.id} studentId={student.id} studentProgram={programVal} hasEnrollment={enrList.length > 0} current={teamId ? { id: teamId, label: teamLabel } : null} teams={assignTeams} /> : '—' },
+    { label: 'Team', value: student ? <TeamAssign familySeasonId={fs.id} studentId={student.id} studentProgram={programVal} hasEnrollment={enrList.length > 0} current={teamId ? { id: teamId, label: teamLabel, provisional: teamProvisional } : null} teams={assignTeams} /> : '—' },
     { label: 'Status', value: <StatusBadge label={STATUS_LABELS[fs.status] ?? fs.status} variant={STATUS_VARIANT[fs.status] ?? 'neutral'} /> },
   ]
   const guardianFields = [

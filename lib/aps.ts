@@ -93,6 +93,59 @@ export async function enrollApsTraining(db: any, apiKey: string, volunteerId: st
   return { ok: true, url: created.direct_login_url, created: true }
 }
 
+// ── Bulk renewal enrollment (task 1.10) ─────────────────────────────────────
+
+// Profile statuses an admin has closed off — never bulk-enroll these.
+const APS_EXCLUDED_STATUSES = new Set(['denied', 'deactivated', 'suspended', 'withdrawn'])
+
+/**
+ * Pure eligibility rule: a volunteer needs APS renewal enrollment when their
+ * latest cert doesn't carry them through season end (or they have no cert at
+ * all — which covers never-enrolled volunteers), unless an admin has closed
+ * their profile. `validThrough` = season-end date (lib/volunteer APS_VALID_THROUGH).
+ */
+export function needsApsRenewal(v: { status: string; latestExpiry: string | null }, validThrough: string): boolean {
+  if (APS_EXCLUDED_STATUSES.has(v.status)) return false
+  return !v.latestExpiry || v.latestExpiry < validThrough
+}
+
+export type ApsRenewalCandidate = {
+  volunteerId: string
+  name: string
+  email: string
+  hasApsAccount: boolean
+  latestExpiry: string | null
+}
+
+// Everyone the bulk-enroll run would touch. Shared by the preview and the run
+// itself so the admin confirms exactly what will execute.
+export async function listApsRenewalCandidates(db: any, validThrough: string): Promise<ApsRenewalCandidate[]> {
+  const { data: vols } = await db
+    .from('volunteer_profile')
+    .select('id, status, aps_user_id, guardian:guardian_id ( first_name, last_name, login_email )')
+  const { data: certs } = await db
+    .from('youth_protection_cert')
+    .select('volunteer_id, expiration_date')
+    .order('expiration_date', { ascending: false })
+  const latestByVol: Record<string, string> = {}
+  for (const c of certs ?? []) if (!latestByVol[c.volunteer_id]) latestByVol[c.volunteer_id] = c.expiration_date
+
+  return (vols ?? [])
+    .map((v: any) => {
+      const g = Array.isArray(v.guardian) ? v.guardian[0] : v.guardian
+      return {
+        volunteerId: v.id as string,
+        status: v.status as string,
+        name: g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : 'Unknown volunteer',
+        email: g?.login_email ?? '',
+        hasApsAccount: !!v.aps_user_id,
+        latestExpiry: latestByVol[v.id] ?? null,
+      }
+    })
+    .filter((v: any) => v.email && needsApsRenewal(v, validThrough))
+    .map(({ status: _s, ...rest }: any) => rest as ApsRenewalCandidate)
+}
+
 // Pull APS training for every volunteer with an aps_user_id and update
 // youth_protection_cert + the aps_youth_protection step. Shared by the manual
 // "Sync from APS" button and the daily cron. `db` is a service-role client.

@@ -31,7 +31,7 @@ export async function hasAnyRole(db: any, adminProfileId: string, roles: string[
 // landing (/admin "Needs Attention") is broad but excludes single-purpose roles like
 // the IQ coordinator, whose home is their own section. Edit here to change access.
 export const ADMIN_SECTION_ROLES: Record<string, string[]> = {
-  '/admin': ['registration_admin', 'financial_aid_admin', 'payment_admin', 'volunteer_admin', 'program_lead', 'board_member', 'communications_admin', 'student_director', 'read_only_admin'],
+  '/admin': ['registration_admin', 'financial_aid_admin', 'payment_admin', 'volunteer_admin', 'program_lead', 'board_member', 'communications_admin', 'read_only_admin'],
   '/admin/applications': ['registration_admin', 'program_lead', 'board_member', 'read_only_admin'],
   '/admin/financial-aid': ['financial_aid_admin', 'read_only_admin'],
   '/admin/registrations': ['registration_admin', 'read_only_admin'],

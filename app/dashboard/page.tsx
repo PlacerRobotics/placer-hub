@@ -9,8 +9,19 @@ import { volunteerBucket, VOLUNTEER_BUCKET_META } from '@/lib/volunteer-buckets'
 import { fundraisingDeadline } from '@/lib/fundraising'
 import { getAdminAccess } from '@/lib/auth/admin-access'
 import { adminHome } from '@/lib/auth/roles'
+import { NEXT_PUBLIC_SLACK_MAIN_INVITE, NEXT_PUBLIC_SLACK_IQ_INVITE } from '@/lib/env'
+import { deriveStudentStatus, CHECK_META, BADGE_META, OWNER_LABELS, type Check, type StudentBadge } from '@/lib/dashboard-status'
 
 const SEASON = '2026-27'
+
+// Family/coach-facing team label — never surface the internal "TBD" placeholder
+// name for a provisional team (e.g. an undefined Combat roster); soften it to
+// read as normal in-progress process instead. Admin views show the real name.
+function familyTeamLabel(t: { team_name?: string | null; team_number?: string | null; is_provisional?: boolean } | null | undefined, fallback = 'Assigned'): string {
+  if (!t) return fallback
+  if (t.is_provisional) return 'Final team placement in progress'
+  return t.team_name || t.team_number || fallback
+}
 
 const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 function apsDisplay(state: string, expiry: string | null): { color: string; text: string } {
@@ -28,12 +39,11 @@ const RES_HANDBOOK = 'https://docs.google.com/document/d/1HXsC2LHMADf5a2svsOZLaG
 const RES_IQ_ADDENDUM = 'https://docs.google.com/document/d/17MtNftPsKIWnS-_yn3xxZD3wGdX2tJTE/edit'
 const RES_V5_DRIVE = 'https://drive.google.com/drive/folders/0AMHpvFT5atYCUk9PVA'
 const RES_COMBAT_DRIVE = 'https://drive.google.com/drive/folders/0AJWmYed6tfyuUk9PVA'
-const SLACK_MAIN = 'https://join.slack.com/t/placerrobotics/shared_invite/zt-422x9i083-6P4w8NE8tFricY67KTICaw'
-const SLACK_IQ = 'https://join.slack.com/t/placerroboticsvexiq/shared_invite/zt-422xl7n2r-UjR5INuEKgleeFrFj1BFsg'
+const SLACK_MAIN = NEXT_PUBLIC_SLACK_MAIN_INVITE
+const SLACK_IQ = NEXT_PUBLIC_SLACK_IQ_INVITE
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
-type CheckState = 'done' | 'todo' | 'na'
-type StudentCard = { studentId: string; name: string; program: string; complete: boolean; checks: { cap: string; val: string; state: CheckState }[]; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean; fundMethods: string[]; fundTarget: number; fundDeadline: string; fundReceivedAt: string | null }
+type StudentCard = { studentId: string; name: string; program: string; complete: boolean; badge: StudentBadge; checks: Check[]; attentionNotes: string[]; payTodo: boolean; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean; fundMethods: string[]; fundTarget: number; fundDeadline: string; fundReceivedAt: string | null }
 type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; division: string; isIq: boolean; studentId: string; dropRequested: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
@@ -41,9 +51,6 @@ const DIVISION_LABELS: Record<string, string> = { ES: 'Elementary', MS: 'Middle 
 const TSHIRT_LABELS: Record<string, string> = { ym: 'Youth Medium', yl: 'Youth Large', xs: 'Adult XS', s: 'Adult Small', m: 'Adult Medium', l: 'Adult Large', xl: 'Adult XL', xxl: 'Adult 2XL', xxxl: 'Adult 3XL' }
 const AID_DISPLAY: Record<string, [string, Variant]> = { not_requested: ['Not requested', 'neutral'], pending: ['Requested', 'info'], approved: ['Approved', 'success'], denied: ['Denied', 'error'], withdrawn: ['Withdrawn', 'neutral'] }
 const IQ_STATUS: Record<string, [string, Variant]> = { pending_payment: ['Awaiting payment', 'warning'], pending_admin_confirmation: ['In process', 'info'], active: ['Active', 'success'], suspended: ['Suspended', 'error'], pending: ['Pending', 'warning'] }
-
-const CHECK_COLOR: Record<CheckState, string> = { done: 'var(--color-success)', todo: '#C9971B', na: 'var(--color-text-muted)' }
-const CHECK_GLYPH: Record<CheckState, string> = { done: '✓', todo: '✗', na: '–' }
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
   const supabase = await createClient()
@@ -67,6 +74,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   let guardian2: { name: string; email: string } | null = null
   const studentCards: StudentCard[] = []
   const kidTeams: KidTeam[] = []
+  // Plain-language lines for the muted "In process at Placer Robotics" group —
+  // items no family action can move; deliberately kept out of "What's next".
+  const waitingNotes: string[] = []
   let guardianHasSigned = false
   let hasActiveWaivers = false
   let coachTeams: any[] = []
@@ -94,20 +104,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const studentIds = students.map((s: any) => s.id)
 
     if (studentIds.length) {
-      const { data: enrollments } = await supabase.from('enrollment').select('id, student_id, program, registration_fee_status, submitted_at, fundraising_methods, fundraising_target, fundraising_received_at').eq('season', SEASON).in('student_id', studentIds)
-      const { data: apps } = await supabase.from('student_application').select('student_id, program_interest, triage_notes, reviewed_at').eq('season', SEASON).in('student_id', studentIds)
+      const { data: enrollments } = await supabase.from('enrollment').select('id, student_id, program, registration_fee_status, waiver_status, submitted_at, fundraising_methods, fundraising_target, fundraising_received_at').eq('season', SEASON).in('student_id', studentIds)
+      const { data: apps } = await supabase.from('student_application').select('student_id, program_interest, application_status, triage_notes, reviewed_at').eq('season', SEASON).in('student_id', studentIds)
       const { data: sigs } = await supabase.from('waiver_signature').select('student_id').eq('season', SEASON).in('student_id', studentIds)
       const { data: tms } = await supabase.from('team_member').select('student_id, team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('student_id', studentIds)
       const { data: ecs } = await supabase.from('emergency_contact').select('student_id, first_name, last_name, phone').eq('priority', 1).in('student_id', studentIds)
-      const { data: pays } = await supabase.from('payment_transaction').select('enrollment_id, amount, received_at, raw_payload').eq('family_id', familyId).eq('season', SEASON).eq('payment_type', 'registration_fee')
+      const { data: pays } = await supabase.from('payment_transaction').select('enrollment_id, amount, received_at, matched_status, raw_payload').eq('family_id', familyId).eq('season', SEASON).eq('payment_type', 'registration_fee')
 
       const teamIds = [...new Set((tms ?? []).map((t: any) => t.team_id).filter(Boolean))]
-      const { data: teams } = teamIds.length ? await supabase.from('team').select('id, team_number, team_name, program, division').in('id', teamIds) : { data: [] as any[] }
+      const { data: teams } = teamIds.length ? await supabase.from('team').select('id, team_number, team_name, program, division, is_provisional').in('id', teamIds) : { data: [] as any[] }
       const teamById: Record<string, any> = Object.fromEntries((teams ?? []).map((t: any) => [t.id, t]))
 
       const enrByStudent: Record<string, any[]> = {}
       for (const e of enrollments ?? []) (enrByStudent[e.student_id] ??= []).push(e)
       const progByStudent: Record<string, string> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.program_interest]))
+      const appStatusByStudent: Record<string, string> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.application_status]))
       const reviewedByStudent: Record<string, string | null> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.reviewed_at ?? null]))
       const tnByStudent: Record<string, string> = Object.fromEntries((apps ?? []).map((a: any) => [a.student_id, a.triage_notes ?? '']))
       const signed = new Set((sigs ?? []).map((s: any) => s.student_id))
@@ -115,6 +126,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       for (const t of tms ?? []) if (!teamByStudent[t.student_id]) teamByStudent[t.student_id] = teamById[t.team_id]
       const ecByStudent: Record<string, any> = Object.fromEntries((ecs ?? []).map((e: any) => [e.student_id, e]))
       const payByEnrollment: Record<string, any> = Object.fromEntries((pays ?? []).map((p: any) => [p.enrollment_id, p]))
+      // Family-level payment signals: a captured-but-unreconciled payment means the
+      // family already paid and is waiting on us; needs_review is an admin flag.
+      const hasUnreconciledPayment = (pays ?? []).some((p: any) => p.matched_status === 'unmatched')
+      const hasFlaggedPayment = (pays ?? []).some((p: any) => p.matched_status === 'needs_review')
+      const familyCleared = fsStatus === 'cleared_to_register' || fsStatus === 'registered'
 
       // IQ team membership lives in triage_notes (iq_team:<uuid>); resolve the team for "My teams".
       const iqKids = students.map((s: any) => {
@@ -154,39 +170,42 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         const isIqKid = !!iqLabel
         const name = `${s.first_name} ${s.last_name}`.trim()
 
-        let payVal: string, payState: CheckState
-        if (!enrs.length) { payVal = '—'; payState = 'na' }
-        else if (feeStatuses.includes('unpaid')) { payVal = 'Not paid'; payState = 'todo' }
-        else if (feeStatuses.includes('waived')) { payVal = 'Waived'; payState = 'done' }
-        else { payVal = level ? `Paid · ${level}` : 'Paid'; payState = 'done' }
-
-        // IQ kids join through the coach flow — registration + fee are team-level, not per-student.
-        const checks: StudentCard['checks'] = isIqKid
-          ? [
-              { cap: 'Registration', val: 'Team-managed', state: 'na' },
-              { cap: 'Waivers', val: isSigned ? 'Signed' : 'Not signed', state: isSigned ? 'done' : 'todo' },
-              { cap: 'Payment', val: 'Team fee', state: 'na' },
-              { cap: 'Team', val: iqLabel, state: 'done' },
-            ]
-          : [
-              { cap: 'Registration', val: registered ? 'Complete' : 'Not started', state: registered ? 'done' : 'todo' },
-              { cap: 'Waivers', val: isSigned ? 'Signed' : 'Not signed', state: isSigned ? 'done' : 'todo' },
-              { cap: 'Payment', val: payVal, state: payState },
-              { cap: 'Team', val: hasTeam ? (team.team_name || team.team_number || 'Assigned') : 'Pending', state: hasTeam ? 'done' : 'todo' },
-            ]
-        const complete = isIqKid ? isSigned : (registered && isSigned && paid && hasTeam)
+        const st = deriveStudentStatus({
+          firstName: s.first_name.trim(),
+          isIqKid,
+          familyCleared,
+          hasApplication: appStatusByStudent[s.id] !== undefined,
+          applicationFlagged: appStatusByStudent[s.id] === 'needs_follow_up',
+          registered,
+          signed: isSigned,
+          hasEnrollment: enrs.length > 0,
+          feeUnpaid: feeStatuses.includes('unpaid'),
+          feeWaived: feeStatuses.includes('waived'),
+          waiverFlagged: enrs.some((e: any) => e.waiver_status === 'needs_review'),
+          hasTeam,
+          teamProvisional: !!team?.is_provisional,
+          teamLabel: isIqKid ? iqLabel : familyTeamLabel(team),
+          paymentPendingReconciliation: hasUnreconciledPayment,
+          paymentFlagged: hasFlaggedPayment,
+          paidLabel: level ? `Paid · ${level}` : 'Paid',
+        })
+        waitingNotes.push(...st.waitingItems)
         studentCards.push({
           studentId: s.id,
           name,
           program: isIqKid ? 'VEX IQ' : (PROGRAM_LABELS[programVal] ?? programVal),
-          complete,
-          checks,
+          complete: st.ready,
+          badge: st.badge,
+          checks: st.checks,
+          attentionNotes: st.attentionItems,
+          payTodo: st.familyActions.payment,
           detail: `Emergency contact ${ec ? 'added' : 'missing'} · T-shirt ${s.tshirt_size ? (TSHIRT_LABELS[s.tshirt_size] ?? s.tshirt_size) : 'not set'}`,
           isIqKid,
           registered,
           paid,
-          // Wizard still has something for the family to do: register (non-IQ) or sign waivers (IQ).
-          needsWizard: isIqKid ? !isSigned : !registered,
+          // Wizard still has something for the family to do: register (non-IQ, only once
+          // cleared — an under-review application is waiting on us) or sign waivers (IQ).
+          needsWizard: isIqKid ? !isSigned : st.familyActions.registration,
           // Per-student fundraising (from the student's enrollment(s)).
           fundMethods: [...new Set(enrs.flatMap((e: any) => (e.fundraising_methods ?? []) as string[]))],
           fundTarget: Math.max(0, ...enrs.map((e: any) => Number(e.fundraising_target) || 0)),
@@ -195,7 +214,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         })
 
         if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
-        else if (hasTeam) kidTeams.push({ name, teamLabel: team.team_name || team.team_number || 'Assigned', teamId: team.id, program: PROGRAM_LABELS[team.program] ?? team.program, division: team.division, isIq: false, studentId: s.id, dropRequested: false })
+        else if (hasTeam) kidTeams.push({ name, teamLabel: familyTeamLabel(team), teamId: team.id, program: PROGRAM_LABELS[team.program] ?? team.program, division: team.division, isIq: false, studentId: s.id, dropRequested: false })
       }
 
     }
@@ -211,7 +230,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const adb = createAdminClient()
     const { data: famRow } = await adb.from('family').select('employer_match_company').eq('id', familyId).maybeSingle()
     employerCompany = famRow?.employer_match_company ?? ''
-    const { data: coachTms } = await adb.from('team_member').select('team:team_id ( id, team_name, team_number, program, division, status, team_fee_status, team_fee_amount, team_payment_reference_code )').eq('guardian_id', guardian.id).eq('season', SEASON).eq('team_role', 'coach').is('revoked_at', null)
+    const { data: coachTms } = await adb.from('team_member').select('team:team_id ( id, team_name, team_number, program, division, status, team_fee_status, team_fee_amount, team_payment_reference_code, is_provisional )').eq('guardian_id', guardian.id).eq('season', SEASON).eq('team_role', 'coach').is('revoked_at', null)
     coachTeams = (coachTms ?? []).map((c: any) => (Array.isArray(c.team) ? c.team[0] : c.team)).filter(Boolean)
     if (coachTeams.length) {
       const ids = coachTeams.map((t: any) => t.id)
@@ -246,6 +265,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       const bucket = volunteerBucket({ profileStatus: vp.status, doj: bgCheck, apsState, rc: !!vc?.rc_quiz_passed, yp: !!vc?.yp_quiz_passed, waiver })
       const meta = VOLUNTEER_BUCKET_META[bucket]
       volunteer = { label: meta.label, variant: meta.variant, apsExpiry: exp, apsState, bgCheck, waiver }
+      // A submitted background check being verified is in process at Placer Robotics.
+      if (bg?.status === 'in_progress') waitingNotes.push('Your volunteer background check is being verified — nothing needed from you')
     }
   }
 
@@ -290,7 +311,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   type TeamRow = { id: string; label: string; programLabel: string; divisionLabel: string; isIq: boolean; coached: boolean; status?: string; feeStatus?: string; feeAmount?: number; payRef?: string; count: number; kids: { studentId: string; name: string; dropRequested: boolean }[] }
   const teamRowMap: Record<string, TeamRow> = {}
   for (const t of coachTeams) {
-    teamRowMap[t.id] = { id: t.id, label: t.team_name || t.team_number || 'Team', programLabel: PROGRAM_LABELS[t.program] ?? t.program, divisionLabel: DIVISION_LABELS[t.division] ?? t.division, isIq: t.program === 'vex_iq', coached: true, status: t.status, feeStatus: t.team_fee_status ?? undefined, feeAmount: t.team_fee_amount != null ? Number(t.team_fee_amount) : undefined, payRef: t.team_payment_reference_code ?? undefined, count: teamCount[t.id] ?? 0, kids: [] }
+    teamRowMap[t.id] = { id: t.id, label: familyTeamLabel(t, 'Team'), programLabel: PROGRAM_LABELS[t.program] ?? t.program, divisionLabel: DIVISION_LABELS[t.division] ?? t.division, isIq: t.program === 'vex_iq', coached: true, status: t.status, feeStatus: t.team_fee_status ?? undefined, feeAmount: t.team_fee_amount != null ? Number(t.team_fee_amount) : undefined, payRef: t.team_payment_reference_code ?? undefined, count: teamCount[t.id] ?? 0, kids: [] }
   }
   for (const k of kidTeams) {
     const row = (teamRowMap[k.teamId] ??= { id: k.teamId, label: k.teamLabel, programLabel: k.program, divisionLabel: DIVISION_LABELS[k.division] ?? k.division, isIq: k.isIq, coached: false, count: 0, kids: [] })
@@ -305,7 +326,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   for (const c of studentCards) {
     const fn = c.name.split(' ')[0]
     if (c.needsWizard) todos.push({ label: `Finish registration for ${fn}`, cta: 'Continue', href: `/register?student=${c.studentId}` })
-    else if (!c.isIqKid && !c.paid) todos.push({ label: c.fundReceivedAt ? `Pay ${fn}’s $40 registration fee` : `Pay ${fn}’s $40 fee + $${c.fundTarget || 550} fundraising commitment (due ${c.fundDeadline})`, cta: 'Pay via Zeffy', external: zeffyStudentUrl || ZEFFY_REGISTRATION_URL })
+    // payTodo excludes payments that are processing or admin-flagged — those are
+    // waiting on Placer Robotics and must not read as a family to-do.
+    else if (!c.isIqKid && c.payTodo) todos.push({ label: c.fundReceivedAt ? `Pay ${fn}’s $40 registration fee` : `Pay ${fn}’s $40 fee + $${c.fundTarget || 550} fundraising commitment (due ${c.fundDeadline})`, cta: 'Pay via Zeffy', external: zeffyStudentUrl || ZEFFY_REGISTRATION_URL })
   }
   // IQ coach — get your team registered: build the roster (3+ members), pay the
   // $1,200 fee, then the IQ Coordinator approves it. Each open step is its own to-do.
@@ -377,6 +400,25 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div style={{ marginBottom: '0.5rem' }}><SuccessAlert title="You're all set">Every student is registered, signed, paid, and on a team for {SEASON}.</SuccessAlert></div>
       ) : null}
 
+      {/* IN PROCESS AT PLACER ROBOTICS — items no family action can move. Muted on
+          purpose: visually and verbally distinct from the "What's next" to-dos. */}
+      {waitingNotes.length > 0 && (
+        <section style={{ marginTop: '0.875rem', marginBottom: '0.5rem' }}>
+          <div style={{ ...panel, backgroundColor: 'var(--color-bg-light)' }}>
+            <div style={{ padding: '0.625rem 1.25rem', borderBottom: '1px solid var(--color-border)' }}>
+              <span style={{ color: 'var(--color-text-muted)', fontWeight: 700, fontSize: '0.8125rem', textTransform: 'uppercase', letterSpacing: '0.03em' }}>In process at Placer Robotics</span>
+              <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem', marginLeft: '0.5rem' }}>— nothing needed from you</span>
+            </div>
+            {waitingNotes.map((n, i) => (
+              <div key={i} style={{ display: 'flex', gap: '0.625rem', alignItems: 'baseline', padding: '0.625rem 1.25rem', borderBottom: i < waitingNotes.length - 1 ? '1px solid var(--color-border)' : 'none' }}>
+                <span aria-hidden style={{ color: 'var(--color-text-muted)' }}>◷</span>
+                <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{n}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* MY CHILDREN */}
       {studentCards.length === 0 ? (
         <WarningAlert title="No students yet">We don&apos;t have a student on your account for {SEASON} yet. If you applied, an admin will clear you to register soon.</WarningAlert>
@@ -387,8 +429,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <div key={card.name} style={{ ...panel, padding: '1rem 1.25rem', marginBottom: '0.875rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
                 <div style={{ fontSize: '1.0625rem', fontWeight: 700 }}>{card.name} <span style={{ fontSize: '0.8125rem', fontWeight: 400, color: 'var(--color-text-muted)' }}>· {card.program}</span></div>
-                <StatusBadge label={card.complete ? 'Ready' : 'In progress'} variant={card.complete ? 'success' : 'warning'} />
+                <StatusBadge label={BADGE_META[card.badge].label} variant={BADGE_META[card.badge].variant} />
               </div>
+              {/* Admin-flagged exception — plain language with a help path. */}
+              {card.attentionNotes.length > 0 && (
+                <div style={{ marginBottom: '0.75rem', backgroundColor: 'rgba(198,40,40,0.06)', border: '1px solid rgba(198,40,40,0.25)', borderRadius: 8, padding: '0.75rem 0.875rem' }}>
+                  {card.attentionNotes.map((n, i) => (
+                    <div key={i} style={{ fontSize: '0.875rem', color: 'var(--color-text-primary)', marginBottom: 2 }}>{n}</div>
+                  ))}
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: '0.25rem' }}>
+                    We&apos;ll reach out, or you can email <a href="mailto:registrar@placerrobotics.org" style={{ fontWeight: 600, color: 'var(--color-navy-deep)' }}>registrar@placerrobotics.org</a> — happy to help.
+                  </div>
+                </div>
+              )}
               {card.needsWizard && (
                 <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.625rem' }}>
                   {card.isIqKid ? `Sign the waivers to finish ${card.name.split(' ')[0]}’s setup.` : `Complete these steps to secure ${card.name.split(' ')[0]}’s spot:`}
@@ -398,7 +451,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 {card.checks.map((c, i) => (
                   <div key={c.cap} style={{ textAlign: 'center', padding: '0.5rem 0.375rem', border: '1px solid var(--color-border)', borderRadius: 8 }}>
                     <div style={{ fontSize: '0.625rem', textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--color-text-muted)', marginBottom: 3 }}>{i + 1} · {c.cap}</div>
-                    <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: CHECK_COLOR[c.state] }}>{CHECK_GLYPH[c.state]} {c.val}</div>
+                    <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: CHECK_META[c.state].color }}>{CHECK_META[c.state].glyph} {c.val}</div>
                   </div>
                 ))}
               </div>
@@ -411,7 +464,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               </div>
 
               {/* Payment callout (non-IQ) — fee is the $40 registration fee (Part 4). */}
-              {!card.isIqKid && card.registered && !card.paid && fsStatus === 'registered' && (
+              {!card.isIqKid && card.registered && card.payTodo && fsStatus === 'registered' && (
                 <div style={{ marginTop: '0.75rem', backgroundColor: '#FFF8E6', border: '1px solid var(--color-gold)', borderRadius: 8, padding: '0.75rem 0.875rem' }}>
                   <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#8a6d1a' }}>Registration fee not yet received</div>
                   <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>Pay the $40 registration fee via Zeffy to secure {card.name}’s spot.</div>
@@ -575,9 +628,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           { label: 'IQ Parent Handbook — Addendum A', href: RES_IQ_ADDENDUM, show: hasIq },
           { label: 'V5 Members Drive', href: RES_V5_DRIVE, show: hasV5 || !studentCards.length },
           { label: 'Combat Members Drive', href: RES_COMBAT_DRIVE, show: hasCombat || !studentCards.length },
-          { label: 'Join our Slack (V5 & Combat)', href: SLACK_MAIN, show: hasV5 || hasCombat || !studentCards.length },
-          { label: 'Join the VEX IQ Slack', href: SLACK_IQ, show: hasIq },
-        ].filter((r) => r.show)
+          { label: 'Join our Slack (V5 & Combat)', href: SLACK_MAIN, show: !!SLACK_MAIN && (hasV5 || hasCombat || !studentCards.length) },
+          { label: 'Join the VEX IQ Slack', href: SLACK_IQ, show: !!SLACK_IQ && hasIq },
+        ].filter((r): r is { label: string; href: string; show: boolean } => r.show && !!r.href)
         return (
           <section style={section}>
             <h2 className="text-section-title" style={sectionTitle}>Resources</h2>

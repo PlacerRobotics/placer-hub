@@ -14,6 +14,7 @@ export type Team = {
   season: string
   school_org: string
   active: boolean
+  is_provisional: boolean
   notes: string | null
   kit_number: string | null
   kit_checkout_date: string | null
@@ -123,6 +124,7 @@ export function TeamRows({ teams }: { teams: Team[] }) {
               <div className="text-help">{PROGRAM_LABELS[t.program] ?? t.program} · {t.division} · {t.school_org} · Kit {t.kit_number || '—'}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+              {t.is_provisional && <StatusBadge label="provisional — needs re-confirmation" variant="warning" />}
               {t.kit_return_verified && <StatusBadge label="kit returned" variant="success" />}
               <StatusBadge label={t.active ? 'active' : 'inactive'} variant={t.active ? 'success' : 'neutral'} />
               <Link href={`/admin/teams/${t.id}`} style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Coaches →</Link>

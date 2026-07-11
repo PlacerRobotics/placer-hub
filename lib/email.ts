@@ -250,6 +250,24 @@ export function apsReminderHtml({ name, expiry, days, enrollUrl }: { name: strin
     <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">If the button doesn't work, copy this address into your browser:<br/><a href="${url}" style="color:#0E2558;word-break:break-all;">${url}</a></p>`)
 }
 
+// Bulk APS renewal-enrollment notification (task 1.10). `url` is the volunteer's
+// personal direct_login_url from enrollApsTraining; falls back to the generic
+// self-enroll course when APS didn't return one.
+export function apsRenewalReadyHtml({ name, url, expiry, validThrough, season }: { name: string; url?: string; expiry?: string | null; validThrough: string; season: string }): string {
+  const link = url || APS_TRAINING_URL
+  const why = expiry
+    ? `Your current certificate expires on <strong>${expiry}</strong>, and volunteers need a certificate valid through the end of the ${season} season (<strong>${validThrough}</strong>).`
+    : `Volunteers need a certificate valid through the end of the ${season} season (<strong>${validThrough}</strong>), and we don't have one on file for you yet.`
+  return emailShell(`Your ${season} APS renewal is ready`, `
+    <p style="${P}">Hi ${name || 'volunteer'}, you're enrolled for this season's APS Mandated Reporter (CA AB 506) training — the free online course every Registered Volunteer completes to work with students.</p>
+    <p style="${P}">${why}</p>
+    <p style="${P}">The course only takes a few minutes. Your certificate syncs to the Hub automatically when you finish — nothing to upload.</p>
+    ${emailButton(link, 'Start my training →')}
+    <p style="margin:22px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">If the button doesn't work, copy this address into your browser:<br/><a href="${link}" style="color:#0E2558;word-break:break-all;">${link}</a></p>
+    <p style="margin:14px 0 0;color:#7a879c;font-size:13px;">Questions? Contact registrar@placerrobotics.org</p>`,
+    `Complete your ${season} Mandated Reporter training — it only takes a few minutes.`)
+}
+
 export function volunteerWaiverReminderHtml({ name, season, waiverUrl }: { name: string; season: string; waiverUrl: string }): string {
   return emailShell(`Sign your ${season} volunteer agreement`, `
     <p style="${P}">Hi ${name || 'volunteer'}, please review and sign the ${season} Youth Protection &amp; Abuse Prevention policy agreement to complete your Registered Volunteer clearance.</p>

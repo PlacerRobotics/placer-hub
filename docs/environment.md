@@ -34,6 +34,8 @@ All configuration is via environment variables. No secrets in code or Git.
 |---|---|
 | `SLACK_MAIN_BOT_TOKEN` | Slack bot token for main workspace |
 | `SLACK_IQ_BOT_TOKEN` | Slack bot token for IQ workspace |
+| `NEXT_PUBLIC_SLACK_MAIN_INVITE` | Shared-invite URL for the main Slack workspace (V5 & Combat) — family dashboard hides the "Join our Slack" link if unset |
+| `NEXT_PUBLIC_SLACK_IQ_INVITE` | Shared-invite URL for the VEX IQ Slack workspace — family dashboard hides the "Join the VEX IQ Slack" link if unset |
 | `APS_API_KEY` | APS/MinistrySafe API key |
 | `APS_API_BASE_URL` | APS API base URL |
 | `UNIFI_ACCESS_API_KEY` | UniFi Access API key (scope to Access only) |

@@ -45,8 +45,9 @@ export default function LoginPage() {
       .auth.setSession({ access_token, refresh_token })
       .then(({ error }) => {
         if (error) {
+          console.error('[login] setSession failed:', error)
           setStatus('error')
-          setErrorMessage(error.message)
+          setErrorMessage("We couldn't finish signing you in — please request a new sign-in link and try again.")
           return
         }
         // Record the sign-in (last_login_at), then continue into the app.
@@ -73,8 +74,11 @@ export default function LoginPage() {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
+        console.error('[login] magic-link send failed:', d)
         setStatus('error')
-        setErrorMessage(d.error || 'Something went wrong. Please try again.')
+        setErrorMessage(
+          "We couldn't send your sign-in link — check the email address and try again."
+        )
       } else {
         setStatus('sent')
       }

@@ -15,7 +15,7 @@ export default async function AdminFamiliesPage() {
   const familyIds = (families ?? []).map((f: any) => f.id)
 
   const { data: guardians } = familyIds.length
-    ? await supabase.from('guardian').select('id, family_id, first_name, last_name, login_email, created_at').in('family_id', familyIds).order('created_at', { ascending: true })
+    ? await supabase.from('guardian').select('id, family_id, first_name, last_name, login_email, role, created_at').in('family_id', familyIds).order('created_at', { ascending: true })
     : { data: [] as any[] }
   const { data: students } = familyIds.length
     ? await supabase.from('student').select('family_id, first_name, last_name').in('family_id', familyIds)
@@ -27,8 +27,14 @@ export default async function AdminFamiliesPage() {
     ? await supabase.from('enrollment').select('family_id, program, division').eq('season', SEASON).in('family_id', familyIds)
     : { data: [] as any[] }
 
+  // "Guardian 1" = the primary-role guardian; created_at only breaks ties. Without
+  // the role sort, a same-timestamp secondary (e.g. from a per-student import row)
+  // can win and the list shows the wrong parent.
   const g1ByFamily: Record<string, any> = {}
-  for (const g of guardians ?? []) if (!g1ByFamily[g.family_id]) g1ByFamily[g.family_id] = g
+  const roleRank = (r: string) => (r === 'primary' || r === 'single_guardian' ? 0 : 1)
+  for (const g of [...(guardians ?? [])].sort((a: any, b: any) => roleRank(a.role) - roleRank(b.role))) {
+    if (!g1ByFamily[g.family_id]) g1ByFamily[g.family_id] = g
+  }
   const studentsByFamily: Record<string, string[]> = {}
   for (const s of students ?? []) (studentsByFamily[s.family_id] ??= []).push(`${s.first_name} ${s.last_name}`.trim())
   const statusByFamily: Record<string, string> = Object.fromEntries((fseasons ?? []).map((f: any) => [f.family_id, f.status]))

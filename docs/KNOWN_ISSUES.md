@@ -55,8 +55,15 @@ Severity: **[BLOCKER]** = needed before launch · **[FIX]** = real bug, should f
 - **[LATER]** No partial-payment state (fee is all-or-nothing).
 
 ### Teams & coaches
-- **[FIX] Combat teams undefined** — only 15 V5 teams; combat students unassignable
-  until a combat team list is imported.
+- **[STOPGAP] Combat teams undefined** — real 2026-27 Combat rosters aren't finalized
+  yet. Migration `20260620000045_provisional_combat_teams` seeds two placeholder
+  teams ("Combat MS — TBD" / "Combat HS — TBD", `team.is_provisional = true`) so
+  Combat students can be assigned via `/admin/registrations/[id]` as an interim
+  step. Admin views show the TBD name + a "Provisional" tag; family/coach views
+  (`app/dashboard/page.tsx`) show "Final team placement in progress" instead —
+  never the internal name. When real rosters exist, re-split `team_member` rows
+  onto real teams per-student using the query template at the bottom of that
+  migration file, then deactivate the provisional teams.
 - **[RESOLVED] Coach "create new guardian"** — no longer a dead `/admin/guardians/new`
   link; the Add-Coach panel now creates a coach-only family + guardian inline (reusing an
   existing guardian if the email matches) via `POST /api/admin/teams/[id]/coaches`.

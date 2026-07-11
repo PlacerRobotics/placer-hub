@@ -5,6 +5,7 @@
  */
 
 import { StatusBadge } from './StatusBadge'
+import { OWNER_LABELS } from '@/lib/dashboard-status'
 
 type StepStatus = 'complete' | 'in_progress' | 'pending' | 'blocked' | 'skipped'
 
@@ -32,12 +33,6 @@ const STATUS_CONFIG: Record<StepStatus, { badge: string; variant: 'success' | 'i
   pending: { badge: 'Not started', variant: 'neutral', icon: '○' },
   blocked: { badge: 'Blocked', variant: 'error', icon: '✕' },
   skipped: { badge: 'Not required', variant: 'neutral', icon: '—' },
-}
-
-const OWNER_LABELS = {
-  you: 'Your action needed',
-  placer_robotics: 'Waiting on Placer Robotics',
-  system: 'Automated',
 }
 
 export function StepChecklist({ steps, title }: StepChecklistProps) {

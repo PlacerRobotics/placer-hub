@@ -3,8 +3,10 @@ import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader } from '@/components/ui'
 import VolunteersDashboard, { type VolRow } from './volunteers-dashboard'
 import ApsSyncButton from './aps-sync-button'
+import ApsEnrollButton from './aps-enroll-button'
 import { VOLUNTEER_SEASON as SEASON, APS_VALID_THROUGH } from '@/lib/volunteer'
 import { volunteerBucket } from '@/lib/volunteer-buckets'
+import { listApsRenewalCandidates } from '@/lib/aps'
 
 // Reads live data via the service-role client (no cookies), so Next would otherwise
 // prerender this page static and freeze the volunteer list at deploy time.
@@ -65,10 +67,16 @@ export default async function AdminVolunteersPage() {
     }
   })
 
+  // Who the bulk APS-enroll run would touch (same query the preview/run use).
+  const renewalCount = (await listApsRenewalCandidates(db, APS_VALID_THROUGH)).length
+
   return (
     <AdminShell activePath="/admin/volunteers">
       <PageHeader title="Volunteers" subtitle={`Registered Volunteer clearance — ${rows.length} people · ${SEASON} season`} />
-      <div style={{ marginBottom: '1.25rem' }}><ApsSyncButton /></div>
+      <div style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <ApsSyncButton />
+        <ApsEnrollButton count={renewalCount} />
+      </div>
       {error ? (
         <p style={{ color: 'var(--color-error)' }}>Couldn’t load volunteers: {error.message}</p>
       ) : (

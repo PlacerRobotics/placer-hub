@@ -3,13 +3,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-export type AssignTeam = { id: string; number: string; name: string; program: string }
+export type AssignTeam = { id: string; number: string; name: string; program: string; provisional?: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ' }
 const btn: React.CSSProperties = { padding: '6px 12px', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 const navyBtn: React.CSSProperties = { ...btn, backgroundColor: 'var(--color-navy-deep)', color: '#fff' }
 const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: 'var(--color-navy-deep)', fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }
 const dangerLink: React.CSSProperties = { ...linkBtn, color: 'var(--color-error)' }
+const provisionalTag: React.CSSProperties = { fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-navy-darker)', backgroundColor: 'var(--color-gold)', borderRadius: 4, padding: '2px 6px' }
 const input: React.CSSProperties = { padding: '8px 10px', fontSize: '0.875rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
 
 export default function TeamAssign({ familySeasonId, studentId, studentProgram, hasEnrollment, current, teams }: {
@@ -17,7 +18,7 @@ export default function TeamAssign({ familySeasonId, studentId, studentProgram, 
   studentId: string
   studentProgram: string
   hasEnrollment: boolean
-  current: { id: string; label: string } | null
+  current: { id: string; label: string; provisional?: boolean } | null
   teams: AssignTeam[]
 }) {
   const router = useRouter()
@@ -46,6 +47,7 @@ export default function TeamAssign({ familySeasonId, studentId, studentProgram, 
       {current ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           <strong>{current.label}</strong>
+          {current.provisional && <span style={provisionalTag} title="Placeholder team — needs re-confirmation once real rosters exist">Provisional</span>}
           <button type="button" onClick={() => { setSel(''); setErr(''); setOpen(true) }} style={linkBtn}>Change Team</button>
           <button type="button" onClick={() => post('')} disabled={busy} style={dangerLink}>Remove from Team</button>
         </span>
@@ -72,7 +74,7 @@ export default function TeamAssign({ familySeasonId, studentId, studentProgram, 
             </div>
             <select value={sel} onChange={(e) => setSel(e.target.value)} size={8} style={{ ...input, width: '100%', height: 'auto' }}>
               {filtered.length === 0 ? <option value="" disabled>No matching teams</option> : filtered.map((t) => (
-                <option key={t.id} value={t.id}>{(t.number || t.name || t.id)}{t.number && t.name ? ` · ${t.name}` : ''} · {PROGRAM_LABELS[t.program] ?? t.program}</option>
+                <option key={t.id} value={t.id}>{(t.number || t.name || t.id)}{t.number && t.name ? ` · ${t.name}` : ''} · {PROGRAM_LABELS[t.program] ?? t.program}{t.provisional ? ' · PROVISIONAL' : ''}</option>
               ))}
             </select>
             {err && <p style={{ color: 'var(--color-error)', fontSize: '0.8125rem', margin: '0.5rem 0 0' }}>{err}</p>}
