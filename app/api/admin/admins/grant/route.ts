@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getAdminProfile } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ROLE_VALUES, isSuperAdmin } from '@/lib/auth/roles'
+import { ROLE_VALUES, isSuperAdmin, PROGRAM_SCOPED_ROLES, PROGRAM_SCOPE_VALUES } from '@/lib/auth/roles'
 
 const nameFromEmail = (e: string) =>
   e.split('@')[0].split(/[._-]/).filter(Boolean).map((s) => s[0].toUpperCase() + s.slice(1)).join(' ')
@@ -20,7 +20,9 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid body.' }, { status: 400 }) }
   const role = String(body.role ?? '')
   if (!ROLE_VALUES.has(role)) return NextResponse.json({ error: 'Unknown role.' }, { status: 400 })
-  const programScope = body.program_scope ? String(body.program_scope) : null
+  // A scope only means something on program-scoped roles (D5); drop it elsewhere.
+  const programScope = PROGRAM_SCOPED_ROLES.has(role) && body.program_scope ? String(body.program_scope) : null
+  if (programScope && !PROGRAM_SCOPE_VALUES.has(programScope)) return NextResponse.json({ error: 'Unknown program scope.' }, { status: 400 })
 
   // Resolve the target admin_profile.
   let profileId: string | null = body.admin_profile_id ? String(body.admin_profile_id) : null
@@ -53,8 +55,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Skip if an identical active role already exists.
-  const { data: dupe } = await db.from('admin_role_assignment').select('id').eq('admin_profile_id', profileId).eq('role', role).is('revoked_at', null).limit(1)
+  // Skip if an identical active grant exists — same role AND same scope (a lead
+  // can legitimately hold e.g. vex_v5 + combat as two grants).
+  let dq = db.from('admin_role_assignment').select('id').eq('admin_profile_id', profileId).eq('role', role).is('revoked_at', null)
+  dq = programScope ? dq.eq('program_scope', programScope) : dq.is('program_scope', null)
+  const { data: dupe } = await dq.limit(1)
   if ((dupe ?? []).length) return NextResponse.json({ ok: true, alreadyHad: true })
 
   const { error } = await db.from('admin_role_assignment').insert({ admin_profile_id: profileId, role, program_scope: programScope, granted_by: admin.id })

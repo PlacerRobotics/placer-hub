@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { requireSection } from '@/lib/auth/admin-access'
+import { programScopeFor, programInScope, PROGRAM_SCOPE_LABELS } from '@/lib/auth/roles'
 import { AdminShell, PageHeader } from '@/components/ui'
 import RosterDownload from './roster-download'
 import RegistrationsManager, { type RegRow, type TeamOpt } from './registrations-manager'
@@ -7,7 +8,10 @@ import RegistrationsManager, { type RegRow, type TeamOpt } from './registrations
 const SEASON = '2026-27'
 
 export default async function AdminRegistrationsPage() {
-  await requireSection('/admin/registrations')
+  const access = await requireSection('/admin/registrations')
+  // Program-scoped leads (D5) see only students/teams in their program; students
+  // with no program yet (not_sure / no application) stay registrar-only.
+  const scope = programScopeFor(access, '/admin/registrations')
   const supabase = await createClient()
 
   // Family-season lifecycle rows for the season.
@@ -95,7 +99,7 @@ export default async function AdminRegistrationsPage() {
     .eq('season', SEASON)
     .order('team_number', { ascending: true })
 
-  const rows: RegRow[] = students.map((s) => {
+  const allRows: RegRow[] = students.map((s) => {
     const fs = fsByFamily[s.family_id] ?? {}
     const enr = enrByStudent[s.id]
     const g = gByFamily[s.family_id]
@@ -146,17 +150,23 @@ export default async function AdminRegistrationsPage() {
     }
   })
 
+  const rows = allRows.filter((r) => programInScope(r.program, scope))
+
   const schools = [...new Set(rows.map((r) => r.school).filter((x) => x && x !== '—'))].sort()
-  const teamOpts: TeamOpt[] = (allTeams ?? []).map((t: any) => ({
-    id: t.id,
-    label: `${t.team_number ?? t.team_name ?? t.id} · ${t.program} · ${t.division}`,
-  }))
+  const teamOpts: TeamOpt[] = (allTeams ?? [])
+    .filter((t: any) => programInScope(t.program, scope))
+    .map((t: any) => ({
+      id: t.id,
+      label: `${t.team_number ?? t.team_name ?? t.id} · ${t.program} · ${t.division}`,
+    }))
 
   return (
     <AdminShell activePath="/admin/registrations">
       <PageHeader
         title="Registrations"
-        subtitle={`Registration lifecycle for the ${SEASON} season.`}
+        subtitle={scope
+          ? `${scope.map((p) => PROGRAM_SCOPE_LABELS[p] ?? p).join(' + ')} registrations for ${SEASON} (your program scope).`
+          : `Registration lifecycle for the ${SEASON} season.`}
         actions={<RosterDownload />}
       />
       <RegistrationsManager rows={rows} teams={teamOpts} schools={schools} />

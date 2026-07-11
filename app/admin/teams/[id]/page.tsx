@@ -1,5 +1,8 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { requireSection } from '@/lib/auth/admin-access'
+import { programScopeFor, programInScope } from '@/lib/auth/roles'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 import { TeamCoaches, type Coach } from './team-coaches'
 
@@ -8,6 +11,8 @@ const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5 Robotics', vex_
 
 export default async function TeamDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const access = await requireSection('/admin/teams')
+  const scope = programScopeFor(access, '/admin/teams')
   const supabase = await createClient()
 
   const { data: team } = await supabase
@@ -15,6 +20,9 @@ export default async function TeamDetailPage({ params }: { params: Promise<{ id:
     .select('id, team_number, team_name, program, division, season, school_org, active, notes')
     .eq('id', id)
     .maybeSingle()
+
+  // A program-scoped lead can't open another program's team by URL.
+  if (team && !programInScope(team.program, scope)) redirect('/admin/teams')
 
   if (!team) {
     return (
