@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendEmail, apsReminderHtml, volunteerWaiverReminderHtml } from '@/lib/email'
+import { sendEmail, apsReminderHtml, volunteerWaiverReminderHtml, volunteerClearedSlackHtml } from '@/lib/email'
+import { NEXT_PUBLIC_SLACK_MAIN_INVITE } from '@/lib/env'
 import { getApsUser } from '@/lib/aps'
 import { VOLUNTEER_SEASON as SEASON } from '@/lib/volunteer'
 
@@ -86,7 +87,33 @@ export async function POST(req: NextRequest) {
         if (e2) return NextResponse.json({ error: e2.message }, { status: 500 })
       }
     }
-    return NextResponse.json({ ok: true, action, processed: ids.length })
+
+    // Task 1.6 (D11): being marked cleared is a volunteer's Slack-invite moment.
+    // Best-effort — the status change above never depends on email delivery.
+    let slackInvitesSent = 0
+    if (action === 'mark_cleared' && NEXT_PUBLIC_SLACK_MAIN_INVITE) {
+      try {
+        const { data: vps } = await db.from('volunteer_profile').select('id, guardian:guardian_id ( id, first_name, last_name, login_email, slack_email, slack_invite_status )').in('id', ids)
+        for (const vp of (vps ?? []) as any[]) {
+          const g = Array.isArray(vp.guardian) ? vp.guardian[0] : vp.guardian
+          if (!g?.login_email || g.slack_invite_status === 'accepted') continue
+          const joinEmail = g.slack_email || g.login_email
+          const sent = await sendEmail({
+            to: g.login_email,
+            subject: `You're cleared to volunteer — join us on Slack (Placer Robotics ${SEASON})`,
+            html: volunteerClearedSlackHtml({ name: `${g.first_name ?? ''}`.trim() || 'there', season: SEASON, inviteUrl: NEXT_PUBLIC_SLACK_MAIN_INVITE, joinEmail }),
+          })
+          if (sent.ok) {
+            slackInvitesSent++
+            if (!g.slack_invite_status) await db.from('guardian').update({ slack_invite_status: 'sent' }).eq('id', g.id)
+            await db.from('notification_log').insert({ volunteer_id: vp.id, recipient_email: g.login_email, notification_type: 'volunteer_cleared_slack_invite', subject: 'Volunteer cleared — Slack invite', provider: 'resend', status: 'sent', sent_at: new Date().toISOString() })
+          }
+        }
+      } catch (e) {
+        console.error('[volunteers/bulk] slack invite emails failed:', e)
+      }
+    }
+    return NextResponse.json({ ok: true, action, processed: ids.length, slackInvitesSent })
   }
 
   // Admin-only lifecycle: Denied / Deactivated (and reactivate back to In Progress).

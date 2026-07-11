@@ -41,6 +41,8 @@ export const ADMIN_SECTION_ROLES: Record<string, string[]> = {
   '/admin/iq-teams': ['iq_coordinator', 'payment_admin', 'registration_admin'],
   '/admin/families': ['registration_admin', 'read_only_admin'],
   '/admin/volunteers': ['volunteer_admin', 'read_only_admin'],
+  '/admin/slack': ['communications_admin', 'volunteer_admin', 'read_only_admin'],
+  '/admin/google-groups': ['communications_admin', 'read_only_admin'],
   '/admin/sync': [],
   '/admin/settings': [],
   '/admin/admins': [],
