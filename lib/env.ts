@@ -27,6 +27,10 @@ export const NEXT_PUBLIC_SUPABASE_ANON_KEY = requireEnv('NEXT_PUBLIC_SUPABASE_AN
 export const NEXT_PUBLIC_SITE_URL = requireEnv('NEXT_PUBLIC_SITE_URL')
 export const NEXT_PUBLIC_SLACK_MAIN_INVITE = optionalEnv('NEXT_PUBLIC_SLACK_MAIN_INVITE')
 export const NEXT_PUBLIC_SLACK_IQ_INVITE = optionalEnv('NEXT_PUBLIC_SLACK_IQ_INVITE')
+// Feature flags (browser-safe; NEXT_PUBLIC so client components can read them too).
+// Default OFF: the family-facing financial-aid feature is hidden unless explicitly
+// set to 'true'. Admin views (/admin/financial-aid) + the API are never gated by this.
+export const FEATURE_FINANCIAL_AID = optionalEnv('NEXT_PUBLIC_FEATURE_FINANCIAL_AID') === 'true'
 
 // ── Server-side only ───────────────────────────────────────────────────────
 // These must never be imported in client components ('use client')

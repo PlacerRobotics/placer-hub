@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { FamilyShell, PageHeader, StatusBadge, EmptyState } from '@/components/ui'
+import { FEATURE_FINANCIAL_AID } from '@/lib/env'
 import AidRequestForm from './aid-request-form'
 
 const SEASON = '2026-27'
@@ -13,6 +14,8 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'neutral'
 }
 
 export default async function FinancialAidPage() {
+  // Feature hidden from families (default off). Admins use /admin/financial-aid.
+  if (!FEATURE_FINANCIAL_AID) redirect('/dashboard')
   const supabase = await createClient()
   const {
     data: { user },

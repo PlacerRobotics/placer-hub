@@ -36,6 +36,7 @@ All configuration is via environment variables. No secrets in code or Git.
 | `SLACK_IQ_BOT_TOKEN` | Slack bot token for IQ workspace |
 | `NEXT_PUBLIC_SLACK_MAIN_INVITE` | Shared-invite URL for the main Slack workspace (V5 & Combat) — family dashboard hides the "Join our Slack" link if unset |
 | `NEXT_PUBLIC_SLACK_IQ_INVITE` | Shared-invite URL for the VEX IQ Slack workspace — family dashboard hides the "Join the VEX IQ Slack" link if unset |
+| `NEXT_PUBLIC_FEATURE_FINANCIAL_AID` | Feature flag (default **off**). Set to `true` to show the family-facing financial-aid feature: the dashboard row, the `/financial-aid` request page, and the `/apply` callout. When off, `/financial-aid` redirects to `/dashboard`. Admin views (`/admin/financial-aid`) and the API are never gated by this. |
 | `APS_API_KEY` | APS/MinistrySafe API key |
 | `APS_API_BASE_URL` | APS API base URL |
 | `UNIFI_ACCESS_API_KEY` | UniFi Access API key (scope to Access only) |

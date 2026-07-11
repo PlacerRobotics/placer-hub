@@ -9,7 +9,7 @@ import { volunteerBucket, VOLUNTEER_BUCKET_META } from '@/lib/volunteer-buckets'
 import { fundraisingDeadline } from '@/lib/fundraising'
 import { getAdminAccess } from '@/lib/auth/admin-access'
 import { adminHome } from '@/lib/auth/roles'
-import { NEXT_PUBLIC_SLACK_MAIN_INVITE, NEXT_PUBLIC_SLACK_IQ_INVITE } from '@/lib/env'
+import { NEXT_PUBLIC_SLACK_MAIN_INVITE, NEXT_PUBLIC_SLACK_IQ_INVITE, FEATURE_FINANCIAL_AID } from '@/lib/env'
 import { deriveStudentStatus, CHECK_META, BADGE_META, OWNER_LABELS, type Check, type StudentBadge } from '@/lib/dashboard-status'
 
 const SEASON = '2026-27'
@@ -651,13 +651,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <section style={section}>
           <h2 className="text-section-title" style={sectionTitle}>My household</h2>
           <div style={panel}>
-            <div style={{ ...rowFlex, borderBottom: '1px solid var(--color-border)' }}>
+            <div style={{ ...rowFlex, borderBottom: FEATURE_FINANCIAL_AID ? '1px solid var(--color-border)' : 'none' }}>
               <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Second guardian</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>{guardian2 ? `${guardian2.name}${guardian2.email ? ` · ${guardian2.email}` : ''}` : 'Not added'}</span>
                 <Link href="/dashboard/edit" style={smallLink}>{guardian2 ? 'Edit' : 'Add'}</Link>
               </span>
             </div>
+            {/* Financial aid — hidden from families behind FEATURE_FINANCIAL_AID (admin views unaffected). */}
+            {FEATURE_FINANCIAL_AID && (
             <div style={rowFlex}>
               <span style={{ fontSize: '0.9375rem', fontWeight: 500 }}>Financial aid</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -665,6 +667,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 {aidStatus === 'not_requested' && <Link href="/financial-aid" style={smallLink}>Request</Link>}
               </span>
             </div>
+            )}
           </div>
         </section>
       )}
