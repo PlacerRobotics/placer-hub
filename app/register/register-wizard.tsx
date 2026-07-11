@@ -93,6 +93,7 @@ type Props = {
   standardFee: number
   cavittFee: number
   fundraisingTarget: number
+  cavittFundraisingTarget: number
   fundraisingDeadline: string
   emergency: { first_name: string; last_name: string; relationship: string; phone: string } | null
   consent: { slackConsent: boolean; emailCertified: boolean } | null
@@ -179,6 +180,7 @@ export default function RegisterWizard({
   standardFee,
   cavittFee,
   fundraisingTarget,
+  cavittFundraisingTarget,
   fundraisingDeadline,
   emergency,
   consent,
@@ -230,6 +232,7 @@ export default function RegisterWizard({
   // structure). Tracks the school dropdown live; 'both'/combat stay standard.
   const isCavittV5 = !isIq && program === 'vex_v5' && schools.find((sc) => sc.id === schoolId)?.fee_tier === 'cavitt'
   const feeAmount = isCavittV5 ? cavittFee : standardFee
+  const fundTarget = isCavittV5 ? cavittFundraisingTarget : fundraisingTarget
   // Zeffy is the default payment path. Always have a working URL (config or fallback).
   const payUrl = (isCavittV5 ? zeffyCavittUrl || zeffyUrl : zeffyUrl) || ZEFFY_REGISTRATION_URL
   const [schoolOther, setSchoolOther] = useState(student.school_raw ?? '')
@@ -402,7 +405,7 @@ export default function RegisterWizard({
               <p style={{ fontWeight: 700, fontSize: '0.9375rem', margin: '0 0 0.75rem' }}>Payment summary</p>
               <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.9375rem' }}>
                 <Row label="Registration fee" value={`$${feeAmount} — required, paid via Zeffy (non-deductible)`} />
-                <Row label="Fundraising commitment" value={`$${fundraisingTarget} (due ${fundraisingDeadline}) — ${fundMethods.map((m) => FUND_METHOD_LABELS[m] ?? m).join(', ') || '—'}`} />
+                <Row label="Fundraising commitment" value={`$${fundTarget} (due ${fundraisingDeadline}) — ${fundMethods.map((m) => FUND_METHOD_LABELS[m] ?? m).join(', ') || '—'}`} />
               </div>
             </div>
             <a href={payUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', padding: '12px 24px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.9375rem', borderRadius: 6, textDecoration: 'none' }}>
@@ -410,7 +413,7 @@ export default function RegisterWizard({
             </a>
             <ZeffyMethodsNote />
             <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0.625rem 0 1.25rem', lineHeight: 1.6 }}>
-              On Zeffy, choose the ticket for {programLabel}. You can pay just the ${feeAmount} registration fee, or pick a higher ticket (e.g. Standard or Champion) to put money toward your ${fundraisingTarget} fundraising commitment too — and you can always give more later. Payments can take up to a day to show on your dashboard, so please don’t pay twice.
+              On Zeffy, choose the ticket for {programLabel}. You can pay just the ${feeAmount} registration fee, or pick a higher ticket (e.g. Standard or Champion) to put money toward your ${fundTarget} fundraising commitment too — and you can always give more later. Payments can take up to a day to show on your dashboard, so please don’t pay twice.
             </p>
             {fundMethods.filter((m) => SUBMIT_METHOD_MESSAGE[m]).map((m) => (
               <div key={m} style={{ backgroundColor: 'var(--color-bg-light)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '0.875rem 1rem', marginBottom: '0.75rem', fontSize: '0.875rem', color: 'var(--color-text-primary)', lineHeight: 1.6 }}>
@@ -676,10 +679,10 @@ export default function RegisterWizard({
             <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', fontWeight: 700, margin: '0 0 0.5rem' }}>2 · Fundraising commitment</div>
             <h2 className="text-section-title" style={{ margin: '0 0 0.375rem' }}>How will you fulfill your fundraising commitment?</h2>
             <p style={{ fontSize: '0.9375rem', color: 'var(--color-text-muted)', margin: '0 0 1rem', lineHeight: 1.6 }}>
-              Separately from the ${feeAmount} fee, your {programLabel} participation includes a <strong>${fundraisingTarget} fundraising commitment</strong>, due <strong>{fundraisingDeadline}</strong>. <strong>Select all that apply</strong> — you can combine options (for example, donate part and also have a business sponsor).
+              Separately from the ${feeAmount} fee, your {programLabel} participation includes a <strong>${fundTarget} fundraising commitment</strong>, due <strong>{fundraisingDeadline}</strong>. <strong>Select all that apply</strong> — you can combine options (for example, donate part and also have a business sponsor).
             </p>
 
-            <CheckCard checked={fundMethods.includes('direct_donation')} onToggle={() => toggleFundMethod('direct_donation')} title="Direct contribution via Zeffy" label="I’ll donate toward the $550 online">
+            <CheckCard checked={fundMethods.includes('direct_donation')} onToggle={() => toggleFundMethod('direct_donation')} title="Direct contribution via Zeffy" label={`I’ll donate toward the $${fundTarget} online`}>
               <p style={helpTextStyle}>Pay your contribution through the same Zeffy campaign — choose a Standard ($790) or Champion ($1,040) ticket (each includes the registration fee), or make a separate donation anytime.</p>
             </CheckCard>
 

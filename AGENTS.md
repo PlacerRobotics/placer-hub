@@ -91,10 +91,13 @@ Use the next free number; validate with `pglast` before committing.
 
 - **0048** Cavitt Jr. High V5 fee tier — `school.fee_tier` +
   `season_config.cavitt_v5_registration_fee`/`zeffy_cavitt_url`. V5-ONLY registrations
-  from a 'cavitt' school pay the Cavitt fee via a separate same-structure Zeffy
-  campaign (env `ZEFFY_CAVITT_CAMPAIGN_ID`); Combat/'both'/IQ stay standard.
+  from a 'cavitt' school pay via a separate same-structure Zeffy campaign
+  (env `ZEFFY_CAVITT_CAMPAIGN_ID`); Combat/'both'/IQ stay standard.
+- **0049** `season_config.cavitt_v5_fundraising_target` — Cavitt keeps the standard
+  $40 reg fee; what differs is the fundraising commitment ($500 vs $550). Live config
+  set 2026-07-11 (fee 40, target 500, Cavitt Zeffy URL).
 
-Applied through **0048** (0048 applied + verified live 2026-07-11; 0025–0047 verified
+Applied through **0049** (0048–0049 applied + verified live 2026-07-11; 0025–0047 verified
 against the live DB 2026-07-10: 0025 waiver column, 0026 volunteer_clearance, 0044
 volunteer statuses, 0045 provisional Combat teams,
 0046 step_status 'needs_review', 0047 aps_enrollment_run all present). Historical

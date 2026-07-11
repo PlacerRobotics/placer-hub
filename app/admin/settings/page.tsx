@@ -74,6 +74,7 @@ export default async function SettingsPage() {
               <dt className="text-help">IQ student registration fee</dt><dd style={{ margin: 0 }}>${config.iq_student_registration_fee}</dd>
               <dt className="text-help">IQ team fee</dt><dd style={{ margin: 0 }}>${config.iq_team_fee}</dd>
               <dt className="text-help">One-program fundraising target</dt><dd style={{ margin: 0 }}>${config.one_program_fundraising_target}</dd>
+              <dt className="text-help">Cavitt V5 fundraising target</dt><dd style={{ margin: 0 }}>{config.cavitt_v5_fundraising_target != null ? `$${config.cavitt_v5_fundraising_target}` : `$${config.one_program_fundraising_target} (standard — not set)`}</dd>
             </dl>
             <p className="text-help" style={{ marginTop: '0.875rem' }}>Fee editing UI is read-only here for now — update via SQL or a future settings form.</p>
           </div>

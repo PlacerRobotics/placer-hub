@@ -138,7 +138,9 @@ export async function POST(request: NextRequest) {
       : config?.v5_combat_registration_fee ?? 40
   const target = isIq
     ? config?.iq_default_fundraising_target ?? 0
-    : config?.one_program_fundraising_target ?? 550
+    : cavittV5
+      ? config?.cavitt_v5_fundraising_target ?? config?.one_program_fundraising_target ?? 550
+      : config?.one_program_fundraising_target ?? 550
 
   // Honor an approved financial-aid resolution (waiver / adjusted target).
   const { data: aid } = await db

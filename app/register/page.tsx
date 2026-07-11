@@ -133,7 +133,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
 
   const { data: config } = await supabase
     .from('season_config')
-    .select('zeffy_student_url, zeffy_cavitt_url, one_program_fundraising_target, v5_combat_registration_fee, cavitt_v5_registration_fee')
+    .select('zeffy_student_url, zeffy_cavitt_url, one_program_fundraising_target, v5_combat_registration_fee, cavitt_v5_registration_fee, cavitt_v5_fundraising_target')
     .eq('season', SEASON)
     .maybeSingle()
 
@@ -169,6 +169,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       standardFee={config?.v5_combat_registration_fee != null ? Number(config.v5_combat_registration_fee) : 40}
       cavittFee={config?.cavitt_v5_registration_fee != null ? Number(config.cavitt_v5_registration_fee) : (config?.v5_combat_registration_fee != null ? Number(config.v5_combat_registration_fee) : 40)}
       fundraisingTarget={config?.one_program_fundraising_target ?? 550}
+      cavittFundraisingTarget={config?.cavitt_v5_fundraising_target != null ? Number(config.cavitt_v5_fundraising_target) : (config?.one_program_fundraising_target ?? 550)}
       fundraisingDeadline={fundraisingDeadline(appn?.reviewed_at ?? null)}
       emergency={ecRow ? { first_name: ecRow.first_name ?? '', last_name: ecRow.last_name ?? '', relationship: ecRow.relationship ?? '', phone: ecRow.phone ?? '' } : null}
       consent={enrollment ? { slackConsent: !!enrollment.student_slack_consent, emailCertified: !!enrollment.parent_email_access_certified } : null}
