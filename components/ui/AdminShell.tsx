@@ -26,6 +26,8 @@ const NAV_ITEMS = [
   { href: '/admin/iq-teams', label: 'IQ Teams' },
   { href: '/admin/families', label: 'Families' },
   { href: '/admin/volunteers', label: 'Volunteers' },
+  { href: '/admin/slack', label: 'Slack' },
+  { href: '/admin/google-groups', label: 'Google Groups' },
   { href: '/admin/sync', label: 'Sync Issues' },
   { href: '/admin/settings', label: 'Settings' },
   { href: '/admin/admins', label: 'Admins' },

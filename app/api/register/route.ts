@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, registrationConfirmationHtml } from '@/lib/email'
+import { NEXT_PUBLIC_SLACK_MAIN_INVITE, NEXT_PUBLIC_SLACK_IQ_INVITE } from '@/lib/env'
 import { ageFromDob, isUnder13, needsCoppa as computeNeedsCoppa } from '@/lib/compliance'
 
 const SEASON = '2026-27'
@@ -336,7 +337,7 @@ export async function POST(request: NextRequest) {
   // 11. Confirmation email to both guardians + the student. Best-effort — never
   // fail the registration if email isn't configured or the send errors.
   try {
-    const { data: gs } = await db.from('guardian').select('first_name, last_name, login_email, communication_email').eq('family_id', familyId)
+    const { data: gs } = await db.from('guardian').select('first_name, last_name, login_email, communication_email, slack_email').eq('family_id', familyId)
     const { data: stu } = await db
       .from('student')
       .select('first_name, last_name, communication_email')
@@ -352,6 +353,12 @@ export async function POST(request: NextRequest) {
     const { data: tms } = await db.from('team_member').select('team:team_id ( team_number )').eq('student_id', studentId).eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null)
     const teamNumber = ((tms ?? []) as any[]).map((t) => (Array.isArray(t.team) ? t.team[0] : t.team)?.team_number).filter(Boolean).join(', ') || null
     const subject = `Registration received — ${studentName} (Placer Robotics ${SEASON})`
+    // Task 1.6 (D11): the confirmation IS the Slack invite moment. IQ families get
+    // the IQ workspace; everyone else the main one. Join email = the primary
+    // guardian's Slack identity (slack_email if set, else login_email — PRD §19).
+    const slackInviteUrl = (isIq ? NEXT_PUBLIC_SLACK_IQ_INVITE : NEXT_PUBLIC_SLACK_MAIN_INVITE) || null
+    const primaryG: any = ((gs ?? []) as any[])[0] ?? null
+    const slackJoinEmail = primaryG ? (primaryG.slack_email || primaryG.login_email || null) : null
     const html = registrationConfirmationHtml({
       studentName,
       programLabel: PROGRAM_LABELS[program] ?? program,
@@ -361,9 +368,16 @@ export async function POST(request: NextRequest) {
       guardianNames,
       teamNumber,
       requiresPayment: !isIq,
+      slackInviteUrl,
+      slackJoinEmail,
     })
     const sent = await sendEmail({ to: recipients, subject, html })
     const status = sent.ok ? 'sent' : sent.error === 'no_api_key' ? 'skipped' : 'failed'
+    // Record that the workspace invite went out (reconciliation flips it to
+    // 'accepted' once the account appears in Slack).
+    if (sent.ok && slackInviteUrl) {
+      await db.from('guardian').update({ slack_invite_status: 'sent' }).eq('family_id', familyId).is('slack_invite_status', null)
+    }
     for (const r of [...new Set(recipients.map((e) => e.toLowerCase()))]) {
       await db.from('notification_log').insert({
         family_id: familyId,

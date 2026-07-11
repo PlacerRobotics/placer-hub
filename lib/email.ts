@@ -287,6 +287,17 @@ export function volunteerRenewalReminderHtml({ name, season, statusLines, renewU
     <p style="margin:18px 0 0;color:#7a879c;font-size:13px;">Questions? Contact registrar@placerrobotics.org</p>`)
 }
 
+// "Join us on Slack" block shared by the registration confirmation and the
+// volunteer-cleared invite (task 1.6 / D11). joinEmail is the Hub sign-in email —
+// PRD §19: it's the Slack identity, and changing it later needs admin action.
+export function slackInviteSection({ inviteUrl, joinEmail }: { inviteUrl: string; joinEmail?: string | null }): string {
+  return `<div style="margin:24px 0 0;padding:16px;background-color:#f4f6fb;border:1px solid #e6eaf1;border-radius:8px;">
+      <p style="margin:0 0 10px;color:#0E2558;font-size:15px;font-weight:700;">Join us on Slack</p>
+      <p style="margin:0 0 12px;color:#3a4a63;font-size:14px;line-height:1.6;">Slack is where team announcements and day-to-day coordination happen.${joinEmail ? ` Please join using <strong>${joinEmail}</strong> — the same email as your Hub account, so we can match you automatically.` : ''}</p>
+      ${emailButton(inviteUrl, 'Join the Slack workspace →')}
+    </div>`
+}
+
 export function registrationConfirmationHtml({
   studentName,
   programLabel,
@@ -296,6 +307,8 @@ export function registrationConfirmationHtml({
   guardianNames,
   teamNumber,
   requiresPayment = true,
+  slackInviteUrl,
+  slackJoinEmail,
 }: {
   studentName: string
   programLabel: string
@@ -305,6 +318,8 @@ export function registrationConfirmationHtml({
   guardianNames?: string
   teamNumber?: string | null
   requiresPayment?: boolean
+  slackInviteUrl?: string | null
+  slackJoinEmail?: string | null
 }): string {
   const details = emailKeyValues([
     { label: 'Student', value: studentName },
@@ -337,6 +352,29 @@ export function registrationConfirmationHtml({
         <p style="margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.6;">We've received the ${season} registration. Thank you!</p>
         ${details}
         ${paymentSection}
+        ${slackInviteUrl ? slackInviteSection({ inviteUrl: slackInviteUrl, joinEmail: slackJoinEmail }) : ''}
+      </td></tr>
+      <tr><td style="padding:20px 32px;border-top:1px solid #e6eaf1;">
+        <p style="margin:0;color:#9aa6ba;font-size:12px;">Placer Advanced Robotics &amp; Technology &middot; Roseville, CA &middot; 501(c)(3) nonprofit</p>
+      </td></tr>
+    </table>
+  </td></tr></table></body></html>`
+}
+
+// Volunteer cleared → Slack invite (task 1.6): the "right moment" for a
+// volunteer's workspace invite is the moment an admin marks them cleared.
+export function volunteerClearedSlackHtml({ name, season, inviteUrl, joinEmail }: { name: string; season: string; inviteUrl: string; joinEmail?: string | null }): string {
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background-color:#eef1f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#eef1f7;padding:24px 0;"><tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;">
+      <tr><td style="background-color:#0E2558;padding:24px 32px;">
+        <div style="color:#F2C352;font-size:12px;font-weight:700;letter-spacing:0.09em;text-transform:uppercase;">Placer Robotics</div>
+        <div style="color:#ffffff;font-size:22px;font-weight:700;margin-top:3px;">Placer Robotics Hub</div>
+      </td></tr>
+      <tr><td style="padding:32px;">
+        <h1 style="margin:0 0 12px;color:#0E2558;font-size:20px;font-weight:700;">You're cleared to volunteer!</h1>
+        <p style="margin:0 0 16px;color:#3a4a63;font-size:15px;line-height:1.6;">Hi ${name}, your volunteer clearance for the ${season} season is complete. Welcome aboard!</p>
+        ${slackInviteSection({ inviteUrl, joinEmail })}
       </td></tr>
       <tr><td style="padding:20px 32px;border-top:1px solid #e6eaf1;">
         <p style="margin:0;color:#9aa6ba;font-size:12px;">Placer Advanced Robotics &amp; Technology &middot; Roseville, CA &middot; 501(c)(3) nonprofit</p>
