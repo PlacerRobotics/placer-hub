@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
 
@@ -10,7 +10,7 @@ const SEASON = '2026-27'
 // body: { student_id, team_id }. Team membership is per student via team_member,
 // attached to the student's enrollment — so the student must be registered.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   let body: any

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { sendMagicLinkEmail } from '@/lib/email'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
 
@@ -11,7 +11,7 @@ const SEASON = '2026-27'
 // primary guardian's login email and marks family_season magic_link_sent.
 // Branded magic link via Resend (sendMagicLinkEmail) — no Supabase SMTP dependency.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id: familyId } = await params
 

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
 
 // POST /api/admin/registrations/[id]/cancel  — [id] = family_season id.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
 

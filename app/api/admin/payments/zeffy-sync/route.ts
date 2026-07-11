@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncRegistrationPayments } from '@/lib/zeffy-sync'
 
@@ -8,7 +8,7 @@ import { syncRegistrationPayments } from '@/lib/zeffy-sync'
 // matches each ticket to an enrollment by guardian email + student name + program.
 // apply=false (default) previews; apply=true records payments + marks fees paid.
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   let body: any = {}

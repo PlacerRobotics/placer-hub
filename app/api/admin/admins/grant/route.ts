@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ROLE_VALUES, isSuperAdmin, PROGRAM_SCOPED_ROLES, PROGRAM_SCOPE_VALUES } from '@/lib/auth/roles'
 
@@ -11,7 +11,7 @@ const nameFromEmail = (e: string) =>
 // admin_profile_id, or by email — creating the auth account + admin_profile if the
 // person doesn't have one yet). body: { admin_profile_id?, email?, role, program_scope? }
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const db = createAdminClient()
   if (!(await isSuperAdmin(db, admin.id))) return NextResponse.json({ error: 'Super admin only.' }, { status: 403 })

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
 
@@ -9,7 +9,7 @@ const FIELDS = ['first_name', 'last_name', 'preferred_name', 'grade', 'school_id
 
 // PATCH /api/admin/students/[id] — admin edits a student; logs each changed field.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 const SEASON = '2026-27'
@@ -13,7 +13,7 @@ const COACH_ROLES = new Set(['coach', 'assistant_coach', 'mentor'])
  * DELETE  — remove a coach: set revoked_at = now() on the team_member (?member_id=).
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id: teamId } = await params
 
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   await params // team id is implied by the membership row; not needed for the update
 

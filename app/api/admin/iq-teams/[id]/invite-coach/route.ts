@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendMagicLinkEmail } from '@/lib/email'
@@ -10,7 +10,7 @@ const ROLES = ['iq_coordinator', 'super_admin', 'payment_admin', 'registration_a
 // POST /api/admin/iq-teams/[id]/invite-coach
 // Emails the team's coach a magic-link invite to sign in and set up their team.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const db = createAdminClient()
   if (!(await hasAnyRole(db, admin.id, ROLES))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

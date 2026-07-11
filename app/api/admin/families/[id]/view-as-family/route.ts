@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
 
@@ -11,7 +11,7 @@ const SEASON = '2026-27'
 // the family's dashboard for support. NOTE: opening it sets the family session
 // in that browser — open in an incognito window to avoid losing your admin login.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id: familyId } = await params
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSuperAdmin } from '@/lib/auth/roles'
 
@@ -10,7 +10,7 @@ import { isSuperAdmin } from '@/lib/auth/roles'
 // session. The link lands on /login, which consumes the session and forwards on.
 // body: { email, redirectTo? }
 export async function POST(req: NextRequest) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const db = createAdminClient()
   if (!(await isSuperAdmin(db, admin.id))) return NextResponse.json({ error: 'Super admin only.' }, { status: 403 })

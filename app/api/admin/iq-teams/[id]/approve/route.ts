@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAdminProfile } from '@/lib/auth/admin'
+import { requireWriteAdmin } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 import { sendEmail, iqTeamApprovedHtml, sendMagicLinkEmail } from '@/lib/email'
 
@@ -10,7 +10,7 @@ const SEASON = '2026-27'
 // paid IQ team: flips it to active, clears each member family to register, sends the
 // parent magic links, and emails the coach.
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await getAdminProfile()
+  const admin = await requireWriteAdmin()
   if (!admin) return NextResponse.json({ error: 'Not authorized.' }, { status: 401 })
   const db = createAdminClient()
   if (!(await hasAnyRole(db, admin.id, ['iq_coordinator', 'super_admin']))) {
