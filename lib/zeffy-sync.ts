@@ -52,8 +52,14 @@ export async function syncRegistrationPayments(db: any, { apply, adminId }: { ap
   const campaignId = process.env.ZEFFY_REGISTRATION_CAMPAIGN_ID
   if (!apiKey || !campaignId) return { ok: false, error: 'Zeffy not configured — set ZEFFY_API_KEY and ZEFFY_REGISTRATION_CAMPAIGN_ID.' }
 
+  // The Cavitt campaign (same ticket structure, partner pricing) reconciles through
+  // the same matcher — payments from both campaigns are registration fees.
+  const cavittCampaignId = process.env.ZEFFY_CAVITT_CAMPAIGN_ID
   let payments
-  try { payments = await fetchZeffyPayments(apiKey, campaignId) } catch (e: any) { return { ok: false, error: `Zeffy API: ${e.message}` } }
+  try {
+    payments = await fetchZeffyPayments(apiKey, campaignId)
+    if (cavittCampaignId) payments = payments.concat(await fetchZeffyPayments(apiKey, cavittCampaignId))
+  } catch (e: any) { return { ok: false, error: `Zeffy API: ${e.message}` } }
 
   const results: any[] = []
   let matched = 0, unmatched = 0, already = 0, applied = 0

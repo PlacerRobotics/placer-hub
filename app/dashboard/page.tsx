@@ -43,7 +43,7 @@ const SLACK_MAIN = NEXT_PUBLIC_SLACK_MAIN_INVITE
 const SLACK_IQ = NEXT_PUBLIC_SLACK_IQ_INVITE
 
 type Variant = 'success' | 'warning' | 'error' | 'info' | 'neutral'
-type StudentCard = { studentId: string; name: string; program: string; complete: boolean; badge: StudentBadge; checks: Check[]; attentionNotes: string[]; payTodo: boolean; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean; fundMethods: string[]; fundTarget: number; fundDeadline: string; fundReceivedAt: string | null }
+type StudentCard = { studentId: string; name: string; program: string; complete: boolean; badge: StudentBadge; checks: Check[]; attentionNotes: string[]; payTodo: boolean; detail: string; isIqKid: boolean; registered: boolean; paid: boolean; needsWizard: boolean; fundMethods: string[]; fundTarget: number; fundDeadline: string; fundReceivedAt: string | null; feeAmount: number; payUrl: string }
 type KidTeam = { name: string; teamLabel: string; teamId: string; program: string; division: string; isIq: boolean; studentId: string; dropRequested: boolean }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
@@ -83,6 +83,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const teamCount: Record<string, number> = {}
   let zeffyIqUrl: string | null = null
   let zeffyStudentUrl: string | null = null
+  let zeffyCavittUrl: string | null = null
   let employerCompany = ''
   let volunteer: { label: string; variant: Variant; apsExpiry: string | null; apsState: 'valid' | 'expiring' | 'expired' | 'none'; bgCheck: boolean; waiver: boolean } | null = null
 
@@ -92,6 +93,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const { data: fs } = await supabase.from('family_season').select('status').eq('family_id', familyId).eq('season', SEASON).maybeSingle()
     fsStatus = fs?.status ?? ''
 
+    // Zeffy URLs early — the per-student cards below pick a payment link per enrollment.
+    const { data: zcfg } = await supabase.from('season_config').select('zeffy_iq_team_url, zeffy_student_url, zeffy_cavitt_url').eq('season', SEASON).maybeSingle()
+    zeffyIqUrl = zcfg?.zeffy_iq_team_url ?? null
+    zeffyStudentUrl = zcfg?.zeffy_student_url ?? null
+    zeffyCavittUrl = zcfg?.zeffy_cavitt_url ?? null
+
     const { data: aid } = await supabase.from('financial_aid').select('status').eq('family_id', familyId).eq('season', SEASON).order('requested_at', { ascending: false }).limit(1).maybeSingle()
     if (aid) aidStatus = aid.status
 
@@ -99,17 +106,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const g2 = (gAll ?? []).find((g: any) => g.id !== guardian.id)
     guardian2 = g2 ? { name: `${g2.first_name} ${g2.last_name}`.trim(), email: g2.communication_email || g2.login_email || '' } : null
 
-    const { data: studs } = await supabase.from('student').select('id, first_name, last_name, preferred_name, tshirt_size').eq('family_id', familyId).order('created_at', { ascending: true })
+    const { data: studs } = await supabase.from('student').select('id, first_name, last_name, preferred_name, tshirt_size, school_id').eq('family_id', familyId).order('created_at', { ascending: true })
     const students = studs ?? []
     const studentIds = students.map((s: any) => s.id)
 
     if (studentIds.length) {
-      const { data: enrollments } = await supabase.from('enrollment').select('id, student_id, program, registration_fee_status, waiver_status, submitted_at, fundraising_methods, fundraising_target, fundraising_received_at').eq('season', SEASON).in('student_id', studentIds)
+      const { data: enrollments } = await supabase.from('enrollment').select('id, student_id, program, registration_fee_amount, registration_fee_status, waiver_status, submitted_at, fundraising_methods, fundraising_target, fundraising_received_at').eq('season', SEASON).in('student_id', studentIds)
       const { data: apps } = await supabase.from('student_application').select('student_id, program_interest, application_status, triage_notes, reviewed_at').eq('season', SEASON).in('student_id', studentIds)
       const { data: sigs } = await supabase.from('waiver_signature').select('student_id').eq('season', SEASON).in('student_id', studentIds)
       const { data: tms } = await supabase.from('team_member').select('student_id, team_id').eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null).in('student_id', studentIds)
       const { data: ecs } = await supabase.from('emergency_contact').select('student_id, first_name, last_name, phone').eq('priority', 1).in('student_id', studentIds)
       const { data: pays } = await supabase.from('payment_transaction').select('enrollment_id, amount, received_at, matched_status, raw_payload').eq('family_id', familyId).eq('season', SEASON).eq('payment_type', 'registration_fee')
+
+      // School fee tiers (Cavitt partnership) — picks the fee + Zeffy campaign per student.
+      const schoolIds = [...new Set(students.map((s: any) => s.school_id).filter(Boolean))]
+      const { data: schs } = schoolIds.length ? await supabase.from('school').select('id, fee_tier').in('id', schoolIds) : { data: [] as any[] }
+      const tierBySchool: Record<string, string> = Object.fromEntries((schs ?? []).map((x: any) => [x.id, x.fee_tier]))
 
       const teamIds = [...new Set((tms ?? []).map((t: any) => t.team_id).filter(Boolean))]
       const { data: teams } = teamIds.length ? await supabase.from('team').select('id, team_number, team_name, program, division, is_provisional').in('id', teamIds) : { data: [] as any[] }
@@ -211,6 +223,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           fundTarget: Math.max(0, ...enrs.map((e: any) => Number(e.fundraising_target) || 0)),
           fundDeadline: fundraisingDeadline(reviewedByStudent[s.id] ?? null),
           fundReceivedAt: (enrs.map((e: any) => e.fundraising_received_at).find(Boolean) ?? null) as string | null,
+          // Fee from the enrollment snapshot (set at registration); Cavitt V5-only
+          // students pay through the Cavitt campaign so prices are never side-by-side.
+          feeAmount: Number(enrs.find((e: any) => Number(e.registration_fee_amount) > 0)?.registration_fee_amount ?? 40),
+          payUrl: ((s.school_id && tierBySchool[s.school_id] === 'cavitt' && enrs.length === 1 && enrs[0]?.program === 'vex_v5' ? zeffyCavittUrl || zeffyStudentUrl : zeffyStudentUrl) || ZEFFY_REGISTRATION_URL),
         })
 
         if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
@@ -245,9 +261,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       for (const a of iqApps ?? []) { const m = String(a.triage_notes ?? '').match(/iq_team:([0-9a-f-]{36})/i); if (m && ids.includes(m[1])) addMember(m[1], a.student_id) }
       for (const tid of ids) teamCount[tid] = memberIds[tid]?.size ?? 0
     }
-    const { data: cfg } = await supabase.from('season_config').select('zeffy_iq_team_url, zeffy_student_url').eq('season', SEASON).maybeSingle()
-    zeffyIqUrl = cfg?.zeffy_iq_team_url ?? null
-    zeffyStudentUrl = cfg?.zeffy_student_url ?? null
 
     // Volunteer clearance for the logged-in guardian.
     const { data: vp } = await supabase.from('volunteer_profile').select('id, status').eq('guardian_id', guardian.id).maybeSingle()
@@ -328,7 +341,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     if (c.needsWizard) todos.push({ label: `Finish registration for ${fn}`, cta: 'Continue', href: `/register?student=${c.studentId}` })
     // payTodo excludes payments that are processing or admin-flagged — those are
     // waiting on Placer Robotics and must not read as a family to-do.
-    else if (!c.isIqKid && c.payTodo) todos.push({ label: c.fundReceivedAt ? `Pay ${fn}’s $40 registration fee` : `Pay ${fn}’s $40 fee + $${c.fundTarget || 550} fundraising commitment (due ${c.fundDeadline})`, cta: 'Pay via Zeffy', external: zeffyStudentUrl || ZEFFY_REGISTRATION_URL })
+    else if (!c.isIqKid && c.payTodo) todos.push({ label: c.fundReceivedAt ? `Pay ${fn}’s $${c.feeAmount} registration fee` : `Pay ${fn}’s $${c.feeAmount} fee + $${c.fundTarget || 550} fundraising commitment (due ${c.fundDeadline})`, cta: 'Pay via Zeffy', external: c.payUrl })
   }
   // IQ coach — get your team registered: build the roster (3+ members), pay the
   // $1,200 fee, then the IQ Coordinator approves it. Each open step is its own to-do.
@@ -467,8 +480,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               {!card.isIqKid && card.registered && card.payTodo && fsStatus === 'registered' && (
                 <div style={{ marginTop: '0.75rem', backgroundColor: '#FFF8E6', border: '1px solid var(--color-gold)', borderRadius: 8, padding: '0.75rem 0.875rem' }}>
                   <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#8a6d1a' }}>Registration fee not yet received</div>
-                  <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>Pay the $40 registration fee via Zeffy to secure {card.name}’s spot.</div>
-                  <a href={zeffyStudentUrl || ZEFFY_REGISTRATION_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.5rem', padding: '7px 14px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 6, textDecoration: 'none' }}>Pay Now via Zeffy →</a>
+                  <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: 2 }}>Pay the ${card.feeAmount} registration fee via Zeffy to secure {card.name}’s spot.</div>
+                  <a href={card.payUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '0.5rem', padding: '7px 14px', backgroundColor: 'var(--color-gold)', color: 'var(--color-navy-darker)', fontWeight: 700, fontSize: '0.8125rem', borderRadius: 6, textDecoration: 'none' }}>Pay Now via Zeffy →</a>
                   <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>Already paid? It can take up to a day to show here — please don’t pay again.</div>
                 </div>
               )}

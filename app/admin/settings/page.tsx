@@ -70,6 +70,7 @@ export default async function SettingsPage() {
           <div style={{ backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '1.25rem' }}>
             <dl style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '0.5rem', margin: 0, fontSize: '0.9375rem' }}>
               <dt className="text-help">V5/Combat registration fee</dt><dd style={{ margin: 0 }}>${config.v5_combat_registration_fee}</dd>
+              <dt className="text-help">Cavitt Jr. High V5 fee</dt><dd style={{ margin: 0 }}>{config.cavitt_v5_registration_fee != null ? `$${config.cavitt_v5_registration_fee}` : `$${config.v5_combat_registration_fee} (standard — not set)`}</dd>
               <dt className="text-help">IQ student registration fee</dt><dd style={{ margin: 0 }}>${config.iq_student_registration_fee}</dd>
               <dt className="text-help">IQ team fee</dt><dd style={{ margin: 0 }}>${config.iq_team_fee}</dd>
               <dt className="text-help">One-program fundraising target</dt><dd style={{ margin: 0 }}>${config.one_program_fundraising_target}</dd>

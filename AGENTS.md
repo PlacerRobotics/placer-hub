@@ -89,8 +89,14 @@ Use the next free number; validate with `pglast` before committing.
 - **0025** `waiver_signature.participant_typed_name` — **coupled with the register route**
   (student + parent dual signature); registration submit errors until it's applied
 
-Applied through **0047** (verified against the live DB 2026-07-10: 0025 waiver column,
-0026 volunteer_clearance, 0044 volunteer statuses, 0045 provisional Combat teams,
+- **0048** Cavitt Jr. High V5 fee tier — `school.fee_tier` +
+  `season_config.cavitt_v5_registration_fee`/`zeffy_cavitt_url`. V5-ONLY registrations
+  from a 'cavitt' school pay the Cavitt fee via a separate same-structure Zeffy
+  campaign (env `ZEFFY_CAVITT_CAMPAIGN_ID`); Combat/'both'/IQ stay standard.
+
+Applied through **0048** (0048 applied + verified live 2026-07-11; 0025–0047 verified
+against the live DB 2026-07-10: 0025 waiver column, 0026 volunteer_clearance, 0044
+volunteer statuses, 0045 provisional Combat teams,
 0046 step_status 'needs_review', 0047 aps_enrollment_run all present). Historical
 note: 0016 + 0017 had once silently never been applied — always verify, don't assume.
 

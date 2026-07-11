@@ -121,7 +121,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
 
   const { data: schools } = await supabase
     .from('school')
-    .select('id, name, grade_min, grade_max')
+    .select('id, name, grade_min, grade_max, fee_tier')
     .eq('active', true)
     .order('name', { ascending: true })
 
@@ -133,7 +133,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
 
   const { data: config } = await supabase
     .from('season_config')
-    .select('zeffy_student_url, one_program_fundraising_target')
+    .select('zeffy_student_url, zeffy_cavitt_url, one_program_fundraising_target, v5_combat_registration_fee, cavitt_v5_registration_fee')
     .eq('season', SEASON)
     .maybeSingle()
 
@@ -165,6 +165,9 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       paymentReferenceCode={paymentRef}
       guardianName={`${guardian.first_name} ${guardian.last_name}`}
       zeffyUrl={config?.zeffy_student_url ?? null}
+      zeffyCavittUrl={config?.zeffy_cavitt_url ?? null}
+      standardFee={config?.v5_combat_registration_fee != null ? Number(config.v5_combat_registration_fee) : 40}
+      cavittFee={config?.cavitt_v5_registration_fee != null ? Number(config.cavitt_v5_registration_fee) : (config?.v5_combat_registration_fee != null ? Number(config.v5_combat_registration_fee) : 40)}
       fundraisingTarget={config?.one_program_fundraising_target ?? 550}
       fundraisingDeadline={fundraisingDeadline(appn?.reviewed_at ?? null)}
       emergency={ecRow ? { first_name: ecRow.first_name ?? '', last_name: ecRow.last_name ?? '', relationship: ecRow.relationship ?? '', phone: ecRow.phone ?? '' } : null}

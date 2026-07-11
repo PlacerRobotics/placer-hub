@@ -123,7 +123,19 @@ export async function POST(request: NextRequest) {
   // 6. Compute fees from season_config.
   const { data: config } = await db.from('season_config').select('*').eq('season', SEASON).maybeSingle()
   const isIq = program === 'vex_iq'
-  const fee = isIq ? config?.iq_student_registration_fee ?? 0 : config?.v5_combat_registration_fee ?? 40
+  // Cavitt partnership: a V5-ONLY registration from a 'cavitt' fee-tier school pays
+  // the Cavitt fee via the Cavitt Zeffy campaign. Combat and 'both' registrations
+  // stay standard — the discount covers V5 participation only.
+  let cavittV5 = false
+  if (program === 'vex_v5' && s.school_id) {
+    const { data: sch } = await db.from('school').select('fee_tier').eq('id', s.school_id).maybeSingle()
+    cavittV5 = sch?.fee_tier === 'cavitt'
+  }
+  const fee = isIq
+    ? config?.iq_student_registration_fee ?? 0
+    : cavittV5
+      ? config?.cavitt_v5_registration_fee ?? config?.v5_combat_registration_fee ?? 40
+      : config?.v5_combat_registration_fee ?? 40
   const target = isIq
     ? config?.iq_default_fundraising_target ?? 0
     : config?.one_program_fundraising_target ?? 550
@@ -363,7 +375,7 @@ export async function POST(request: NextRequest) {
       studentName,
       programLabel: PROGRAM_LABELS[program] ?? program,
       paymentRef,
-      zeffyUrl: isIq ? null : (config?.zeffy_student_url ?? null),
+      zeffyUrl: isIq ? null : (cavittV5 ? (config?.zeffy_cavitt_url ?? config?.zeffy_student_url ?? null) : (config?.zeffy_student_url ?? null)),
       season: SEASON,
       guardianNames,
       teamNumber,
