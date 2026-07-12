@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { nearMissDomain } from '@/lib/duplicates'
 import { cleanEmail } from '@/lib/email-input'
 import { cleanPhone } from '@/lib/phone-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 const SEASON = '2026-27'
 
@@ -96,22 +97,33 @@ export async function POST(request: NextRequest) {
       const miss = nearMissDomain(gEmail)
       if (miss) warnings.push({ row: rowNo, message: `guardian email "${gEmail}" — did you mean @${miss.suggestion}? A typo'd domain creates a duplicate guardian.` })
 
-      // family
+      // family — alias-aware guardian match takes priority (§1): a re-import
+      // under a known alternate email must never mint a duplicate family.
       let familyId: string
-      const { data: fam0 } = await db.from('family').select('id').ilike('primary_email', gEmail).maybeSingle()
-      if (fam0) familyId = fam0.id
+      const gMatch = await findGuardianByEmail(db, gEmail)
+      if (gMatch) familyId = gMatch.family_id
       else {
-        const { data: fam, error } = await db.from('family').insert({ primary_email: gEmail, display_name: gLast ? `${gLast} Family` : null }).select('id').single()
-        if (error) throw new Error(error.message)
-        familyId = fam.id; familiesCreated++
+        const { data: fam0 } = await db.from('family').select('id').ilike('primary_email', gEmail).maybeSingle()
+        if (fam0) familyId = fam0.id
+        else {
+          const { data: fam, error } = await db.from('family').insert({ primary_email: gEmail, display_name: gLast ? `${gLast} Family` : null }).select('id').single()
+          if (error) throw new Error(error.message)
+          familyId = fam.id; familiesCreated++
+        }
       }
 
-      // guardian
-      await db.from('guardian').upsert({
-        family_id: familyId, role: 'primary',
+      // guardian — an alias-only match updates the real row in place (an
+      // upsert on login_email can't see aliases, and would otherwise insert a
+      // phantom second "primary" guardian under the CSV's email).
+      const guardianFields = {
         first_name: g(r, 'Parent/Guardian First Name'), last_name: gLast,
-        login_email: gEmail, phone: cleanPhone(g(r, 'Parent/Guardian Phone Number')) || '',
-      }, { onConflict: 'login_email' })
+        phone: cleanPhone(g(r, 'Parent/Guardian Phone Number')) || '',
+      }
+      if (gMatch?.matchedVia === 'alias') {
+        await db.from('guardian').update(guardianFields).eq('id', gMatch.id)
+      } else {
+        await db.from('guardian').upsert({ family_id: familyId, role: 'primary', login_email: gEmail, ...guardianFields }, { onConflict: 'login_email' })
+      }
 
       // student
       const grade = parseGrade(g(r, 'Grade Entering (Fall 2026)'))

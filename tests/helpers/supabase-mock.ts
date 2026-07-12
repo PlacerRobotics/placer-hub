@@ -13,7 +13,7 @@
 type Row = Record<string, any>
 export type Tables = Record<string, Row[]>
 
-type FilterKind = 'eq' | 'neq' | 'ilike' | 'is' | 'in' | 'gte' | 'lte' | 'gt' | 'lt'
+type FilterKind = 'eq' | 'neq' | 'ilike' | 'is' | 'in' | 'gte' | 'lte' | 'gt' | 'lt' | 'not_is' | 'not_eq'
 type Filter = { kind: FilterKind; col: string; val: any }
 
 let idCounter = 0
@@ -58,6 +58,11 @@ class Query implements PromiseLike<{ data: any; error: any }> {
   lte(col: string, val: any) { this.filters.push({ kind: 'lte', col, val }); return this }
   gt(col: string, val: any) { this.filters.push({ kind: 'gt', col, val }); return this }
   lt(col: string, val: any) { this.filters.push({ kind: 'lt', col, val }); return this }
+  // Only the negated-operator shapes this codebase actually uses.
+  not(col: string, op: 'is' | 'eq', val: any) {
+    this.filters.push({ kind: op === 'is' ? 'not_is' : 'not_eq', col, val })
+    return this
+  }
   order(_col?: string, _opts?: any) { return this }
   limit(n: number) { this.limitN = n; return this }
 
@@ -84,6 +89,8 @@ class Query implements PromiseLike<{ data: any; error: any }> {
       case 'lte': return v <= f.val
       case 'gt': return v > f.val
       case 'lt': return v < f.val
+      case 'not_is': return v !== f.val
+      case 'not_eq': return !(v === f.val || String(v) === String(f.val))
     }
   }
 

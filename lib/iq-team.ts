@@ -1,5 +1,6 @@
 import { sendMagicLinkEmail } from '@/lib/email'
 import { cleanEmail } from '@/lib/email-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 const SEASON = '2026-27'
 
@@ -75,7 +76,10 @@ export async function addIqMembers(db: any, opts: {
       continue
     }
     let familyId: string
-    const pg = (await db.from('guardian').select('id, family_id').ilike('login_email', pEmail).maybeSingle()).data
+    // Alias-aware: a parent's email that doesn't match login_email exactly
+    // (an APS-era yahoo, an abandoned login) can still resolve to their real
+    // family instead of spawning a duplicate — see lib/guardian-lookup.ts.
+    const pg = await findGuardianByEmail(db, pEmail)
     if (pg) familyId = pg.family_id
     else {
       const { data: fam, error: fe } = await db.from('family').insert({ primary_email: pEmail, display_name: pLast }).select('id').single()

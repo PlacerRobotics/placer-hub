@@ -4,6 +4,7 @@
 import { fetchZeffyPayments, zeffyAnswer } from '@/lib/zeffy'
 import { linkPaymentToEnrollment, SEASON } from '@/lib/payments'
 import { sendEmail, iqTeamPaidNotifyHtml } from '@/lib/email'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 type SyncResult = { ok: boolean; error?: string; fetched?: number; summary?: any; results?: any[] }
 
@@ -104,7 +105,7 @@ export async function syncRegistrationPayments(db: any, { apply, adminId }: { ap
       if (!enrollment) {
         if (!guardianEmail) reason = 'no guardian email on ticket'
         else {
-          const { data: g } = await db.from('guardian').select('family_id').ilike('login_email', guardianEmail).maybeSingle()
+          const g = await findGuardianByEmail(db, guardianEmail)
           if (!g) reason = `no family for ${guardianEmail}`
           else {
             const { data: famEnrs } = await db.from('enrollment')
@@ -226,7 +227,7 @@ export async function syncIqPayments(db: any, { apply, adminId }: { apply: boole
       if (t) team = t; else reason = `no IQ team for ref ${refCode}`
     }
     if (!team && email) {
-      const { data: g } = await db.from('guardian').select('id').ilike('login_email', email).maybeSingle()
+      const g = await findGuardianByEmail(db, email)
       if (g) {
         const { data: tms } = await db.from('team_member').select('team:team_id ( id, status, team_payment_reference_code, team_number, team_name, team_fee_amount, team_fee_status, program, season )').eq('guardian_id', g.id).eq('team_role', 'coach').eq('program', 'vex_iq').is('revoked_at', null)
         const teams = (tms ?? []).map((r: any) => (Array.isArray(r.team) ? r.team[0] : r.team)).filter((t: any) => t && t.program === 'vex_iq' && t.season === SEASON)

@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cleanEmail } from '@/lib/email-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 // POST /api/admin/volunteers/[id]/move-guardian — repoint a volunteer_profile
 // to a different guardian (the duplicate-family case: a volunteer record landed
@@ -33,8 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: vp } = await db.from('volunteer_profile').select('id, guardian_id, family_id').eq('id', volunteerId).maybeSingle()
   if (!vp) return NextResponse.json({ error: 'Volunteer record not found.' }, { status: 404 })
 
-  const { data: target } = await db.from('guardian').select('id, family_id, first_name, last_name').ilike('login_email', email).maybeSingle()
-  if (!target) return NextResponse.json({ error: `No guardian found with login email ${email}.` }, { status: 404 })
+  const match = await findGuardianByEmail(db, email)
+  if (!match) return NextResponse.json({ error: `No guardian found with login (or known alternate) email ${email}.` }, { status: 404 })
+  const { data: target } = await db.from('guardian').select('id, family_id, first_name, last_name').eq('id', match.id).maybeSingle()
+  if (!target) return NextResponse.json({ error: 'Target guardian not found.' }, { status: 404 })
   if (target.id === vp.guardian_id) return NextResponse.json({ error: 'The volunteer record already belongs to that guardian.' }, { status: 400 })
 
   const { data: existing } = await db.from('volunteer_profile').select('id').eq('guardian_id', target.id).maybeSingle()

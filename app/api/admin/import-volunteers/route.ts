@@ -5,6 +5,7 @@ import { requireWriteAdmin } from '@/lib/auth/admin'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
 import { cleanEmail } from '@/lib/email-input'
 import { cleanPhone } from '@/lib/phone-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 const DEFAULT_SEASON = '2026-27'
 
@@ -39,16 +40,18 @@ export async function POST(req: NextRequest) {
 
     try {
       // 1. Guardian + family.
-      let g = (await db.from('guardian').select('id, family_id').ilike('login_email', email).maybeSingle()).data
+      const match = await findGuardianByEmail(db, email)
+      let g: { id: string; family_id: string }
       let created = false
-      if (!g) {
+      if (!match) {
         const { data: fam, error: fe } = await db.from('family').insert({ primary_email: email, display_name: last }).select('id').single()
         if (fe) throw new Error(fe.message)
         const { data: ng, error: ge } = await db.from('guardian').insert({ family_id: fam.id, first_name: first, last_name: last, login_email: email, phone: cleanPhone(r.phone) || '', role: 'primary' }).select('id, family_id').single()
         if (ge) throw new Error(ge.message)
         g = ng
-      } else if (r.phone) {
-        await db.from('guardian').update({ phone: cleanPhone(r.phone) }).eq('id', g.id)
+      } else {
+        g = { id: match.id, family_id: match.family_id }
+        if (r.phone) await db.from('guardian').update({ phone: cleanPhone(r.phone) }).eq('id', g.id)
       }
 
       // 2. Compute completion + status.

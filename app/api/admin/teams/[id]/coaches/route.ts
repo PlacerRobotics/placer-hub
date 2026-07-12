@@ -4,6 +4,7 @@ import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cleanEmail } from '@/lib/email-input'
 import { cleanPhone } from '@/lib/phone-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 const SEASON = '2026-27'
 const COACH_ROLES = new Set(['coach', 'assistant_coach', 'mentor'])
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!email || !first || !last) return NextResponse.json({ error: 'New coach needs a first name, last name, and email.' }, { status: 400 })
 
     // Reuse a guardian with this email if one exists; otherwise create a coach-only family + guardian.
-    const { data: existing } = await db.from('guardian').select('id').ilike('login_email', email).maybeSingle()
+    const existing = await findGuardianByEmail(db, email)
     if (existing) {
       guardianId = existing.id
     } else {
