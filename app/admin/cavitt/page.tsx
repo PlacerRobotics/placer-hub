@@ -25,7 +25,8 @@ export default async function CavittPage() {
     getCavittTeams(supabase),
     getCategoryStats(supabase, 'cyber9537'),
   ])
-  const teamStats = await Promise.all(teams.map((t) => getTeamVexStats(supabase, t.teamNumber)))
+  // Cyber Cowboys teams are all V5 (middle school)
+  const teamStats = await Promise.all(teams.map((t) => getTeamVexStats(supabase, t.teamNumber, 'vex_v5')))
 
   return (
     <AdminShell activePath="/admin/cavitt">

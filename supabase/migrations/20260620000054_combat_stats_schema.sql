@@ -37,7 +37,7 @@ create table combat_bot (
   bot_slug     text primary key,           -- 'kinetic-ko'
   name         text not null,
   weight_class combat_weight_class not null,
-  team_number  text references vex_team(team_number),  -- optional: same team also fields a VEX team
+  team_number  text,  -- optional SOFT link to vex_team.team_number (no FK: vex_team's PK is (team_number, program))
   linked_team_id uuid references team(id),               -- optional soft link to this hub's own team row
   is_part      boolean not null default true,
   active       boolean not null default true,

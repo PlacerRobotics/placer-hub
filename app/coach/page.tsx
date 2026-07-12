@@ -39,13 +39,14 @@ export default async function CoachPage() {
   const teams = await getCoachTeams(adb, { guardianId: guardian.id, season: SEASON, validThrough: APS_VALID_THROUGH })
   if (!teams || !teams.length) redirect('/dashboard')
 
-  // Competition record (VEX Worlds/awards history) — keyed by team_number, not
-  // every team has a synced VEX record (combat teams, brand-new teams pre-sync).
+  // Competition record (VEX Worlds/awards history) — keyed by (team_number,
+  // program) since PART reuses numbers across V5/IQ. Combat teams have no
+  // RobotEvents record; brand-new teams have nothing synced yet.
   const vexStatsByTeamId = new Map<string, TeamVexStats>()
   await Promise.all(
     teams.map(async (t) => {
-      if (!t.teamNumber) return
-      const stats = await getTeamVexStats(supabase, t.teamNumber)
+      if (!t.teamNumber || (t.program !== 'vex_v5' && t.program !== 'vex_iq')) return
+      const stats = await getTeamVexStats(supabase, t.teamNumber, t.program)
       if (stats) vexStatsByTeamId.set(t.teamId, stats)
     })
   )

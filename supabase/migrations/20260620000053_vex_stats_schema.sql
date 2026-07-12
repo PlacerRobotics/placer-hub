@@ -46,9 +46,13 @@ create type vex_banner_type as enum ('Excellence', 'Tournament Champions', 'Desi
 
 -- ----------------------------------------------------------------------------
 -- vex_team
+-- PK is (team_number, program): PART reuses the SAME numbers across programs —
+-- "295A" is both a V5 team and a separate IQ team. Keying on team_number alone
+-- collapses them and mis-attributes every award (found the hard way on the
+-- first backfill).
 -- ----------------------------------------------------------------------------
 create table vex_team (
-  team_number  text primary key,          -- canonical current number (81818X -> 295X)
+  team_number  text not null,             -- canonical current number (81818X -> 295X)
   program      vex_program not null,
   category     vex_category not null,
   org_name     text,                      -- e.g. 'Willma Cavitt Junior High'
@@ -58,15 +62,17 @@ create table vex_team (
   first_season text,
   last_season  text,
   created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
+  updated_at   timestamptz not null default now(),
+  primary key (team_number, program)
 );
 
 -- ----------------------------------------------------------------------------
--- vex_award
+-- vex_award — program column disambiguates shared numbers (see vex_team note).
 -- ----------------------------------------------------------------------------
 create table vex_award (
   id          bigint generated always as identity primary key,
-  team_number text not null references vex_team(team_number),
+  team_number text not null,
+  program     vex_program not null,
   season      text not null,               -- '2021-22'
   title       text not null,               -- 'Excellence Award (VRC/VEXU/VAIRC)'
   event_name  text,
@@ -78,7 +84,8 @@ create table vex_award (
   source      vex_award_source not null default 'api',
   notes       text,
   created_at  timestamptz not null default now(),
-  unique (team_number, season, title, event_sku)
+  foreign key (team_number, program) references vex_team (team_number, program),
+  unique (team_number, program, season, title, event_sku)
 );
 
 -- ----------------------------------------------------------------------------
@@ -86,7 +93,8 @@ create table vex_award (
 -- ----------------------------------------------------------------------------
 create table vex_worlds_run (
   id            bigint generated always as identity primary key,
-  team_number   text not null references vex_team(team_number),
+  team_number   text not null,
+  program       vex_program not null,
   season        text not null,
   event_sku     text,
   -- Free text, not an enum: VEX round codes are mapped defensively in the
@@ -98,7 +106,8 @@ create table vex_worlds_run (
   made_final    boolean not null default false,
   source        vex_award_source not null default 'api',
   created_at    timestamptz not null default now(),
-  unique (team_number, season, event_sku)
+  foreign key (team_number, program) references vex_team (team_number, program),
+  unique (team_number, program, season, event_sku)
 );
 
 -- ----------------------------------------------------------------------------
@@ -136,7 +145,9 @@ select t.category,
   count(distinct a.id) filter (where a.is_banner and a.scope is not null) as banner_at_state_region,
   count(distinct a.id) filter (where a.scope = 'State')             as state_champ_awards,
   count(distinct a.id) filter (where a.scope = 'Region')            as region_champ_awards,
-  count(distinct (w.team_number, w.season))                         as worlds_qual_by_team,
+  -- filter is load-bearing: without it, teams with no runs join as ROW(null,null),
+  -- which is NOT null and inflates the distinct count by one per category.
+  count(distinct (w.team_number, w.season)) filter (where w.id is not null) as worlds_qual_by_team,
   count(distinct w.team_number)                                     as worlds_qual_teams,
   count(distinct w.season)                                          as worlds_qual_seasons,
   count(distinct (w.team_number, w.season)) filter (where w.made_elim)  as worlds_elim,
@@ -145,6 +156,6 @@ select t.category,
   count(distinct a.id) filter (where a.is_worlds)                   as worlds_awards,
   count(distinct a.id)                                              as total_awards
 from vex_team t
-left join vex_award a       on a.team_number = t.team_number
-left join vex_worlds_run w  on w.team_number = t.team_number
+left join vex_award a       on a.team_number = t.team_number and a.program = t.program
+left join vex_worlds_run w  on w.team_number = t.team_number and w.program = t.program
 group by t.category;

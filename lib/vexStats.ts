@@ -40,14 +40,18 @@ export type TeamVexStats = {
   worldsRuns: VexWorldsRun[]
 }
 
+// program is required: PART reuses the same team numbers across V5 and IQ
+// ("295A" is two different teams), so (team_number, program) is the key.
 export async function getTeamVexStats(
   supabase: SupabaseClient,
-  teamNumber: string
+  teamNumber: string,
+  program: 'vex_v5' | 'vex_iq'
 ): Promise<TeamVexStats | null> {
   const { data: team } = await supabase
     .from('vex_team')
     .select('team_number, program, category, is_part, first_season, last_season')
     .eq('team_number', teamNumber)
+    .eq('program', program)
     .maybeSingle()
   if (!team) return null
 
@@ -56,11 +60,13 @@ export async function getTeamVexStats(
       .from('vex_award')
       .select('season, title, event_name, is_worlds, scope, is_banner, banner_type')
       .eq('team_number', teamNumber)
+      .eq('program', program)
       .order('season', { ascending: false }),
     supabase
       .from('vex_worlds_run')
       .select('season, deepest_stage, made_elim, made_semi, made_final')
       .eq('team_number', teamNumber)
+      .eq('program', program)
       .order('season', { ascending: false }),
   ])
 

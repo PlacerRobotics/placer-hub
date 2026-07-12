@@ -872,18 +872,22 @@ CATEGORY_META = {
 
 
 def to_supabase_rows(cats, only_season):
-    """Flatten pull() output into vex_team / vex_award / vex_worlds_run row dicts."""
+    """Flatten pull() output into vex_team / vex_award / vex_worlds_run row dicts.
+    Teams key on (team_number, program): PART reuses the same numbers across V5
+    and IQ ("295A" is two different teams), so number alone collapses categories
+    and mis-attributes every award."""
     teams = {}
     awards = []
     runs = []
     for label, data, seasons in cats:
         meta = CATEGORY_META[label]
+        prog = meta["program"]
         for tn in data:
             all_seasons = sorted(s for s in data[tn] if data[tn][s]["events"])
             if not all_seasons:
                 continue
             team_row = {
-                "team_number": tn, "program": meta["program"], "category": meta["category"],
+                "team_number": tn, "program": prog, "category": meta["category"],
                 "is_part": meta["is_part"],
             }
             if only_season is None:
@@ -891,7 +895,7 @@ def to_supabase_rows(cats, only_season):
                 # run must NOT overwrite first/last season with just this one.
                 team_row["first_season"] = season_label(all_seasons[0])
                 team_row["last_season"] = season_label(all_seasons[-1])
-            teams[tn] = team_row
+            teams[(tn, prog)] = team_row
             for s in all_seasons:
                 if only_season is not None and s != only_season:
                     continue
@@ -900,7 +904,8 @@ def to_supabase_rows(cats, only_season):
                     if a["source"] not in ("api", "worlds-html"):
                         continue
                     awards.append({
-                        "team_number": tn, "season": season_label(s), "title": a["award"],
+                        "team_number": tn, "program": prog, "season": season_label(s),
+                        "title": a["award"],
                         "event_name": a["event"] or None, "event_sku": a.get("event_sku"),
                         "is_worlds": a["is_worlds"], "scope": (a["state_scope"] or None),
                         "is_banner": a["is_prestige"], "banner_type": banner_type(a["award"]),
@@ -909,7 +914,8 @@ def to_supabase_rows(cats, only_season):
                 if nd["made_worlds"]:
                     sku = sorted(nd["wskus"])[0][0] if nd["wskus"] else None
                     runs.append({
-                        "team_number": tn, "season": season_label(s), "event_sku": sku,
+                        "team_number": tn, "program": prog, "season": season_label(s),
+                        "event_sku": sku,
                         "deepest_stage": nd["worlds_stage"] or "Qualified",
                         "made_elim": nd["worlds_elim"], "made_semi": nd["worlds_semi"],
                         "made_final": nd["worlds_final"], "source": "api",
@@ -944,7 +950,7 @@ def push_to_supabase(cats, only_season, live):
         return 2
 
     for t in teams:
-        db.table("vex_team").upsert(t, on_conflict="team_number").execute()
+        db.table("vex_team").upsert(t, on_conflict="team_number,program").execute()
 
     # Clean re-sync of this run's season scope. Only rows this script owns
     # (source in api/worlds-html) are ever touched — source='manual' rows
