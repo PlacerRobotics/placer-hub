@@ -140,8 +140,12 @@ group by t.category;
   up" access is instead a dedicated **service-role-backed read API route** (not raw anon
   PostgREST on the tables) — see §6. This is stricter than originally planned here, and
   intentionally so.
-- `banner_type` mapping (Excellence / Tournament (or IQ Teamwork) Champions / Design / Robot
-  Skills Champion) and the elim-stage names come straight from the Python.
+- `banner_type` classifies the TITLE (Excellence / Tournament (or IQ Teamwork) Champions /
+  Design / Robot Skills Champion); `is_banner` is stricter — **a banner is earned only at a
+  Championship event** (Kevin's rule): a banner-list title at a Region/State Championship, or
+  at Worlds only event-level Excellence / Tournament Champions / Robot Skills (Design at
+  Worlds is a division-level award — never a banner). The same titles at regular
+  tournaments/leagues are NOT banners (`banner_type` set, `is_banner` false).
 - The actual shipped migrations add a few things this sketch omits: `vex_program`/`vex_category`/
   `championship_scope` (nullable, not `''`) /`vex_award_source`/`vex_banner_type` enums instead of
   bare `text`, an optional `linked_team_id uuid references team(id)` soft link on `vex_team` (and
@@ -252,7 +256,8 @@ stay manual in `orgFacts` / `lib/content.ts`.
   on large drops.
 - **Season floors are load-bearing:** 295 teams floored at 2018-19 (VEX reused those numbers
   pre-PART); 9537 keeps full history from 2013-14. Lives in the Python.
-- **Definitions match the workbook & content notes** (banner set, State=all-CA vs Region=Region 2,
+- **Definitions match the workbook & content notes** (banner = championship-level only, see §2;
+  State=all-CA vs Region=Region 2,
   Worlds elim = reached the bracket, finalist = reached a Final = 0 to date — don't claim it).
 - **9537 never blends into PART totals** — enforced by `is_part=false` + the view grouping by
   category, and by the separate Cavitt section.

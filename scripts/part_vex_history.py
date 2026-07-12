@@ -588,7 +588,7 @@ def awards_sheet(wb, data, label, seasons):
                 lvl = TIER_LABEL[aw["tier"]] if aw["is_worlds"] else (aw["state_scope"] or "")
                 bg = GREEN if aw["is_worlds"] else (GOLDL if aw["tier"] >= 1 else (LGRAY if row % 2 == 0 else "FFFFFF"))
                 cells = [tn, season_label(s), aw["award"], aw["event"], lvl,
-                         "✓" if aw["is_prestige"] else "",
+                         "✓" if aw["is_banner"] else "",
                          "✓" if aw["is_worlds"] else "",
                          aw["state_scope"]]
                 for ci, v in enumerate(cells, 1):
@@ -621,7 +621,7 @@ def team_summary(wb, data, label, seasons):
                 per.append(f"{ec}/{ac}" + (f" {mark}" if mark else ""))
                 te += ec
                 ta += ac
-                tp += sum(1 for a in nd["awards"] if a["is_prestige"])
+                tp += sum(1 for a in nd["awards"] if a["is_banner"])
                 tsr += sum(1 for a in nd["awards"] if a["is_states"])
                 if nd["made_states"]:
                     sq += 1
@@ -664,7 +664,7 @@ def year_summary(wb, data, label, seasons):
             continue
         ev = sum(len(data[t][s]["events"]) for t in active)
         aw = sum(len(data[t][s]["awards"]) for t in active)
-        pr = sum(sum(1 for a in data[t][s]["awards"] if a["is_prestige"]) for t in active)
+        pr = sum(sum(1 for a in data[t][s]["awards"] if a["is_banner"]) for t in active)
         sr = sum(sum(1 for a in data[t][s]["awards"] if a["is_states"]) for t in active)
         sq = sum(1 for t in active if data[t][s]["made_states"])
         wq = sum(1 for t in active if data[t][s]["made_worlds"])
@@ -724,13 +724,15 @@ def headline_sheet(wb, cats):
                 if s not in data[t]:
                     continue
                 for a in data[t][s]["awards"]:
-                    bt = banner_type(a["award"])
-                    if bt:
-                        bcount[bt] += 1
-        r = stat(r, "Banner awards", A["prestige"], "awards that earn a hanging banner")
+                    if a["is_banner"]:
+                        bcount[banner_type(a["award"])] += 1
+        r = stat(r, "Banner awards", A["banners"],
+                 "championship-level only: State/Region champs, or Worlds event-level Excellence/Tourney Champs/Robot Skills")
         r = detail(r, f'      Excellence {bcount["Excellence"]}  ·  Tournament Champions {bcount["Tournament Champions"]}'
                       f'  ·  Design {bcount["Design"]}  ·  Robot Skills {bcount["Robot Skills"]}', color="555555")
-        r = stat(r, "   — won at a State/Region championship", A["banner_state"], "(state / regional banners)")
+        r = stat(r, "   — of which at a State/Region championship", A["banner_state"])
+        r = stat(r, "Banner-list titles at any event", A["prestige"],
+                 "same titles at regular tournaments/leagues — NOT banners")
         r = stat(r, "State/Region championship awards", A["state_aw"] + A["region_aw"],
                  f'({A["state_aw"]} all-CA State · {A["region_aw"]} Region)')
         r = stat(r, "State/Region championship appearances", A["state_appear"], "(team-seasons)")
@@ -769,8 +771,9 @@ def totals_sheet(wb, cats):
     ws.cell(1, 1, "Combined Totals — All Programs").font = Font(bold=True, size=15, color=NAVY)
     ws.merge_cells("A1:F1")
     rows = [("Seasons active", "seasons"), ("Total events", "events"), ("Total awards", "awards"),
-            ("Banner awards (Excellence/Tourney Champ/Design/Robot Skills)", "prestige"),
-            ("Banner awards at a State/Region championship", "banner_state"),
+            ("Banner awards (championship-level only)", "banners"),
+            ("  — of which at a State/Region championship", "banner_state"),
+            ("Banner-list titles at any event (not banners)", "prestige"),
             ("State championship awards (all-CA)", "state_aw"),
             ("Region championship awards", "region_aw"),
             ("State/Region championship appearances", "state_appear"),
@@ -833,7 +836,7 @@ def elevated_sheet(wb, cats):
         row += 1
     for col, w in {"A": 7, "B": 8, "C": 9, "D": 9, "E": 40, "F": 46, "G": 13}.items():
         ws.column_dimensions[col].width = w
-    note = ws.cell(row + 1, 1, "★★★ = banner award at Worlds · ★★ = banner award at a State/Region championship · ★ = banner award (Excellence · Tournament Champions · Design · Robot Skills)")
+    note = ws.cell(row + 1, 1, "★★★ = award at Worlds · ★★ = BANNER (banner-list title at a State/Region championship) · ★ = banner-list title at a regular event (not a banner). Banner-list = Excellence · Tournament Champions · Design · Robot Skills; at Worlds only event-level Excellence/Tourney Champs/Robot Skills earn a banner (Design there is division-level).")
     note.font = Font(italic=True, color="888888", size=9)
 
 
