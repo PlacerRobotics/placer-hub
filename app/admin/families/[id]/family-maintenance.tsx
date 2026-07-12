@@ -17,11 +17,26 @@ const input: React.CSSProperties = { padding: '7px 10px', fontSize: '0.8125rem',
 const dangerBtn: React.CSSProperties = { padding: '7px 14px', backgroundColor: 'var(--color-error)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 const outlineBtn: React.CSSProperties = { padding: '6px 12px', background: 'var(--color-surface)', color: 'var(--color-navy-deep)', border: '1.5px solid var(--color-navy-deep)', borderRadius: 6, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 
+type MergePreview = {
+  source: { familyId: string; label: string }
+  target: { familyId: string; label: string }
+  guardians: { id: string; name: string; email: string }[]
+  students: { id: string; name: string }[]
+  volunteers: { id: string; guardianName: string }[]
+  enrollmentCount: number
+  paymentCount: number
+  financialAidCount: number
+  waiverSignatureCount: number
+  seasons: { season: string; sourceStatus: string | null; targetStatus: string | null; winner: string | null }[]
+}
+
 export default function FamilyMaintenance({ familyId, familyLabel, familyStatus, students, volunteers, blockers }: { familyId: string; familyLabel: string; familyStatus: string; students: MaintStudent[]; volunteers: MaintVolunteer[]; blockers: Blockers }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [moveTarget, setMoveTarget] = useState<Record<string, string>>({})
+  const [mergeEmail, setMergeEmail] = useState('')
+  const [mergePreview, setMergePreview] = useState<MergePreview | null>(null)
 
   const blocking = Object.entries(blockers).filter(([, c]) => c > 0)
   const deletable = blocking.length === 0
@@ -74,6 +89,27 @@ export default function FamilyMaintenance({ familyId, familyLabel, familyStatus,
     }
   }
 
+  async function previewMerge() {
+    if (!mergeEmail.trim()) { setMsg('Enter the surviving family’s guardian login email first.'); return }
+    setMergePreview(null)
+    setBusy(true); setMsg('')
+    try {
+      const res = await fetch(`/api/admin/families/${familyId}/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_guardian_email: mergeEmail.trim() }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setMsg(d.error || 'Preview failed.'); return }
+      setMergePreview(d.preview)
+    } catch { setMsg('Network error.') } finally { setBusy(false) }
+  }
+
+  async function confirmMerge() {
+    if (!mergePreview) return
+    const summary = `${mergePreview.guardians.length} guardian(s), ${mergePreview.students.length} student(s), ${mergePreview.volunteers.length} volunteer record(s), ${mergePreview.enrollmentCount} enrollment(s), ${mergePreview.paymentCount} payment(s)`
+    if (!window.confirm(`Merge "${mergePreview.source.label}" into "${mergePreview.target.label}"?\n\nMoves: ${summary}.\n\nThis cannot be undone.`)) return
+    if (await post(`/api/admin/families/${familyId}/merge`, { target_guardian_email: mergeEmail.trim(), confirm: true })) {
+      window.location.href = '/admin/families?notice=merged'
+    }
+  }
+
   return (
     <div style={card}>
       <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, margin: '0 0 0.25rem', color: 'var(--color-error)' }}>Duplicate cleanup</h3>
@@ -121,6 +157,38 @@ export default function FamilyMaintenance({ familyId, familyLabel, familyStatus,
           <button type="button" style={outlineBtn} disabled={busy} onClick={() => moveVolunteer(v)}>Move to that guardian</button>
         </div>
       ))}
+
+      <div style={{ marginTop: '0.875rem', paddingTop: '0.875rem', borderTop: '1px solid var(--color-border)' }}>
+        <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.375rem' }}>Merge into another family</div>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0 0 0.5rem' }}>
+          For a real family split across two records (both parents/students correct, just in separate rows) — everything here (guardians, students, enrollments, payments, volunteer records) moves to the surviving family in one step.
+        </p>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input style={input} type="email" placeholder="surviving family's guardian login email" value={mergeEmail} onChange={(e) => { setMergeEmail(e.target.value); setMergePreview(null) }} />
+          <button type="button" style={outlineBtn} disabled={busy} onClick={previewMerge}>Preview merge</button>
+        </div>
+
+        {mergePreview && (
+          <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', border: '1px solid var(--color-border)', borderRadius: 8, backgroundColor: 'var(--color-bg-light)', fontSize: '0.8125rem' }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.4rem' }}>"{mergePreview.source.label}" → "{mergePreview.target.label}"</div>
+            {mergePreview.guardians.length > 0 && <div>Guardians: {mergePreview.guardians.map((g) => `${g.name} (${g.email})`).join(', ')}</div>}
+            {mergePreview.students.length > 0 && <div>Students: {mergePreview.students.map((s) => s.name).join(', ')}</div>}
+            {mergePreview.volunteers.length > 0 && <div>Volunteer records: {mergePreview.volunteers.map((v) => v.guardianName).join(', ')}</div>}
+            <div>Enrollments: {mergePreview.enrollmentCount} · Payments: {mergePreview.paymentCount} · Financial aid: {mergePreview.financialAidCount}</div>
+            {mergePreview.waiverSignatureCount > 0 && (
+              <div style={{ color: '#C9971B', marginTop: '0.25rem' }}>
+                {mergePreview.waiverSignatureCount} signed waiver(s) can't move (append-only) — after merging, this shell will be archived rather than deleted.
+              </div>
+            )}
+            {mergePreview.seasons.map((s) => (
+              <div key={s.season} style={{ marginTop: '0.25rem' }}>
+                {s.season}: source {s.sourceStatus ?? '—'} vs. target {s.targetStatus ?? '—'} → keeps <strong>{s.winner === 'source' ? s.sourceStatus : s.targetStatus}</strong>
+              </div>
+            ))}
+            <button type="button" style={{ ...dangerBtn, marginTop: '0.625rem' }} disabled={busy} onClick={confirmMerge}>Confirm merge</button>
+          </div>
+        )}
+      </div>
 
       <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.875rem', paddingTop: '0.875rem', borderTop: '1px solid var(--color-border)' }}>
         {archivable && familyStatus !== 'archived' ? (
