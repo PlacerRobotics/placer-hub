@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { AdminShell, PageHeader, AdminDetailPanel } from '@/components/ui'
 import FamilyActions from './family-actions'
+import FamilyMaintenance from './family-maintenance'
 import { formatPhoneDisplay } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
@@ -41,6 +42,22 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
 
   const { data: fsHistory } = await supabase.from('family_season').select('season, status, magic_link_sent').eq('family_id', id).order('season', { ascending: false })
   const { data: payments } = await supabase.from('payment_transaction').select('amount, source, payment_type, received_at, matched_status, payment_reference_code').eq('family_id', id).order('received_at', { ascending: false })
+
+  // Delete-blocker counts for the duplicate-cleanup panel (same set the delete
+  // API enforces — deleting a family cascades all of these away).
+  const cnt = async (table: string) => ((await supabase.from(table).select('*', { count: 'exact', head: true }).eq('family_id', id)).count ?? 0) as number
+  const blockers = {
+    students: students.length,
+    enrollments: await cnt('enrollment'),
+    payments: (payments ?? []).length,
+    waiver_signatures: await cnt('waiver_signature'),
+    volunteer_profiles: await cnt('volunteer_profile'),
+    financial_aid: await cnt('financial_aid'),
+  }
+  // "Registered" for move-eligibility means an enrollment in ANY season (the
+  // move API checks the same), not just the current one shown above.
+  const { data: anyEnrs } = studentIds.length ? await supabase.from('enrollment').select('student_id').in('student_id', studentIds) : { data: [] as any[] }
+  const registeredStudentIds = new Set((anyEnrs ?? []).map((e: any) => e.student_id))
 
   const familyName = g1?.last_name ? `${g1.last_name} Family` : family.display_name ?? family.primary_email
 
@@ -127,6 +144,13 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
           </tbody>
         </table>
       </div>
+
+      <FamilyMaintenance
+        familyId={id}
+        familyLabel={familyName}
+        students={students.map((s: any) => ({ id: s.id, name: `${s.first_name} ${s.last_name}`.trim(), registered: registeredStudentIds.has(s.id) }))}
+        blockers={blockers}
+      />
 
       <div style={{ marginTop: '1.25rem' }}>
         <Link href="/admin/families" style={{ fontSize: '0.875rem' }}>← Back to families</Link>

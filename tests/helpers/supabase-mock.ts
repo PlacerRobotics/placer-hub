@@ -26,6 +26,7 @@ class Query implements PromiseLike<{ data: any; error: any }> {
   private returning = false
   private terminal: 'array' | 'maybe' | 'single' = 'array'
   private limitN: number | null = null
+  private wantCount = false
 
   constructor(private tables: Tables, private table: string) {}
 
@@ -33,9 +34,10 @@ class Query implements PromiseLike<{ data: any; error: any }> {
     return (this.tables[this.table] ??= [])
   }
 
-  select(_cols?: string) {
+  select(_cols?: string, opts?: { count?: string; head?: boolean }) {
     // On a write chain, `.select()` requests the affected rows back.
     if (this.op !== 'select') this.returning = true
+    if (opts?.count) this.wantCount = true
     return this
   }
   insert(rows: Row | Row[]) { this.op = 'insert'; this.payload = rows; return this }
@@ -94,10 +96,11 @@ class Query implements PromiseLike<{ data: any; error: any }> {
       const t = this.rows()
       if (this.op === 'select') {
         let rows = this.match()
+        const count = this.wantCount ? rows.length : undefined
         if (this.limitN != null) rows = rows.slice(0, this.limitN)
-        if (this.terminal === 'maybe') return { data: rows[0] ?? null, error: null }
-        if (this.terminal === 'single') return rows[0] ? { data: rows[0], error: null } : { data: null, error: { message: 'no rows' } }
-        return { data: rows, error: null }
+        if (this.terminal === 'maybe') return { data: rows[0] ?? null, error: null, count } as any
+        if (this.terminal === 'single') return rows[0] ? ({ data: rows[0], error: null, count } as any) : { data: null, error: { message: 'no rows' } }
+        return { data: rows, error: null, count } as any
       }
       if (this.op === 'insert' || this.op === 'upsert') {
         const rows = Array.isArray(this.payload) ? this.payload : [this.payload]

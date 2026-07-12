@@ -28,6 +28,13 @@ export default async function SuspectedDuplicatesPage() {
   const familyName: Record<string, string> = Object.fromEntries(
     (families ?? []).map((f: any) => [f.id, f.display_name ?? f.primary_email ?? f.id])
   )
+  // Student counts make spurious duplicates obvious — the shell created by a
+  // bad-email lookup usually has 0 students (or only unregistered stubs).
+  const { data: studRows } = familyIds.length
+    ? await supabase.from('student').select('family_id').in('family_id', familyIds)
+    : { data: [] as any[] }
+  const studentCount: Record<string, number> = {}
+  for (const s of studRows ?? []) studentCount[s.family_id] = (studentCount[s.family_id] ?? 0) + 1
 
   const groups = findDuplicateGroups(all)
   const inDupGroup = new Set(groups.flatMap((g) => g.guardians.map((x) => x.id)))
@@ -69,10 +76,11 @@ export default async function SuspectedDuplicatesPage() {
                 </div>
                 <div style={tableWrap}>
                   <table style={table}>
-                    <thead><tr><th style={th}>Login email</th><th style={th}>Domain check</th><th style={th}>Role</th><th style={th}>Family</th><th style={th}>Created</th></tr></thead>
+                    <thead><tr><th style={th}>Login email</th><th style={th}>Domain check</th><th style={th}>Role</th><th style={th}>Family</th><th style={th}>Students</th><th style={th}>Created</th></tr></thead>
                     <tbody>
                       {group.guardians.map((g) => {
                         const miss = nearMissDomain(g.login_email)
+                        const n = studentCount[g.family_id] ?? 0
                         return (
                           <tr key={g.id}>
                             <td style={cell}>{g.login_email}</td>
@@ -83,6 +91,7 @@ export default async function SuspectedDuplicatesPage() {
                                 {familyName[g.family_id] ?? g.family_id}
                               </Link>
                             </td>
+                            <td style={cell}>{n === 0 ? <StatusBadge label="0 — likely spurious" variant="error" /> : n}</td>
                             <td style={cell}>{new Date((g as GuardianRow).created_at).toLocaleDateString()}</td>
                           </tr>
                         )
@@ -122,7 +131,7 @@ export default async function SuspectedDuplicatesPage() {
           )}
 
           <InfoAlert title="How to resolve">
-            Duplicates must be merged by hand: pick the surviving guardian, move students/enrollments on the family detail page, then remove the extra guardian. Since login_email is the magic-link identity, confirm which address the parent actually uses before deleting anything.
+            Open the spurious family (usually the one with 0 students, or unregistered stubs). In its <strong>Duplicate cleanup</strong> panel: move any unregistered students to the surviving family by entering that family's guardian login email, then delete the now-empty shell. The delete is blocked until the family truly has no students, enrollments, payments, waivers, volunteer, or aid records. Since login_email is the magic-link identity, confirm which address the parent actually uses before deleting anything.
           </InfoAlert>
         </>
       )}
