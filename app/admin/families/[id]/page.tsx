@@ -15,7 +15,7 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: family } = await supabase.from('family').select('id, display_name, primary_email').eq('id', id).maybeSingle()
+  const { data: family } = await supabase.from('family').select('id, display_name, primary_email, status').eq('id', id).maybeSingle()
   if (!family) {
     return (
       <AdminShell activePath="/admin/families">
@@ -58,6 +58,11 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
   // move API checks the same), not just the current one shown above.
   const { data: anyEnrs } = studentIds.length ? await supabase.from('enrollment').select('student_id').in('student_id', studentIds) : { data: [] as any[] }
   const registeredStudentIds = new Set((anyEnrs ?? []).map((e: any) => e.student_id))
+
+  // Volunteer records on this family — movable to the person's real guardian
+  // (all history keys off volunteer_id, so the move carries everything).
+  const { data: vps } = await supabase.from('volunteer_profile').select('id, guardian_id, status, aps_user_id').eq('family_id', id)
+  const gNameById: Record<string, string> = Object.fromEntries(gList.map((g: any) => [g.id, `${g.first_name} ${g.last_name}`.trim()]))
 
   const familyName = g1?.last_name ? `${g1.last_name} Family` : family.display_name ?? family.primary_email
 
@@ -148,7 +153,9 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
       <FamilyMaintenance
         familyId={id}
         familyLabel={familyName}
+        familyStatus={family.status ?? 'active'}
         students={students.map((s: any) => ({ id: s.id, name: `${s.first_name} ${s.last_name}`.trim(), registered: registeredStudentIds.has(s.id) }))}
+        volunteers={(vps ?? []).map((v: any) => ({ id: v.id, guardianName: gNameById[v.guardian_id] ?? 'Guardian', status: v.status, hasAps: !!v.aps_user_id }))}
         blockers={blockers}
       />
 
