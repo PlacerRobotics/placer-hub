@@ -82,7 +82,7 @@ export default async function FamilyDetailPage({ params, searchParams }: { param
 
       <FamilyActions
         familyId={id}
-        guardian1={g1 ? { id: g1.id, first_name: g1.first_name, last_name: g1.last_name, login_email: g1.login_email, communication_email: g1.communication_email ?? '', phone: g1.phone ?? '' } : null}
+        guardians={gList.map((g: any) => ({ id: g.id, first_name: g.first_name, last_name: g.last_name, login_email: g.login_email, communication_email: g.communication_email ?? '', phone: g.phone ?? '' }))}
         students={students.map((s: any) => ({ id: s.id, first_name: s.first_name, last_name: s.last_name, grade: s.grade ?? '', tshirt_size: s.tshirt_size ?? '' }))}
       />
 
