@@ -37,7 +37,16 @@ function payCell(p: RegRow['payment']) {
   const amt = (p.state === 'paid' || p.state === 'partial') && p.amount != null ? ` $${Number(p.amount).toLocaleString()}` : ''
   return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 999, fontSize: '0.6875rem', fontWeight: 700, backgroundColor: m.bg, color: m.fg }}>{m.label}{amt}</span>
 }
-const PAY_FILTERS: [string, string][] = [['all', 'Payment: all'], ['paid', 'Paid'], ['partial', 'Partial'], ['unpaid', 'Unpaid'], ['waived', 'Waived'], ['na', 'IQ (coach pays)']]
+const PAY_FILTERS: [string, string][] = [
+  ['all', 'Payment: all'], ['paid', 'Paid'], ['partial', 'Partial'], ['unpaid', 'Unpaid'], ['waived', 'Waived'], ['na', 'IQ (coach pays)'],
+  ['unpaid_or_partial', 'Unpaid or Partial'], ['paid_or_waived', 'Paid or Waived'],
+]
+function matchesPay(state: RegRow['payment']['state'], f: string): boolean {
+  if (f === 'all') return true
+  if (f === 'unpaid_or_partial') return state === 'unpaid' || state === 'partial'
+  if (f === 'paid_or_waived') return state === 'paid' || state === 'waived'
+  return state === f
+}
 
 // Fundraising method → compact badge (colors per spec: Direct blue, Match purple,
 // Sponsor gold, Check gray, Aid yellow). Custom palette — StatusBadge lacks purple/gold.
@@ -72,6 +81,49 @@ const STATUS_VARIANT: Record<string, 'success' | 'warning' | 'error' | 'info' | 
   cleared_to_register: 'info', registered: 'success', cancelled: 'neutral', applied: 'warning', suspended: 'error',
 }
 
+// Stat cards — clickable presets over the filters above (PRD §7.1: no new
+// filtering machinery, a card just sets the dropdowns that already exist).
+// Card-controlled dimensions: fStatus, fMagic, fPay, fTeam, fFund. Clicking a
+// card resets all five to 'all' first, then applies its own preset — so cards
+// never partially combine with each other, only with the OTHER filters
+// (program/division/school/login/search), matching "cards stack" (§7.3).
+type CardKey = 'students' | 'awaiting_invite' | 'invited_not_registered' | 'registered_unpaid' | 'paid' | 'no_team' | 'fundraising_not_selected'
+const CARD_PRESETS: Record<CardKey, { label: string; cue: string; match: (r: RegRow) => boolean; apply: (set: { status: string; magic: string; pay: string; team: string; fund: string }) => void }> = {
+  students: { label: 'Students', cue: 'neutral', match: () => true, apply: () => {} },
+  awaiting_invite: {
+    label: 'Awaiting invite', cue: 'info',
+    match: (r) => r.status === 'cleared_to_register' && !r.magicLinkSent,
+    apply: (s) => { s.status = 'cleared_to_register'; s.magic = 'not_sent' },
+  },
+  invited_not_registered: {
+    label: 'Invited, not registered', cue: 'warning',
+    match: (r) => r.status === 'cleared_to_register' && r.magicLinkSent,
+    apply: (s) => { s.status = 'cleared_to_register'; s.magic = 'sent' },
+  },
+  registered_unpaid: {
+    label: 'Registered, unpaid', cue: 'warning',
+    match: (r) => r.status === 'registered' && (r.payment.state === 'unpaid' || r.payment.state === 'partial'),
+    apply: (s) => { s.status = 'registered'; s.pay = 'unpaid_or_partial' },
+  },
+  paid: {
+    label: 'Paid', cue: 'success',
+    match: (r) => r.payment.state === 'paid' || r.payment.state === 'waived',
+    apply: (s) => { s.pay = 'paid_or_waived' },
+  },
+  no_team: {
+    label: 'No team yet', cue: 'info',
+    match: (r) => !r.teamId,
+    apply: (s) => { s.team = 'unassigned' },
+  },
+  fundraising_not_selected: {
+    label: 'Fundraising not selected', cue: 'warning',
+    match: (r) => r.fundraisingMethods.length === 0,
+    apply: (s) => { s.fund = 'not_selected' },
+  },
+}
+const CARD_ORDER: CardKey[] = ['students', 'awaiting_invite', 'invited_not_registered', 'registered_unpaid', 'paid', 'no_team', 'fundraising_not_selected']
+const CUE_COLOR: Record<string, string> = { neutral: 'var(--color-text-primary)', info: 'var(--color-navy-deep)', warning: '#C9971B', success: 'var(--color-success)' }
+
 const sel: React.CSSProperties = { padding: '7px 9px', fontSize: '0.8125rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', backgroundColor: 'var(--color-surface)' }
 const cell: React.CSSProperties = { padding: '0.6rem 0.75rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left', verticalAlign: 'middle' }
 const th: React.CSSProperties = { ...cell, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', fontSize: '0.6875rem', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }
@@ -89,34 +141,60 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
   const [fFund, setFFund] = useState('all')
   const [fPay, setFPay] = useState('all')
   const [search, setSearch] = useState('')
+  const [activeCard, setActiveCard] = useState<CardKey | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [assignTeam, setAssignTeam] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
 
-  const filtered = useMemo(
+  // Non-card dimensions only — this is the base a stat card's live count is
+  // computed against, so counts reflect whatever slice you've already picked
+  // manually (school/program/division/login/search) regardless of which card
+  // (if any) is currently active.
+  const preCardFiltered = useMemo(
     () =>
       rows.filter((r) => {
-        if (fStatus !== 'all' && r.status !== fStatus) return false
         if (fProgram !== 'all' && r.program !== fProgram) return false
         if (fDivision !== 'all' && r.division !== fDivision) return false
-        if (fTeam !== 'all' && r.teamId !== fTeam) return false
         if (fSchool !== 'all' && r.school !== fSchool) return false
-        if (fMagic === 'sent' && !r.magicLinkSent) return false
-        if (fMagic === 'not_sent' && r.magicLinkSent) return false
         if (fLogin === 'logged_in' && !r.guardianLoggedIn) return false
         if (fLogin === 'never' && r.guardianLoggedIn) return false
-        if (fFund === 'not_selected' && r.fundraisingMethods.length) return false
-        if (fFund !== 'all' && fFund !== 'not_selected' && !r.fundraisingMethods.includes(fFund)) return false
-        if (fPay !== 'all' && r.payment.state !== fPay) return false
         if (search.trim()) {
           const q = search.toLowerCase()
           if (!r.name.toLowerCase().includes(q) && !r.guardianEmail.toLowerCase().includes(q)) return false
         }
         return true
       }),
-    [rows, fStatus, fProgram, fDivision, fTeam, fSchool, fMagic, fLogin, fFund, fPay, search]
+    [rows, fProgram, fDivision, fSchool, fLogin, search]
   )
+  const cardCounts = useMemo(
+    () => Object.fromEntries(CARD_ORDER.map((k) => [k, preCardFiltered.filter(CARD_PRESETS[k].match).length])) as Record<CardKey, number>,
+    [preCardFiltered]
+  )
+
+  const filtered = useMemo(
+    () =>
+      preCardFiltered.filter((r) => {
+        if (fStatus !== 'all' && r.status !== fStatus) return false
+        if (fTeam === 'unassigned' && r.teamId) return false
+        if (fTeam !== 'all' && fTeam !== 'unassigned' && r.teamId !== fTeam) return false
+        if (fMagic === 'sent' && !r.magicLinkSent) return false
+        if (fMagic === 'not_sent' && r.magicLinkSent) return false
+        if (fFund === 'not_selected' && r.fundraisingMethods.length) return false
+        if (fFund !== 'all' && fFund !== 'not_selected' && !r.fundraisingMethods.includes(fFund)) return false
+        if (!matchesPay(r.payment.state, fPay)) return false
+        return true
+      }),
+    [preCardFiltered, fStatus, fTeam, fMagic, fFund, fPay]
+  )
+
+  function clickCard(key: CardKey) {
+    const next = activeCard === key ? null : key
+    setActiveCard(next)
+    const s = { status: 'all', magic: 'all', pay: 'all', team: 'all', fund: 'all' }
+    if (next) CARD_PRESETS[next].apply(s)
+    setFStatus(s.status); setFMagic(s.magic); setFPay(s.pay); setFTeam(s.team); setFFund(s.fund)
+  }
 
   const selectedRows = filtered.filter((r) => selected.has(r.studentId))
 
@@ -199,18 +277,43 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
 
   return (
     <div>
+      {/* Stat cards — click to filter, click again to clear. Counts reflect any
+          active program/division/school/login/search filter (preCardFiltered),
+          so they stay accurate as you narrow down manually. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.625rem', marginBottom: '1.25rem' }}>
+        {CARD_ORDER.map((key) => {
+          const preset = CARD_PRESETS[key]
+          const active = activeCard === key
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => clickCard(key)}
+              style={{
+                textAlign: 'left', minWidth: 130, padding: '0.75rem 1rem', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                border: active ? `1.5px solid ${CUE_COLOR[preset.cue]}` : '1.5px solid var(--color-border)',
+                backgroundColor: active ? 'var(--color-bg-light)' : 'var(--color-surface)',
+              }}
+            >
+              <div style={{ fontSize: '1.375rem', fontWeight: 700, color: CUE_COLOR[preset.cue], lineHeight: 1.1 }}>{cardCounts[key]}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>{preset.label}</div>
+            </button>
+          )
+        })}
+      </div>
+
       {/* Filter bar */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
         <input placeholder="Search name or email…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...sel, minWidth: 200 }} />
-        <select style={sel} value={fStatus} onChange={(e) => setFStatus(e.target.value)}><option value="all">All statuses</option><option value="cleared_to_register">Cleared to Register</option><option value="registered">Registered</option><option value="applied">Applied</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select>
+        <select style={sel} value={fStatus} onChange={(e) => { setFStatus(e.target.value); setActiveCard(null) }}><option value="all">All statuses</option><option value="cleared_to_register">Cleared to Register</option><option value="registered">Registered</option><option value="applied">Applied</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select>
         <select style={sel} value={fProgram} onChange={(e) => setFProgram(e.target.value)}><option value="all">All programs</option><option value="vex_v5">VEX V5</option><option value="combat">Combat</option><option value="both">Both</option><option value="vex_iq">VEX IQ</option></select>
         <select style={sel} value={fDivision} onChange={(e) => setFDivision(e.target.value)}><option value="all">All divisions</option><option value="ES">ES</option><option value="MS">MS</option><option value="HS">HS</option></select>
-        <select style={sel} value={fTeam} onChange={(e) => setFTeam(e.target.value)}><option value="all">All teams</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
+        <select style={sel} value={fTeam} onChange={(e) => { setFTeam(e.target.value); setActiveCard(null) }}><option value="all">All teams</option><option value="unassigned">Unassigned</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
         <select style={sel} value={fSchool} onChange={(e) => setFSchool(e.target.value)}><option value="all">All schools</option>{schools.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-        <select style={sel} value={fMagic} onChange={(e) => setFMagic(e.target.value)}><option value="all">Magic link: all</option><option value="sent">Sent</option><option value="not_sent">Not sent</option></select>
+        <select style={sel} value={fMagic} onChange={(e) => { setFMagic(e.target.value); setActiveCard(null) }}><option value="all">Magic link: all</option><option value="sent">Sent</option><option value="not_sent">Not sent</option></select>
         <select style={sel} value={fLogin} onChange={(e) => setFLogin(e.target.value)}><option value="all">Login: all</option><option value="logged_in">Logged in</option><option value="never">Never</option></select>
-        <select style={sel} value={fFund} onChange={(e) => setFFund(e.target.value)}>{FUND_FILTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}</select>
-        <select style={sel} value={fPay} onChange={(e) => setFPay(e.target.value)}>{PAY_FILTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}</select>
+        <select style={sel} value={fFund} onChange={(e) => { setFFund(e.target.value); setActiveCard(null) }}>{FUND_FILTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}</select>
+        <select style={sel} value={fPay} onChange={(e) => { setFPay(e.target.value); setActiveCard(null) }}>{PAY_FILTERS.map(([v, lbl]) => <option key={v} value={v}>{lbl}</option>)}</select>
         <button type="button" onClick={exportCsv} style={{ ...btn, padding: '7px 12px' }}>Export Filtered</button>
       </div>
 
