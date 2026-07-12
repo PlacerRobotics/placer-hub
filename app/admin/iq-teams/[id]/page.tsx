@@ -5,6 +5,7 @@ import { getAdminProfile } from '@/lib/auth/admin'
 import { hasAnyRole } from '@/lib/auth/roles'
 import { AdminShell, PageHeader, StatusBadge } from '@/components/ui'
 import { sendMagicLinkEmail } from '@/lib/email'
+import { dropIqStudent } from '@/lib/iq-team'
 import IqApproveButton from '../iq-approve-button'
 
 const SEASON = '2026-27'
@@ -188,8 +189,8 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     if (!(await hasAnyRole(adb, a.id, ROLES))) return
     const studentId = String(formData.get('studentId') ?? '')
     if (!studentId) return
-    await adb.from('student_application').update({ status: 'withdrawn', triage_notes: `iq_team_dropped:${id}` }).eq('student_id', studentId).eq('season', SEASON)
-    await adb.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('team_id', id).eq('student_id', studentId).eq('team_role', 'student').is('revoked_at', null)
+    const res = await dropIqStudent(adb, id, studentId, SEASON)
+    if (!res.ok) { console.error('[admin iq-teams dropStudent] failed:', res.error); return }
     redirect(`/admin/iq-teams/${id}`)
   }
   async function cancelDropRequest(formData: FormData) {
