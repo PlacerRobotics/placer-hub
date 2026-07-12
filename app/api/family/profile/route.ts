@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 // PATCH /api/family/profile — the family's contact info. NOTE: `family` has no
 // address/phone columns in this schema; that lives on the guardian. So this
@@ -24,7 +25,7 @@ export async function PATCH(req: NextRequest) {
   if (body.city !== undefined) upd.city = String(body.city).trim() || null
   if (body.state !== undefined) upd.state = String(body.state).trim() || null
   if (body.zip_code !== undefined) upd.zip_code = String(body.zip_code).trim() || null
-  if (body.phone !== undefined) upd.phone = String(body.phone).trim() || guardian.phone // phone is NOT NULL
+  if (body.phone !== undefined) upd.phone = cleanPhone(body.phone) || guardian.phone // phone is NOT NULL
   // Google Workspace / communication email — freely editable.
   if (body.communication_email !== undefined) upd.communication_email = cleanEmail(body.communication_email) || null
   // Slack email — settable once; changing it later needs an admin (Slack can't rename/merge).

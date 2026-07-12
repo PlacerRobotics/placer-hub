@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ageFromDob } from '@/lib/compliance'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 const TSHIRT = new Set(['ym', 'yl', 'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl'])
@@ -68,7 +69,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { data: ec } = await db.from('emergency_contact').select('id, first_name, last_name, phone').eq('student_id', studentId).eq('priority', 1).maybeSingle()
     const first = String(body.ec_first ?? ec?.first_name ?? '').trim()
     const last = String(body.ec_last ?? ec?.last_name ?? '').trim()
-    const phone = String(body.ec_phone ?? ec?.phone ?? '').trim()
+    const phone = body.ec_phone != null ? cleanPhone(body.ec_phone) : (ec?.phone ?? '')
     const relationship = body.ec_relationship !== undefined ? String(body.ec_relationship).trim() || null : undefined
     if (ec) {
       const upd: Record<string, unknown> = { first_name: first || ec.first_name, last_name: last || ec.last_name, phone: phone || ec.phone }

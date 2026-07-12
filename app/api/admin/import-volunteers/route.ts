@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 const DEFAULT_SEASON = '2026-27'
 
@@ -43,11 +44,11 @@ export async function POST(req: NextRequest) {
       if (!g) {
         const { data: fam, error: fe } = await db.from('family').insert({ primary_email: email, display_name: last }).select('id').single()
         if (fe) throw new Error(fe.message)
-        const { data: ng, error: ge } = await db.from('guardian').insert({ family_id: fam.id, first_name: first, last_name: last, login_email: email, phone: String(r.phone ?? '').trim() || '', role: 'primary' }).select('id, family_id').single()
+        const { data: ng, error: ge } = await db.from('guardian').insert({ family_id: fam.id, first_name: first, last_name: last, login_email: email, phone: cleanPhone(r.phone) || '', role: 'primary' }).select('id, family_id').single()
         if (ge) throw new Error(ge.message)
         g = ng
       } else if (r.phone) {
-        await db.from('guardian').update({ phone: String(r.phone).trim() }).eq('id', g.id)
+        await db.from('guardian').update({ phone: cleanPhone(r.phone) }).eq('id', g.id)
       }
 
       // 2. Compute completion + status.

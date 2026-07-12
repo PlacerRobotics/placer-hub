@@ -4,6 +4,7 @@ import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { nearMissDomain } from '@/lib/duplicates'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
       await db.from('guardian').upsert({
         family_id: familyId, role: 'primary',
         first_name: g(r, 'Parent/Guardian First Name'), last_name: gLast,
-        login_email: gEmail, phone: g(r, 'Parent/Guardian Phone Number') || '',
+        login_email: gEmail, phone: cleanPhone(g(r, 'Parent/Guardian Phone Number')) || '',
       }, { onConflict: 'login_email' })
 
       // student
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       const studentEmail = cleanEmail(g(r, 'Student Email')) || null
       const studentFields = {
         first_name: g(r, 'Student First Name'), last_name: g(r, 'Student Last Name'),
-        communication_email: studentEmail, phone: g(r, 'Student Phone Number') || null,
+        communication_email: studentEmail, phone: cleanPhone(g(r, 'Student Phone Number')) || null,
         birthdate: parseDate(g(r, 'Date of Birth (required for age group cut offs)')),
         street_address: addr.street, city: addr.city, state: addr.state, zip_code: addr.zip,
         grade, school_raw: g(r, 'School Attending (Fall 2026)') || null, status: 'active',

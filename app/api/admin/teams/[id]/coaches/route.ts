@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 const COACH_ROLES = new Set(['coach', 'assistant_coach', 'mentor'])
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const email = cleanEmail(ng?.email)
     const first = String(ng?.first_name ?? '').trim()
     const last = String(ng?.last_name ?? '').trim()
-    const phone = String(ng?.phone ?? '').trim()
+    const phone = cleanPhone(ng?.phone)
     if (!email || !first || !last) return NextResponse.json({ error: 'New coach needs a first name, last name, and email.' }, { status: 400 })
 
     // Reuse a guardian with this email if one exists; otherwise create a coach-only family + guardian.

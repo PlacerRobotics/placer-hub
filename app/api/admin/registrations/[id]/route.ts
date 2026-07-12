@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
+import { cleanPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 const TSHIRT = new Set(['xs', 's', 'm', 'l', 'xl', 'xxl'])
@@ -121,7 +122,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const parts = name.split(/\s+/)
     const first = parts[0] || ''
     const last = parts.slice(1).join(' ') || '-'
-    const phone = String(body.emergency_phone ?? ec?.phone ?? '').trim()
+    const phone = body.emergency_phone != null ? cleanPhone(body.emergency_phone) : (ec?.phone ?? '')
     if (ec) {
       await db.from('emergency_contact').update({ first_name: first || ec.first_name, last_name: last, phone: phone || ec.phone }).eq('id', ec.id)
     } else if (name && phone) {

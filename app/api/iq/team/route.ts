@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, iqTeamSubmittedHtml } from '@/lib/email'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 
@@ -75,11 +76,11 @@ export async function POST(req: NextRequest) {
   let coachFamilyId: string
   if (guardian) {
     coachFamilyId = guardian.family_id
-    await db.from('guardian').update({ first_name: String(coach.first_name).trim(), last_name: String(coach.last_name).trim(), phone: String(coach.phone ?? '').trim() || undefined }).eq('id', guardian.id)
+    await db.from('guardian').update({ first_name: String(coach.first_name).trim(), last_name: String(coach.last_name).trim(), phone: cleanPhone(coach.phone) || undefined }).eq('id', guardian.id)
   } else {
     const { data: fam, error: famErr } = await db.from('family').insert({ primary_email: coachEmail, display_name: String(coach.last_name).trim() }).select('id').single()
     if (famErr) return NextResponse.json({ error: `Could not create coach family: ${famErr.message}` }, { status: 500 })
-    const { data: g, error: gErr } = await db.from('guardian').insert({ family_id: fam.id, first_name: String(coach.first_name).trim(), last_name: String(coach.last_name).trim(), login_email: coachEmail, phone: String(coach.phone ?? '').trim() || '', role: 'primary' }).select('id, family_id').single()
+    const { data: g, error: gErr } = await db.from('guardian').insert({ family_id: fam.id, first_name: String(coach.first_name).trim(), last_name: String(coach.last_name).trim(), login_email: coachEmail, phone: cleanPhone(coach.phone) || '', role: 'primary' }).select('id, family_id').single()
     if (gErr) return NextResponse.json({ error: `Could not create coach: ${gErr.message}` }, { status: 500 })
     guardian = g; coachFamilyId = g.family_id
   }

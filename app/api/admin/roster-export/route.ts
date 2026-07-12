@@ -1,6 +1,7 @@
 import { getAdminAccess } from '@/lib/auth/admin-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { programScopeFor } from '@/lib/auth/roles'
+import { formatPhoneDisplay } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 
@@ -135,7 +136,7 @@ export async function GET() {
         (stu.tshirt_size ?? '').toString().toUpperCase(),
         g1 ? `${g1.first_name} ${g1.last_name}` : '',
         g1?.login_email ?? '',
-        g1?.phone ?? '',
+        formatPhoneDisplay(g1?.phone),
         g2 ? `${g2.first_name} ${g2.last_name}` : '',
         g2?.login_email ?? '',
         e.registration_fee_status ?? '',

@@ -4,6 +4,7 @@ import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { nearMissDomain } from '@/lib/duplicates'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
         first_name: String(r.guardian1_first ?? '').trim(),
         last_name: g1last,
         login_email: g1email,
-        phone: String(r.guardian1_phone ?? '').trim() || '',
+        phone: cleanPhone(r.guardian1_phone) || '',
       }
       if (employerMatch) {
         g1.employer = String(r.employer_match_company ?? '').trim() || null
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
           first_name: String(r.guardian2_first ?? '').trim(),
           last_name: String(r.guardian2_last ?? '').trim(),
           login_email: g2email,
-          phone: String(r.guardian2_phone ?? '').trim() || '',
+          phone: cleanPhone(r.guardian2_phone) || '',
         })
       }
       await db.from('guardian').upsert(guardianRows, { onConflict: 'login_email' })
@@ -141,7 +142,7 @@ export async function POST(request: NextRequest) {
         first_name: String(r.student_first_name ?? '').trim(),
         last_name: String(r.student_last_name ?? '').trim(),
         communication_email: studentEmail,
-        phone: String(r.student_phone ?? '').trim() || null,
+        phone: cleanPhone(r.student_phone) || null,
         street_address: street,
         city: cityVal,
         state: stateVal,

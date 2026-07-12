@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 // PATCH /api/family/guardian2 — add/update a second guardian (contact only).
 // guardian.login_email is NOT NULL + UNIQUE, so the email is stored there with
@@ -23,7 +24,7 @@ export async function PATCH(req: NextRequest) {
   const last = String(body.last_name ?? '').trim()
   const emailIn = cleanEmail(body.email)
   const commIn = body.communication_email !== undefined ? cleanEmail(body.communication_email) || null : undefined
-  const phone = String(body.phone ?? '').trim()
+  const phone = cleanPhone(body.phone)
   const addr = {
     street_address: body.street_address !== undefined ? String(body.street_address).trim() || null : undefined,
     city: body.city !== undefined ? String(body.city).trim() || null : undefined,

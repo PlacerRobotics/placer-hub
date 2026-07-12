@@ -6,6 +6,7 @@ import { sendEmail, registrationConfirmationHtml } from '@/lib/email'
 import { NEXT_PUBLIC_SLACK_MAIN_INVITE, NEXT_PUBLIC_SLACK_IQ_INVITE } from '@/lib/env'
 import { ageFromDob, isUnder13, needsCoppa as computeNeedsCoppa } from '@/lib/compliance'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone, isValidPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = {
@@ -83,6 +84,19 @@ export async function POST(request: NextRequest) {
   const needsCoppa = computeNeedsCoppa(grade, studentAge)
   if (needsCoppa && body.coppaConsent !== true) {
     return NextResponse.json({ error: 'Parental (COPPA) consent is required for students in grade 6 or 7, or under age 13.' }, { status: 400 })
+  }
+
+  // A garbled emergency-contact number is worse than a missing one — it looks
+  // complete but fails silently in a real emergency. Only rejects phone input
+  // that was actually provided; still doesn't require an emergency contact.
+  // Validated here (before any writes below) so a bad number never leaves the
+  // registration half-submitted.
+  const emergencyIn = body.emergency ?? {}
+  if (emergencyIn.phone && !isValidPhone(emergencyIn.phone)) {
+    return NextResponse.json({ error: 'Please enter a valid phone number for the primary emergency contact.' }, { status: 400 })
+  }
+  if (emergencyIn.second_phone && !isValidPhone(emergencyIn.second_phone)) {
+    return NextResponse.json({ error: 'Please enter a valid phone number for the second emergency contact.' }, { status: 400 })
   }
   const emailCertified = body.emailCertified === true
   const slackConsent = under13 ? false : body.slackConsent === true
@@ -238,7 +252,7 @@ export async function POST(request: NextRequest) {
       first_name: ec.first_name,
       last_name: ec.last_name,
       relationship: ec.relationship || null,
-      phone: ec.phone,
+      phone: cleanPhone(ec.phone),
       priority: 1,
     })
   }
@@ -249,7 +263,7 @@ export async function POST(request: NextRequest) {
       first_name: ec.second_first_name,
       last_name: ec.second_last_name,
       relationship: ec.second_relationship || null,
-      phone: ec.second_phone,
+      phone: cleanPhone(ec.second_phone),
       priority: 2,
     })
   }

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireSection } from '@/lib/auth/admin-access'
 import { programScopeFor, programInScope } from '@/lib/auth/roles'
+import { formatPhoneDisplay } from '@/lib/phone-input'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
 import RegistrationEdit from './edit-modal'
 import TeamAssign, { type AssignTeam } from './team-assign'
@@ -143,7 +144,7 @@ export default async function RegistrationDetailPage({
   const guardianFields = [
     { label: 'Name', value: guardian ? `${guardian.first_name} ${guardian.last_name}` : '—' },
     { label: 'Email', value: guardian?.login_email ?? '—' },
-    { label: 'Phone', value: guardian?.phone ?? '—' },
+    { label: 'Phone', value: guardian?.phone ? formatPhoneDisplay(guardian.phone) : '—' },
     { label: 'Magic link', value: fs.magic_link_sent ? 'Sent' : 'Not sent' },
     { label: 'Login status', value: guardian?.last_login_at ? 'Logged in' : fs.magic_link_sent ? 'Invited, not logged in' : 'Not invited' },
     { label: 'Last sign-in', value: guardian?.last_login_at ? new Date(guardian.last_login_at).toLocaleString() : '—' },
@@ -151,7 +152,7 @@ export default async function RegistrationDetailPage({
   const regFields = [
     { label: 'Waiver signed', value: wsig?.signed_at ? new Date(wsig.signed_at).toLocaleString() : 'Not signed' },
     { label: 'Emergency contact', value: ec ? `${ec.first_name} ${ec.last_name}` : '—' },
-    { label: 'Emergency phone', value: ec?.phone ?? '—' },
+    { label: 'Emergency phone', value: ec?.phone ? formatPhoneDisplay(ec.phone) : '—' },
     { label: 'T-shirt size', value: student?.tshirt_size ? String(student.tshirt_size).toUpperCase() : '—' },
     { label: 'Payment', value: pay ? `$${pay.amount} · ${pay.source} · ${pay.matched_status}${pay.payment_reference_code ? ` · ${pay.payment_reference_code}` : ''}` : 'No payment on file' },
   ]

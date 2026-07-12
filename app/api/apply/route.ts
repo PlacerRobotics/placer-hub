@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, studentApplicationReceivedHtml } from '@/lib/email'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone, isValidPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', both: 'VEX V5 & Combat', not_sure: 'Not sure yet' }
@@ -87,6 +88,9 @@ export async function POST(request: NextRequest) {
   if (!guardian1?.first_name || !guardian1?.last_name || !guardian1?.email || !guardian1?.phone) {
     return NextResponse.json({ error: 'Please complete the guardian 1 fields.' }, { status: 400 })
   }
+  if (!isValidPhone(guardian1.phone)) {
+    return NextResponse.json({ error: 'Please enter a valid phone number for guardian 1.' }, { status: 400 })
+  }
   if (!data_certified) {
     return NextResponse.json({ error: 'Please confirm the parent/guardian certification.' }, { status: 400 })
   }
@@ -123,7 +127,7 @@ export async function POST(request: NextRequest) {
       first_name: guardian1.first_name,
       last_name: guardian1.last_name,
       login_email: g1email,
-      phone: guardian1.phone,
+      phone: cleanPhone(guardian1.phone),
       occupation: guardian1.occupation ?? null,
       volunteer_interests: guardian1.volunteer_interests ?? [],
       volunteer_notes: guardian1.volunteer_notes ?? null,
@@ -136,7 +140,7 @@ export async function POST(request: NextRequest) {
       first_name: guardian2.first_name ?? '',
       last_name: guardian2.last_name ?? '',
       login_email: cleanEmail(guardian2.email),
-      phone: guardian2.phone ?? '',
+      phone: cleanPhone(guardian2.phone),
     })
   }
   const { error: gErr } = await db.from('guardian').upsert(guardianRows, { onConflict: 'login_email' })
