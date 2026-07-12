@@ -88,13 +88,23 @@ function nameKey(g: GuardianLike): string {
   return `${g.first_name.trim().toLowerCase()}|${g.last_name.trim().toLowerCase()}`
 }
 
+// Org staff logins (task: docs/design_email_identity_v1_0.md §2 — Amity Chavez
+// case): a person can legitimately hold an @placerrobotics.org admin login
+// AND a personal family login. That's an intentional two-identity setup, not
+// a duplicate to clean up, and must never flag here.
+export const STAFF_EMAIL_DOMAIN = 'placerrobotics.org'
+function isStaffLogin(email: string): boolean {
+  return email.trim().toLowerCase().endsWith(`@${STAFF_EMAIL_DOMAIN}`)
+}
+
 // Guardians sharing first+last name (case/whitespace-insensitive) but holding
 // different login_emails — across families or within one. Guardians with a
-// blank name component are excluded (a placeholder "" name is not a signal).
+// blank name component, or an @placerrobotics.org staff login, are excluded.
 export function findDuplicateGroups<G extends GuardianLike>(guardians: G[]): DuplicateGroup<G>[] {
   const byName = new Map<string, G[]>()
   for (const g of guardians) {
     if (!g.first_name.trim() || !g.last_name.trim()) continue
+    if (isStaffLogin(g.login_email)) continue
     const key = nameKey(g)
     const list = byName.get(key)
     if (list) list.push(g)
