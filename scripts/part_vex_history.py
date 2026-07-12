@@ -298,17 +298,34 @@ def banner_type(title):
     return None
 
 
+def is_banner(title, is_worlds, is_states):
+    """A BANNER is earned only at a Championship event (Kevin's definition):
+    the banner-list titles (Excellence / Tournament (or IQ Teamwork) Champions /
+    Design / Robot Skills Champion) at a Region/State Championship, or —
+    at Worlds — event-level Excellence / Tournament Champions / Robot Skills
+    only. Design is EXCLUDED at Worlds (it's a division-level award there).
+    The same titles at a regular tournament/league are NOT banners."""
+    bt = banner_type(title)
+    if bt is None:
+        return False
+    if is_states:
+        return True
+    if is_worlds:
+        return bt != "Design"
+    return False
+
+
 def tier_rank(is_w, is_s, is_p):
     if is_w:
         return 3            # any award at worlds
     if is_s and is_p:
         return 2            # banner award at a state/region championship
     if is_p:
-        return 1            # banner award elsewhere
+        return 1            # banner-list title at a regular event (NOT a banner)
     return 0
 
 
-TIER_LABEL = {3: "Worlds", 2: "State/Region", 1: "Banner", 0: ""}
+TIER_LABEL = {3: "Worlds", 2: "State/Region", 1: "Major award", 0: ""}
 
 
 def norm_title(t):
@@ -450,6 +467,7 @@ def pull(headers, team_numbers, program_code, label, rename, min_season=0, only_
             data[cn][s]["awards"].append({"award": aw_name, "event": ev_name,
                 "event_sku": safe(ev_obj.get("code")) or None,
                 "is_worlds": is_w, "is_states": is_s, "state_scope": scope, "is_prestige": is_p,
+                "is_banner": is_banner(aw_name, is_w, is_s),
                 "tier": tier_rank(is_w, is_s, is_p), "source": "api"})
             if is_w:
                 data[cn][s]["worlds_awards"].append(f"{aw_name} @ {ev_name}")
@@ -475,6 +493,7 @@ def pull(headers, team_numbers, program_code, label, rename, min_season=0, only_
                         nd["awards"].append({"award": title, "event": f"VEX Worlds {season_label(s)}",
                             "event_sku": sku,
                             "is_worlds": True, "is_states": False, "state_scope": "", "is_prestige": is_p,
+                            "is_banner": is_banner(title, True, False),
                             "tier": 3, "source": "worlds-html"})
                         nd["worlds_awards"].append(f"{title} @ VEX Worlds")
                         scraped_added += 1
@@ -489,7 +508,7 @@ def seasons_of(data):
 
 
 def agg(data, seasons):
-    A = dict(teams=0, seasons=0, events=0, awards=0, prestige=0, banner_state=0,
+    A = dict(teams=0, seasons=0, events=0, awards=0, prestige=0, banners=0, banner_state=0,
              state_aw=0, region_aw=0, state_appear=0, wq=0, wq_seasons=0,
              welim=0, wsemi=0, wfinal=0, waws=0)
     active = set()
@@ -504,7 +523,8 @@ def agg(data, seasons):
             A["events"] += len(nd["events"])
             A["awards"] += len(nd["awards"])
             A["prestige"] += sum(1 for a in nd["awards"] if a["is_prestige"])
-            A["banner_state"] += sum(1 for a in nd["awards"] if a["is_prestige"] and a["is_states"])
+            A["banners"] += sum(1 for a in nd["awards"] if a["is_banner"])
+            A["banner_state"] += sum(1 for a in nd["awards"] if a["is_banner"] and a["is_states"])
             A["state_aw"] += sum(1 for a in nd["awards"] if a["is_states"] and a["state_scope"] == "State")
             A["region_aw"] += sum(1 for a in nd["awards"] if a["is_states"] and a["state_scope"] == "Region")
             if nd["made_states"]:
@@ -908,7 +928,7 @@ def to_supabase_rows(cats, only_season):
                         "title": a["award"],
                         "event_name": a["event"] or None, "event_sku": a.get("event_sku"),
                         "is_worlds": a["is_worlds"], "scope": (a["state_scope"] or None),
-                        "is_banner": a["is_prestige"], "banner_type": banner_type(a["award"]),
+                        "is_banner": a["is_banner"], "banner_type": banner_type(a["award"]),
                         "source": a["source"],
                     })
                 if nd["made_worlds"]:
