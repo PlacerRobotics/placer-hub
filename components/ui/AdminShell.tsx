@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/sponsors', label: 'Sponsors' },
   { href: '/admin/teams', label: 'Teams' },
+  { href: '/admin/vex-stats', label: 'VEX Competition Record' },
   { href: '/admin/combat', label: 'Combat Results' },
   { href: '/admin/cavitt', label: 'Cavitt / 9537' },
   { href: '/admin/iq-teams', label: 'IQ Teams' },

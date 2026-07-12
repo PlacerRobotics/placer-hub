@@ -166,3 +166,29 @@ export async function getCavittTeams(supabase: SupabaseClient): Promise<CavittTe
     lastSeason: t.last_season,
   }))
 }
+
+export type PartTeam = {
+  teamNumber: string
+  program: 'vex_v5' | 'vex_iq'
+  orgName: string | null
+  firstSeason: string | null
+  lastSeason: string | null
+}
+
+// PART's own V5 + IQ teams (is_part=true) — the synced competition record for
+// the admin viewer at /admin/vex-stats. Same underlying rows as /coach reads
+// per-team, but flattened for a full-roster view.
+export async function getPartTeams(supabase: SupabaseClient): Promise<PartTeam[]> {
+  const { data } = await supabase
+    .from('vex_team')
+    .select('team_number, program, org_name, first_season, last_season')
+    .eq('is_part', true)
+    .order('team_number')
+  return (data ?? []).map((t: any) => ({
+    teamNumber: t.team_number,
+    program: t.program,
+    orgName: t.org_name,
+    firstSeason: t.first_season,
+    lastSeason: t.last_season,
+  }))
+}
