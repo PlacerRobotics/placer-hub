@@ -16,7 +16,7 @@ export default async function TeamsPage() {
   const supabase = await createClient()
   let tq = supabase
     .from('team')
-    .select('id, team_name, team_number, program, division, season, school_org, active, is_provisional, notes, kit_number, kit_checkout_date, kit_return_date, kit_return_verified')
+    .select('id, team_name, team_number, program, division, season, school_org, active, is_provisional, notes, kit_number, kit_checkout_date, kit_return_date, kit_return_verified, slack_channel_id')
     .eq('season', SEASON)
     .order('created_at', { ascending: true })
   if (scope) tq = tq.in('program', scope)

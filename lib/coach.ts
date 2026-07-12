@@ -61,6 +61,7 @@ export type CoachAlert = { kind: CoachAlertKind; text: string }
 
 export type CoachTeamView = {
   teamId: string
+  teamNumber: string | null
   label: string
   program: string
   programLabel: string
@@ -264,6 +265,7 @@ export async function getCoachTeams(
 
     return {
       teamId: t.id,
+      teamNumber: t.team_number ?? null,
       label: coachTeamLabel(t),
       program: t.program,
       programLabel: PROGRAM_LABELS[t.program] ?? t.program,

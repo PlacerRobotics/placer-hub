@@ -20,6 +20,7 @@ export type Team = {
   kit_checkout_date: string | null
   kit_return_date: string | null
   kit_return_verified: boolean
+  slack_channel_id: string | null
 }
 
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', vex_iq: 'VEX IQ', combat: 'Combat' }
@@ -43,6 +44,7 @@ function EditForm({ team, onClose }: { team: Team; onClose: () => void }) {
     kit_checkout_date: team.kit_checkout_date ?? '',
     kit_return_date: team.kit_return_date ?? '',
     kit_return_verified: team.kit_return_verified ?? false,
+    slack_channel_id: team.slack_channel_id ?? '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -92,6 +94,7 @@ function EditForm({ team, onClose }: { team: Team; onClose: () => void }) {
         <div><label style={labelStyle}>Kit number</label><input style={inputStyle} value={f.kit_number} onChange={(e) => set('kit_number', e.target.value)} placeholder="e.g. K-0042" /></div>
         <div><label style={labelStyle}>Kit checked out</label><input type="date" style={inputStyle} value={f.kit_checkout_date} onChange={(e) => set('kit_checkout_date', e.target.value)} /></div>
         <div><label style={labelStyle}>Kit returned</label><input type="date" style={inputStyle} value={f.kit_return_date} onChange={(e) => set('kit_return_date', e.target.value)} /></div>
+        <div><label style={labelStyle}>Slack channel ID</label><input style={inputStyle} value={f.slack_channel_id} onChange={(e) => set('slack_channel_id', e.target.value)} placeholder="e.g. C0123ABCDEF" /></div>
       </div>
       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.875rem', fontSize: '0.9375rem', cursor: 'pointer' }}>
         <input type="checkbox" checked={f.kit_return_verified} onChange={(e) => set('kit_return_verified', e.target.checked)} style={{ width: 16, height: 16 }} />
@@ -121,7 +124,7 @@ export function TeamRows({ teams }: { teams: Team[] }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', padding: '0.875rem 1.25rem' }}>
             <div>
               <div style={{ fontSize: '0.9375rem', fontWeight: 500 }}>{t.team_name || t.team_number || 'Unnamed team'}</div>
-              <div className="text-help">{PROGRAM_LABELS[t.program] ?? t.program} · {t.division} · {t.school_org} · Kit {t.kit_number || '—'}</div>
+              <div className="text-help">{PROGRAM_LABELS[t.program] ?? t.program} · {t.division} · {t.school_org} · Kit {t.kit_number || '—'} · Slack {t.slack_channel_id ? '✓' : '—'}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
               {t.is_provisional && <StatusBadge label="provisional — needs re-confirmation" variant="warning" />}

@@ -57,8 +57,15 @@ async function CoachTeamView(id: string) {
   if (!coach) redirect('/dashboard') // not this team's coach
 
   const db = createAdminClient()
-  const { data: team } = await db.from('team').select('id, team_name, team_number, status, program').eq('id', id).maybeSingle()
+  const { data: team } = await db.from('team').select('id, team_name, team_number, status, program, team_fee_status, team_fee_amount').eq('id', id).maybeSingle()
   if (!team || team.program !== 'vex_iq') notFound()
+
+  // Team-fee payment record(s) — check number lives in source_payment_id for
+  // check payments; deposited_at is when a paper check actually cleared.
+  const { data: feePayments } = await db.from('payment_transaction')
+    .select('amount, source, source_payment_id, received_at, deposited_at, raw_payload')
+    .eq('team_id', id).eq('season', SEASON).eq('payment_type', 'iq_team_fee')
+    .order('received_at', { ascending: true })
   const { data: schools } = await db.from('school').select('id, name, grade_min, grade_max').order('name')
 
   const { data: apps } = await db.from('student_application').select('family_id, student_id, student:student_id ( first_name, last_name, grade )').eq('season', SEASON).ilike('triage_notes', `%iq_team:${id}%`)
@@ -103,7 +110,37 @@ async function CoachTeamView(id: string) {
   return (
     <FamilyShell familyName={teamLabel} maxWidth="md">
       <PageHeader title={teamLabel} subtitle={`VEX IQ${team.team_number ? ` · ${team.team_number}` : ''} · ${SEASON}`} />
-      <div style={{ marginBottom: '1.25rem' }}><StatusBadge label={sl} variant={sv} /></div>
+      <div style={{ marginBottom: '1.25rem', display: 'flex', gap: '0.5rem' }}>
+        <StatusBadge label={sl} variant={sv} />
+        {team.team_fee_status === 'paid' && <StatusBadge label="Paid" variant="success" />}
+        {team.team_fee_status === 'not_applicable' && <StatusBadge label="Fee waived" variant="neutral" />}
+      </div>
+
+      <FormSection title="Team fee" description="Your team registration fee and how it was paid.">
+        {(feePayments ?? []).length === 0 ? (
+          <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted)', margin: 0 }}>
+            {team.team_fee_status === 'paid'
+              ? 'Marked paid — payment record pending reconciliation.'
+              : `No payment received yet${team.team_fee_amount != null ? ` — team fee is $${Number(team.team_fee_amount).toLocaleString()}` : ''}.`}
+          </p>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><th style={cell}>Amount</th><th style={cell}>Method</th><th style={cell}>Check #</th><th style={cell}>Received</th><th style={cell}>Deposited</th></tr></thead>
+            <tbody>{(feePayments ?? []).map((p: any, i: number) => {
+              const checkNo = p.source === 'check' ? (p.source_payment_id || p.raw_payload?.check_number || null) : null
+              return (
+                <tr key={i}>
+                  <td style={cell}>${Number(p.amount).toLocaleString()}</td>
+                  <td style={cell}>{p.source === 'check' ? 'Check' : p.source === 'zeffy' ? 'Zeffy (online)' : p.source}</td>
+                  <td style={cell}>{checkNo ?? '—'}</td>
+                  <td style={cell}>{p.received_at ? new Date(p.received_at).toLocaleDateString() : '—'}</td>
+                  <td style={cell}>{p.deposited_at ? new Date(p.deposited_at).toLocaleDateString() : p.source === 'check' ? 'Not yet deposited' : '—'}</td>
+                </tr>
+              )
+            })}</tbody>
+          </table>
+        )}
+      </FormSection>
 
       <FormSection title="Team name" description="Your team’s display name. Renaming here does not update events.vex.com — change it there too.">
         <form action={renameTeam} style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>

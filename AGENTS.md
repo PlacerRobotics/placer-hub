@@ -96,8 +96,15 @@ Use the next free number; validate with `pglast` before committing.
 - **0049** `season_config.cavitt_v5_fundraising_target` — Cavitt keeps the standard
   $40 reg fee; what differs is the fundraising commitment ($500 vs $550). Live config
   set 2026-07-11 (fee 40, target 500, Cavitt Zeffy URL).
+- **0053** `vex_stats_schema` — `vex_team`/`vex_award`/`vex_worlds_run` + `vex_category_stats`
+  view (VEX competition record: Worlds quals, banner awards, elim depth, State/Region
+  titles). See docs/vex-stats-integration.md.
+- **0054** `combat_stats_schema` — `combat_bot`/`combat_event`/`combat_result`/`combat_match` +
+  `combat_bot_stats` view. See docs/combat-results-capture.md.
 
-Applied through **0049** (0048–0049 applied + verified live 2026-07-11; 0025–0047 verified
+Applied through **0054** (0053–0054 applied + verified live 2026-07-12 — tables, views,
+RLS + policies, and grants all confirmed; 0048–0049 applied + verified live 2026-07-11;
+0025–0047 verified
 against the live DB 2026-07-10: 0025 waiver column, 0026 volunteer_clearance, 0044
 volunteer statuses, 0045 provisional Combat teams,
 0046 step_status 'needs_review', 0047 aps_enrollment_run all present). Historical
@@ -138,6 +145,18 @@ that line on its own first.
   `/waivers` (second-parent signing).
 - Admin: `/admin/registrations`, `/admin/families` (+ `[id]` detail, change-email /
   resend / view-as-family), `/admin/admins` (roles), `/admin/payments` (Zeffy sync).
+- **Competition stats** (2026-07-12, migrations 0053/0054 — see above):
+  `/coach` shows a "Competition record" block per team (`lib/vexStats.ts`,
+  `components/ui/CompetitionRecord.tsx`) when a synced `vex_team` row matches
+  the coach's `team.team_number`. `/admin/cavitt` — the Cyber Cowboys (Willma
+  Cavitt JH) record, a SEPARATE program (`is_part=false`), never blended into
+  PART's own totals. `/admin/combat` — manual entry for combat results (no
+  RobotEvents source exists for combat). `scripts/part_vex_history.py`
+  (`--backfill` / `--season current --to supabase`) is the sync job, run by
+  `.github/workflows/sync-vex-stats.yml` 2x/day; `scripts/import_combat.py`
+  loads a combat history CSV. `GET /api/public/vex-stats` (service-role,
+  mirrors `/api/schools`'s public-read pattern) is what placer-site reads.
+  Full spec: `docs/vex-stats-integration.md` + `docs/combat-results-capture.md`.
 
 ## Email capture — re-add to registration (requested)
 
@@ -174,10 +193,22 @@ Do **NOT** re-add `volunteerlocal_email` (PRD §18/26 removed it deliberately �
 - The auth-admin actions (`change-email`, `view-as-family`, grant-role-by-email) use
   `auth.admin.*` and have **not been run against live** — verify before relying on them.
 - Combat teams not yet defined (only 15 V5 teams imported).
+- Competition stats: migrations 0053/0054 applied + history backfilled 2026-07-12.
+  Remaining: set `VEX_EVENTS_TOKEN` + `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` as
+  GitHub repo secrets so the 2x/day `Sync VEX Stats` Action can keep the current
+  season fresh (until then the data is a static snapshot).
 - Deferred registration polish (see `docs/KNOWN_ISSUES.md`): bulk-send hides per-email
   failures; reinstate always → `cleared_to_register`; `family_season.updated_at` not
   set; `registration_audit_log` isn't append-only; `/admin/guardians/new` 404 from the
   coach flow.
-- Google/Slack sync (`sync_log`) and volunteer-clearance integrations not built.
+- Slack invite + reconciliation (`/admin/slack`, `lib/slack.ts`/`lib/slack-recon.ts`,
+  nightly `/api/cron/slack-reconcile`) and Google Groups compare (`/admin/google-groups`)
+  are both built and merged, but Slack reconciliation is a no-op in production: none of
+  `SLACK_MAIN_BOT_TOKEN` / `NEXT_PUBLIC_SLACK_MAIN_INVITE` / `NEXT_PUBLIC_SLACK_IQ_INVITE`
+  are set (checked live 2026-07-12). Needs a Slack bot token (scopes `users:read`,
+  `users:read.email`, `channels:manage` or `groups:write`) plus the two invite links.
+  `/admin/teams` now has a Slack channel ID field (team.slack_channel_id) so
+  post-join channel placement has something to place people into — it was schema-only
+  before, no UI existed to set it.
 
 See `docs/KNOWN_ISSUES.md` for the full, severity-tagged list.
