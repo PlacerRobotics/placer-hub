@@ -132,11 +132,22 @@ left join vex_worlds_run w  on w.team_number = t.team_number
 group by t.category;
 ```
 
-- **Enable RLS**; grant `anon`/`authenticated` **read** on the tables + view. Only the
-  service-role key (used by the Action) writes. That read grant is what "serves up data
-  externally" — PostgREST exposes `…/rest/v1/vex_category_stats` for free.
+- **RLS — revised during implementation.** Every other table in this schema is
+  `to authenticated` only (`20260620000004_rls_policies.sql`, "rule 8": anon gets zero access
+  to anything). Rather than make the vex_*/combat_* tables the first-ever exception to that
+  rule, the shipped migrations (`20260620000053`/`54`) keep them `to authenticated` too —
+  writes gated on `public.is_super_admin()`, matching `team_write`. Public/external "serve it
+  up" access is instead a dedicated **service-role-backed read API route** (not raw anon
+  PostgREST on the tables) — see §6. This is stricter than originally planned here, and
+  intentionally so.
 - `banner_type` mapping (Excellence / Tournament (or IQ Teamwork) Champions / Design / Robot
   Skills Champion) and the elim-stage names come straight from the Python.
+- The actual shipped migrations add a few things this sketch omits: `vex_program`/`vex_category`/
+  `championship_scope` (nullable, not `''`) /`vex_award_source`/`vex_banner_type` enums instead of
+  bare `text`, an optional `linked_team_id uuid references team(id)` soft link on `vex_team` (and
+  `combat_bot`) for joining into this hub's own roster when a matching row exists, and
+  `security_invoker = true` on the views. Treat the actual migration files as authoritative over
+  this sketch.
 
 ---
 
@@ -176,11 +187,11 @@ jobs:
       - env:
           VEX_EVENTS_TOKEN:        ${{ secrets.VEX_EVENTS_TOKEN }}
           SUPABASE_URL:            ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY:    ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY:    ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python scripts/part_vex_history.py --season "${{ github.event.inputs.mode || 'current' }}" --to supabase
 ```
 
-- New secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`. `VEX_EVENTS_TOKEN` already exists.
+- New secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. `VEX_EVENTS_TOKEN` already exists.
 - Run `backfill` once via **Run workflow → mode: backfill**; the schedule then keeps the current
   season fresh 2×/day.
 
@@ -200,16 +211,21 @@ The team hub reads Supabase directly (it already does for its own data).
 
 ## 6. Public site (placer-site) — how it reads Supabase
 
-The marketing site currently reads Sanity only. Two ways to bring stats in:
+The marketing site currently reads Sanity only. **Revised from the original sketch**: since the
+shipped RLS keeps `vex_*`/`combat_*` `to authenticated` only (§2 — no anon exception to rule 8),
+an anon-key client from placer-site would see zero rows. Two ways that actually work:
 
-- **Option A (recommended): read Supabase directly, cached.** Add `lib/vexStats.ts` with a
-  Supabase read client (anon key) + a `fetchOrFallback`-style wrapper and `revalidate = 3600`.
-  Single source of truth, no duplication. Adds one dependency (`@supabase/supabase-js`) to the
-  site.
+- **Option A (recommended): a service-role-backed read API route.** Add a route in placer-hub
+  (e.g. `app/api/public/vex-stats/route.ts`) using `SUPABASE_SERVICE_ROLE_KEY` server-side only,
+  returning curated JSON from `vex_category_stats`/`combat_bot_stats` — never the anon key,
+  never exposed to a browser. placer-site's `lib/vexStats.ts` fetches that route (with
+  `revalidate = 3600` + a static fallback), and the same route is the "external consumers" API
+  mentioned in §0 — versioned and cacheable, independent of the raw schema. This is the option
+  that respects rule 8 without adding a new anon-access exception.
 - **Option B: mirror to Sanity.** Have the Action also write the `vex_category_stats` summary
   into a Sanity `vexStatsCache` singleton; the site keeps its Sanity-only read model and stays
   fully decoupled from the team-hub DB. More moving parts; choose this only if you want the
-  public site to have zero runtime dependency on Supabase.
+  public site to have zero runtime dependency on placer-hub at all.
 
 Then swap the hard-coded figures (`orgFacts.vexWorldsQualifications: 7`, the homepage
 "track record" grid, the impact prose) for the live numbers — publishing the **by-team
@@ -248,7 +264,7 @@ stay manual in `orgFacts` / `lib/content.ts`.
 
 1. [ ] Create the 3 tables + `vex_category_stats` view in Supabase; enable RLS + anon read.
 2. [ ] Move `part_vex_history.py` → `scripts/`; add `--backfill`, `--season current`, `--to supabase`.
-3. [ ] Add the GitHub Action + secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`).
+3. [ ] Add the GitHub Action + secrets (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
 4. [ ] Run `workflow_dispatch → backfill` once; verify rows + view in Supabase.
 5. [ ] Confirm the 2×/day schedule keeps the current season fresh (spot-check after a comp).
 6. [ ] Team hub: per-team Competition Record + **dedicated Cavitt section** (`category='cyber9537'`).

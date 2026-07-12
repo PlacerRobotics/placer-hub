@@ -2,3 +2,5 @@ google-auth
 google-api-python-client
 supabase
 python-dotenv
+requests
+openpyxl

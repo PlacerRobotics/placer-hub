@@ -1,0 +1,51 @@
+name: Sync VEX Stats
+
+# Scheduled runs always pull the CURRENT SEASON ONLY (cheap: history is
+# immutable, so old seasons are never re-fetched or re-scraped — see
+# scripts/part_vex_history.py and docs/vex-stats-integration.md). Same
+# 2x/day cadence as the public site's events cron (vercel.json).
+#
+# Run "backfill" manually (Actions tab -> Run workflow) once to seed ALL
+# history, and again only if the schema changes or data needs correcting.
+on:
+  schedule:
+    - cron: "0 8,20 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "current (fast, incremental) or backfill (full history, slow)"
+        type: choice
+        options: [current, backfill]
+        default: current
+      dry_run:
+        description: "Dry run only (compute + report, no writes)"
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Sync VEX stats to Supabase
+        env:
+          VEX_EVENTS_TOKEN: ${{ secrets.VEX_EVENTS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'current' }}"
+          if [ "$MODE" = "backfill" ]; then SCOPE_FLAG="--backfill"; else SCOPE_FLAG="--season current"; fi
+
+          LIVE_FLAG="--live"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then LIVE_FLAG=""; fi
+
+          python scripts/part_vex_history.py $SCOPE_FLAG --to supabase $LIVE_FLAG

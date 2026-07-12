@@ -2,10 +2,11 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { FamilyShell, PageHeader, StatusBadge, WarningAlert } from '@/components/ui'
+import { FamilyShell, PageHeader, StatusBadge, WarningAlert, CompetitionRecord } from '@/components/ui'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
 import { getCoachTeams, type CoachTeamView } from '@/lib/coach'
 import type { CoachClearance } from '@/lib/volunteer-buckets'
+import { getTeamVexStats, type TeamVexStats } from '@/lib/vexStats'
 
 const SEASON = '2026-27'
 
@@ -37,6 +38,17 @@ export default async function CoachPage() {
   const adb = createAdminClient()
   const teams = await getCoachTeams(adb, { guardianId: guardian.id, season: SEASON, validThrough: APS_VALID_THROUGH })
   if (!teams || !teams.length) redirect('/dashboard')
+
+  // Competition record (VEX Worlds/awards history) — keyed by team_number, not
+  // every team has a synced VEX record (combat teams, brand-new teams pre-sync).
+  const vexStatsByTeamId = new Map<string, TeamVexStats>()
+  await Promise.all(
+    teams.map(async (t) => {
+      if (!t.teamNumber) return
+      const stats = await getTeamVexStats(supabase, t.teamNumber)
+      if (stats) vexStatsByTeamId.set(t.teamId, stats)
+    })
+  )
 
   const familyLabel = guardian.last_name ? `${guardian.last_name} Family` : (user.email ?? '')
 
@@ -125,6 +137,15 @@ export default async function CoachPage() {
               </div>
             ))}
           </div>
+
+          {vexStatsByTeamId.has(team.teamId) && (
+            <>
+              <div style={{ ...subhead, marginTop: '1rem' }}>Competition record</div>
+              <div style={panel}>
+                <CompetitionRecord stats={vexStatsByTeamId.get(team.teamId)!} />
+              </div>
+            </>
+          )}
         </section>
       ))}
 

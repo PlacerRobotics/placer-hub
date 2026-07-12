@@ -23,5 +23,8 @@ export { FormSection, FormField, TextInput, TextArea } from './FormComponents'
 // Admin components
 export { AdminQueueTable, AdminDetailPanel, PermissionNotice } from './AdminComponents'
 
+// Competition record (VEX stats)
+export { CompetitionRecord } from './CompetitionRecord'
+
 // State components
 export { EmptyState, LoadingState, PageHeader } from './States'
