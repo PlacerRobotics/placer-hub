@@ -12,8 +12,9 @@ const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Comb
 const td: React.CSSProperties = { padding: '0.5rem 0.9rem', fontSize: '0.8125rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left' }
 const thh: React.CSSProperties = { ...td, fontWeight: 700, textTransform: 'uppercase', fontSize: '0.6875rem', color: 'var(--color-text-muted)' }
 
-export default async function FamilyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function FamilyDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ merge_email?: string; merge_guardian?: string }> }) {
   const { id } = await params
+  const { merge_email: initialMergeEmail, merge_guardian: initialLoserGuardianId } = await searchParams
   const supabase = await createClient()
 
   const { data: family } = await supabase.from('family').select('id, display_name, primary_email, status').eq('id', id).maybeSingle()
@@ -167,7 +168,10 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
         familyStatus={family.status ?? 'active'}
         students={students.map((s: any) => ({ id: s.id, name: `${s.first_name} ${s.last_name}`.trim(), registered: registeredStudentIds.has(s.id) }))}
         volunteers={(vps ?? []).map((v: any) => ({ id: v.id, guardianName: gNameById[v.guardian_id] ?? 'Guardian', status: v.status, hasAps: !!v.aps_user_id }))}
+        guardians={gList.map((g: any) => ({ id: g.id, name: `${g.first_name} ${g.last_name}`.trim(), email: g.login_email }))}
         blockers={blockers}
+        initialMergeEmail={initialMergeEmail}
+        initialLoserGuardianId={initialLoserGuardianId}
       />
 
       <div style={{ marginTop: '1.25rem' }}>

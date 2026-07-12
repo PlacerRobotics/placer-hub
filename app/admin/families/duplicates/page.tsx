@@ -80,11 +80,23 @@ export default async function SuspectedDuplicatesPage() {
                 </div>
                 <div style={tableWrap}>
                   <table style={table}>
-                    <thead><tr><th style={th}>Login email</th><th style={th}>Domain check</th><th style={th}>Role</th><th style={th}>Family</th><th style={th}>Students</th><th style={th}>Created</th></tr></thead>
+                    <thead><tr><th style={th}>Login email</th><th style={th}>Domain check</th><th style={th}>Role</th><th style={th}>Family</th><th style={th}>Students</th><th style={th}>Created</th><th style={th}>Fix</th></tr></thead>
                     <tbody>
-                      {group.guardians.map((g) => {
+                      {group.guardians.map((g, i) => {
                         const miss = nearMissDomain(g.login_email)
                         const n = studentCount[g.family_id] ?? 0
+                        // Within one family, every row's count is the SAME shared
+                        // family total, not a per-row number — showing it on every
+                        // row reads like duplicated data. Show it once.
+                        const showCount = group.crossFamily || i === 0
+                        // Fix link: cross-family → the OTHER family's page, pre-filling
+                        // "Merge into another family" with THIS row's email as target.
+                        // Within one family → this family's page, pre-selecting this
+                        // guardian as the one to merge away in "Duplicate guardian".
+                        const other = group.guardians.find((x) => x.id !== g.id)
+                        const fixHref = group.crossFamily
+                          ? (other ? `/admin/families/${other.family_id}?merge_email=${encodeURIComponent(g.login_email)}` : `/admin/families/${g.family_id}`)
+                          : `/admin/families/${g.family_id}?merge_guardian=${g.id}`
                         return (
                           <tr key={g.id}>
                             <td style={cell}>{g.login_email}</td>
@@ -95,8 +107,13 @@ export default async function SuspectedDuplicatesPage() {
                                 {familyName[g.family_id] ?? g.family_id}
                               </Link>
                             </td>
-                            <td style={cell}>{n === 0 ? <StatusBadge label="0 — likely spurious" variant="error" /> : n}</td>
+                            <td style={cell}>{showCount ? (n === 0 ? <StatusBadge label="0 — likely spurious" variant="error" /> : n) : <span style={{ color: 'var(--color-text-muted)' }}>↑ same family</span>}</td>
                             <td style={cell}>{new Date((g as GuardianRow).created_at).toLocaleDateString()}</td>
+                            <td style={cell}>
+                              <Link href={fixHref} style={{ fontWeight: 600, color: 'var(--color-navy)' }}>
+                                {group.crossFamily ? 'Merge families →' : 'Merge guardians →'}
+                              </Link>
+                            </td>
                           </tr>
                         )
                       })}

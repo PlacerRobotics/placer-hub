@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 // Duplicate-family cleanup actions (the "meaningful" half of the duplicates
@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation'
 // enforces every guard server-side; this UI just explains them.
 export type MaintStudent = { id: string; name: string; registered: boolean }
 export type MaintVolunteer = { id: string; guardianName: string; status: string; hasAps: boolean }
+export type MaintGuardian = { id: string; name: string; email: string }
 export type Blockers = Record<string, number>
 
 const card: React.CSSProperties = { border: '1.5px solid var(--color-error)', borderRadius: 10, padding: '1rem 1.25rem', margin: '1.5rem 0', backgroundColor: 'var(--color-surface)' }
@@ -30,13 +31,30 @@ type MergePreview = {
   seasons: { season: string; sourceStatus: string | null; targetStatus: string | null; winner: string | null }[]
 }
 
-export default function FamilyMaintenance({ familyId, familyLabel, familyStatus, students, volunteers, blockers }: { familyId: string; familyLabel: string; familyStatus: string; students: MaintStudent[]; volunteers: MaintVolunteer[]; blockers: Blockers }) {
+type GuardianMergePreview = {
+  loser: { id: string; name: string; email: string }
+  survivor: { id: string; name: string; email: string }
+  teamMemberCount: number
+  loserHasVolunteerProfile: boolean
+  survivorHasVolunteerProfile: boolean
+  waiverSignatureCount: number
+}
+
+export default function FamilyMaintenance({ familyId, familyLabel, familyStatus, students, volunteers, guardians, blockers, initialMergeEmail, initialLoserGuardianId }: { familyId: string; familyLabel: string; familyStatus: string; students: MaintStudent[]; volunteers: MaintVolunteer[]; guardians: MaintGuardian[]; blockers: Blockers; initialMergeEmail?: string; initialLoserGuardianId?: string }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [moveTarget, setMoveTarget] = useState<Record<string, string>>({})
-  const [mergeEmail, setMergeEmail] = useState('')
+  const [mergeEmail, setMergeEmail] = useState(initialMergeEmail ?? '')
   const [mergePreview, setMergePreview] = useState<MergePreview | null>(null)
+  const loserDefault = (initialLoserGuardianId && guardians.some((g) => g.id === initialLoserGuardianId)) ? initialLoserGuardianId : guardians[0]?.id ?? ''
+  const [loserId, setLoserId] = useState(loserDefault)
+  const [survivorId, setSurvivorId] = useState(guardians.find((g) => g.id !== loserDefault)?.id ?? guardians[1]?.id ?? '')
+  const [gPreview, setGPreview] = useState<GuardianMergePreview | null>(null)
+  // Deep-linked from the duplicates report (?merge_email= or ?merge_guardian=)
+  // — auto-run the (read-only) preview once so the admin lands on an answer,
+  // not another empty form to fill in.
+  const autoRan = useRef(false)
 
   const blocking = Object.entries(blockers).filter(([, c]) => c > 0)
   const deletable = blocking.length === 0
@@ -89,6 +107,28 @@ export default function FamilyMaintenance({ familyId, familyLabel, familyStatus,
     }
   }
 
+  async function previewGuardianMerge() {
+    if (!loserId || !survivorId || loserId === survivorId) { setMsg('Pick two different guardians.'); return }
+    setGPreview(null)
+    setBusy(true); setMsg('')
+    try {
+      const res = await fetch(`/api/admin/guardians/${loserId}/merge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ survivor_guardian_id: survivorId }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setMsg(d.error || 'Preview failed.'); return }
+      setGPreview(d.preview)
+    } catch { setMsg('Network error.') } finally { setBusy(false) }
+  }
+
+  async function confirmGuardianMerge() {
+    if (!gPreview) return
+    if (!window.confirm(`Merge "${gPreview.loser.email}" into "${gPreview.survivor.email}"?\n\nThe ${gPreview.loser.email} login goes away; it becomes a known alias of ${gPreview.survivor.email}. This cannot be undone.`)) return
+    if (await post(`/api/admin/guardians/${loserId}/merge`, { survivor_guardian_id: survivorId, confirm: true })) {
+      setMsg('Guardians merged.')
+      setGPreview(null)
+      router.refresh()
+    }
+  }
+
   async function previewMerge() {
     if (!mergeEmail.trim()) { setMsg('Enter the surviving family’s guardian login email first.'); return }
     setMergePreview(null)
@@ -109,6 +149,14 @@ export default function FamilyMaintenance({ familyId, familyLabel, familyStatus,
       window.location.href = '/admin/families?notice=merged'
     }
   }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (autoRan.current) return
+    autoRan.current = true
+    if (initialMergeEmail) previewMerge()
+    else if (initialLoserGuardianId) previewGuardianMerge()
+  }, [])
 
   return (
     <div style={card}>
@@ -157,6 +205,33 @@ export default function FamilyMaintenance({ familyId, familyLabel, familyStatus,
           <button type="button" style={outlineBtn} disabled={busy} onClick={() => moveVolunteer(v)}>Move to that guardian</button>
         </div>
       ))}
+
+      {guardians.length >= 2 && (
+        <div style={{ marginTop: '0.875rem', paddingTop: '0.875rem', borderTop: '1px solid var(--color-border)' }}>
+          <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.375rem' }}>Duplicate guardian on THIS family</div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '0 0 0.5rem' }}>
+            One real person entered twice under two logins on the same family (often from "add a second guardian" being used to fix a typo). Collapses into one guardian row; the other login becomes a known alias.
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <select style={input} value={loserId} onChange={(e) => { setLoserId(e.target.value); setGPreview(null) }}>
+              {guardians.map((g) => <option key={g.id} value={g.id}>{g.name} · {g.email}</option>)}
+            </select>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>goes away, merges into →</span>
+            <select style={input} value={survivorId} onChange={(e) => { setSurvivorId(e.target.value); setGPreview(null) }}>
+              {guardians.map((g) => <option key={g.id} value={g.id}>{g.name} · {g.email}</option>)}
+            </select>
+            <button type="button" style={outlineBtn} disabled={busy} onClick={previewGuardianMerge}>Preview merge</button>
+          </div>
+          {gPreview && (
+            <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', border: '1px solid var(--color-border)', borderRadius: 8, backgroundColor: 'var(--color-bg-light)', fontSize: '0.8125rem' }}>
+              <div>Coach assignments to move: {gPreview.teamMemberCount}</div>
+              {gPreview.loserHasVolunteerProfile && <div>{gPreview.survivorHasVolunteerProfile ? 'Both have a volunteer record — merge blocked, move one first.' : 'Has a volunteer record — will move to the survivor.'}</div>}
+              {gPreview.waiverSignatureCount > 0 && <div style={{ color: '#C9971B' }}>{gPreview.waiverSignatureCount} signed waiver(s) — the guardian row can't be deleted (append-only), but the login still becomes an alias.</div>}
+              <button type="button" style={{ ...dangerBtn, marginTop: '0.625rem' }} disabled={busy} onClick={confirmGuardianMerge}>Confirm merge</button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ marginTop: '0.875rem', paddingTop: '0.875rem', borderTop: '1px solid var(--color-border)' }}>
         <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.375rem' }}>Merge into another family</div>
