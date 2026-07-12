@@ -4,10 +4,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 // Duplicate-family cleanup actions (the "meaningful" half of the duplicates
-// report): move an unregistered student to their real family, and delete a
-// family once it's an empty shell. The API enforces every guard server-side;
-// this UI just explains them.
+// report): move an unregistered student or a volunteer record to the real
+// family, delete the family once it's an empty shell — or archive it when
+// append-only waiver signatures make deletion permanently impossible. The API
+// enforces every guard server-side; this UI just explains them.
 export type MaintStudent = { id: string; name: string; registered: boolean }
+export type MaintVolunteer = { id: string; guardianName: string; status: string; hasAps: boolean }
 export type Blockers = Record<string, number>
 
 const card: React.CSSProperties = { border: '1.5px solid var(--color-error)', borderRadius: 10, padding: '1rem 1.25rem', margin: '1.5rem 0', backgroundColor: 'var(--color-surface)' }
@@ -15,7 +17,7 @@ const input: React.CSSProperties = { padding: '7px 10px', fontSize: '0.8125rem',
 const dangerBtn: React.CSSProperties = { padding: '7px 14px', backgroundColor: 'var(--color-error)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 const outlineBtn: React.CSSProperties = { padding: '6px 12px', background: 'var(--color-surface)', color: 'var(--color-navy-deep)', border: '1.5px solid var(--color-navy-deep)', borderRadius: 6, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer', fontFamily: 'inherit' }
 
-export default function FamilyMaintenance({ familyId, familyLabel, students, blockers }: { familyId: string; familyLabel: string; students: MaintStudent[]; blockers: Blockers }) {
+export default function FamilyMaintenance({ familyId, familyLabel, familyStatus, students, volunteers, blockers }: { familyId: string; familyLabel: string; familyStatus: string; students: MaintStudent[]; volunteers: MaintVolunteer[]; blockers: Blockers }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
@@ -23,6 +25,9 @@ export default function FamilyMaintenance({ familyId, familyLabel, students, blo
 
   const blocking = Object.entries(blockers).filter(([, c]) => c > 0)
   const deletable = blocking.length === 0
+  // Signatures are append-only — a shell that only they block can never be
+  // deleted; archiving is its terminal state.
+  const archivable = !deletable && blocking.every(([k]) => k === 'waiver_signatures')
 
   async function post(url: string, body?: unknown) {
     setBusy(true); setMsg('')
@@ -44,10 +49,28 @@ export default function FamilyMaintenance({ familyId, familyLabel, students, blo
     }
   }
 
+  async function moveVolunteer(v: MaintVolunteer) {
+    const email = (moveTarget[`v-${v.id}`] ?? '').trim()
+    if (!email) { setMsg('Enter the target guardian’s login email first.'); return }
+    if (!window.confirm(`Move ${v.guardianName}'s volunteer record (clearances, APS history) to the guardian who signs in as ${email}?\n\nAPS sync keys off the MinistrySafe account id, so the history stays linked.`)) return
+    if (await post(`/api/admin/volunteers/${v.id}/move-guardian`, { target_guardian_email: email })) {
+      setMsg('Volunteer record moved.')
+      router.refresh()
+    }
+  }
+
   async function deleteFamily() {
     if (!window.confirm(`Delete ${familyLabel}?\n\nThis removes the family record and its guardian/season rows. It cannot be undone.`)) return
     if (await post(`/api/admin/families/${familyId}/delete`)) {
       window.location.href = '/admin/families?notice=deleted'
+    }
+  }
+
+  async function archiveFamily() {
+    if (!window.confirm(`Archive ${familyLabel}?\n\nSigned waivers are permanent records, so this duplicate can't be deleted — archiving parks it out of active use instead.`)) return
+    if (await post(`/api/admin/families/${familyId}/delete`, { archive: true })) {
+      setMsg('Family archived.')
+      router.refresh()
     }
   }
 
@@ -57,6 +80,10 @@ export default function FamilyMaintenance({ familyId, familyLabel, students, blo
       <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', margin: '0 0 0.875rem' }}>
         For spurious duplicate families (bad-email imports, the mailto: bug). Move any real students to the correct family first — then the empty shell can be deleted.
       </p>
+
+      {familyStatus === 'archived' && (
+        <p style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-text-muted)', margin: '0 0 0.75rem' }}>This family is ARCHIVED.</p>
+      )}
 
       {students.map((s) => (
         <div key={s.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
@@ -78,13 +105,36 @@ export default function FamilyMaintenance({ familyId, familyLabel, students, blo
         </div>
       ))}
 
+      {volunteers.map((v) => (
+        <div key={v.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 600, minWidth: 140 }}>
+            Volunteer record — {v.guardianName}
+            <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}> · {v.status}{v.hasAps ? ' · APS linked' : ''}</span>
+          </span>
+          <input
+            style={input}
+            type="email"
+            placeholder="target guardian's login email"
+            value={moveTarget[`v-${v.id}`] ?? ''}
+            onChange={(e) => setMoveTarget((m) => ({ ...m, [`v-${v.id}`]: e.target.value }))}
+          />
+          <button type="button" style={outlineBtn} disabled={busy} onClick={() => moveVolunteer(v)}>Move to that guardian</button>
+        </div>
+      ))}
+
       <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '0.875rem', paddingTop: '0.875rem', borderTop: '1px solid var(--color-border)' }}>
-        <button type="button" style={{ ...dangerBtn, opacity: deletable ? 1 : 0.5, cursor: deletable ? 'pointer' : 'not-allowed' }} disabled={busy || !deletable} onClick={deleteFamily}>
-          Delete this family
-        </button>
+        {archivable && familyStatus !== 'archived' ? (
+          <button type="button" style={dangerBtn} disabled={busy} onClick={archiveFamily}>Archive this family</button>
+        ) : (
+          <button type="button" style={{ ...dangerBtn, opacity: deletable ? 1 : 0.5, cursor: deletable ? 'pointer' : 'not-allowed' }} disabled={busy || !deletable} onClick={deleteFamily}>
+            Delete this family
+          </button>
+        )}
         <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
           {deletable
             ? 'This family is an empty shell (no students, enrollments, payments, waivers, volunteers, or aid records) — safe to delete.'
+            : archivable
+            ? 'Only signed waivers remain — those are permanent records, so this shell can never be deleted. Archive it instead.'
             : `Blocked — still has ${blocking.map(([k, c]) => `${c} ${k.replace(/_/g, ' ')}`).join(', ')}.`}
         </span>
       </div>

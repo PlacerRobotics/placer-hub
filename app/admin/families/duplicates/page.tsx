@@ -19,12 +19,16 @@ export default async function SuspectedDuplicatesPage() {
     .from('guardian')
     .select('id, family_id, first_name, last_name, login_email, role, created_at')
     .order('created_at', { ascending: true })
-  const all = (guardians ?? []) as GuardianRow[]
+  const allRaw = (guardians ?? []) as GuardianRow[]
 
-  const familyIds = [...new Set(all.map((g) => g.family_id))]
+  const familyIds = [...new Set(allRaw.map((g) => g.family_id))]
   const { data: families } = familyIds.length
-    ? await supabase.from('family').select('id, display_name, primary_email').in('id', familyIds)
+    ? await supabase.from('family').select('id, display_name, primary_email, status').in('id', familyIds)
     : { data: [] as any[] }
+  // Archived families are resolved duplicates parked for good (signed waivers
+  // make them undeletable) — they must stop flagging here forever.
+  const archived = new Set((families ?? []).filter((f: any) => f.status === 'archived').map((f: any) => f.id))
+  const all = allRaw.filter((g) => !archived.has(g.family_id))
   const familyName: Record<string, string> = Object.fromEntries(
     (families ?? []).map((f: any) => [f.id, f.display_name ?? f.primary_email ?? f.id])
   )

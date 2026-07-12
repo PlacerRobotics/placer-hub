@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => H.state.admin 
 
 import { POST as deleteFamily } from '@/app/api/admin/families/[id]/delete/route'
 import { POST as moveStudent } from '@/app/api/admin/students/[id]/move-family/route'
+import { POST as moveVolunteer } from '@/app/api/admin/volunteers/[id]/move-guardian/route'
 
 function useClients(tables: Tables, user: { id?: string; email?: string } | null) {
   H.state.admin = makeAdminClient(tables)
@@ -169,5 +170,78 @@ describe('POST /api/admin/students/[id]/move-family', () => {
     useClients(fixture(), { id: 'auth-readonly', email: 'ro@ex.com' })
     const res = await moveStudent(jsonRequest({ target_guardian_email: 'parent@ex.com' }), ctx({ id: 'sStub' }))
     expect(res.status).toBe(403)
+  })
+})
+
+// The Sheth shape: a spurious duplicate family (legacy yahoo email) carrying
+// the person's VOLUNTEER record — APS history included — instead of students.
+describe('POST /api/admin/volunteers/[id]/move-guardian', () => {
+  function volFixture(): Tables {
+    const t = fixture()
+    t.student = []
+    t.student_application = []
+    t.emergency_contact = []
+    t.volunteer_profile = [{ id: 'vol1', guardian_id: 'gDup', family_id: 'famDup', status: 'cleared', aps_user_id: '200042' }]
+    // History rows key off volunteer_id — they must never need touching.
+    t.volunteer_clearance = [{ id: 'vc1', volunteer_id: 'vol1', season: '2026-27', status: 'cleared' }]
+    t.youth_protection_cert = [{ id: 'yp1', volunteer_id: 'vol1', expiration_date: '2027-08-01' }]
+    return t
+  }
+
+  it('repoints the profile to the real guardian; APS/clearance history rides along untouched', async () => {
+    const tables = volFixture()
+    useClients(tables, WRITE_ADMIN)
+    const res = await moveVolunteer(jsonRequest({ target_guardian_email: 'parent@ex.com' }), ctx({ id: 'vol1' }))
+    expect(res.status).toBe(200)
+    const vp = tables.volunteer_profile.find((v) => v.id === 'vol1')!
+    expect(vp.guardian_id).toBe('gReal')
+    expect(vp.family_id).toBe('famReal')
+    expect(vp.aps_user_id).toBe('200042') // APS linkage untouched — sync keys off this, not email
+    expect(tables.volunteer_clearance[0].volunteer_id).toBe('vol1') // history untouched
+    // The shell is now empty → deletable.
+    const del = await deleteFamily(jsonRequest({}), ctx({ id: 'famDup' }))
+    expect(del.status).toBe(200)
+  })
+
+  it('refuses when the target guardian already has their own volunteer record', async () => {
+    const tables = volFixture()
+    tables.volunteer_profile.push({ id: 'vol2', guardian_id: 'gReal', family_id: 'famReal', status: 'in_progress', aps_user_id: null })
+    useClients(tables, WRITE_ADMIN)
+    const res = await moveVolunteer(jsonRequest({ target_guardian_email: 'parent@ex.com' }), ctx({ id: 'vol1' }))
+    expect(res.status).toBe(409)
+    expect(tables.volunteer_profile.find((v) => v.id === 'vol1')!.guardian_id).toBe('gDup') // untouched
+  })
+
+  it('read_only_admin cannot move a volunteer record', async () => {
+    useClients(volFixture(), { id: 'auth-readonly', email: 'ro@ex.com' })
+    const res = await moveVolunteer(jsonRequest({ target_guardian_email: 'parent@ex.com' }), ctx({ id: 'vol1' }))
+    expect(res.status).toBe(403)
+  })
+})
+
+describe('archive fallback — shells with signed waivers can never be deleted', () => {
+  it('archives when only signatures remain; refuses while movable records exist', async () => {
+    const tables = fixture()
+    tables.student = []
+    tables.student_application = []
+    tables.emergency_contact = []
+    tables.waiver_signature = [{ id: 'w1', family_id: 'famDup', guardian_id: 'gDup', season: '2026-27' }]
+    tables.volunteer_profile = [{ id: 'vol1', guardian_id: 'gDup', family_id: 'famDup', status: 'cleared' }]
+    useClients(tables, WRITE_ADMIN)
+
+    // Volunteer record still attached → archive refused.
+    let res = await deleteFamily(jsonRequest({ archive: true }), ctx({ id: 'famDup' }))
+    expect(res.status).toBe(409)
+
+    // Move the volunteer record off, then archive succeeds…
+    await moveVolunteer(jsonRequest({ target_guardian_email: 'parent@ex.com' }), ctx({ id: 'vol1' }))
+    res = await deleteFamily(jsonRequest({ archive: true }), ctx({ id: 'famDup' }))
+    expect(res.status).toBe(200)
+    expect((await res.json()).archived).toBe(true)
+    expect(tables.family.find((f) => f.id === 'famDup')!.status).toBe('archived')
+
+    // …while plain delete stays blocked by the signatures (append-only records).
+    res = await deleteFamily(jsonRequest({}), ctx({ id: 'famDup' }))
+    expect(res.status).toBe(409)
   })
 })
