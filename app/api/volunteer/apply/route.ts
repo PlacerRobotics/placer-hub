@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, volunteerApplicationReceivedHtml, volunteerAdminNotifyHtml } from '@/lib/email'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 const STANDARD_STEPS = ['policy_acknowledgment', 'background_check', 'aps_youth_protection', 'youth_protection_quiz', 'lab_orientation']
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const first = String(b.first_name ?? '').trim()
   const last = String(b.last_name ?? '').trim()
-  const email = String(b.email ?? '').trim().toLowerCase()
+  const email = cleanEmail(b.email)
   const phone = String(b.phone ?? '').trim()
   const signature = String(b.signature ?? '').trim()
   if (!first || !last || !email || !phone) return NextResponse.json({ error: 'Please complete your name, email, and phone.' }, { status: 400 })

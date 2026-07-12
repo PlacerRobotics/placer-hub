@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ageFromDob } from '@/lib/compliance'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 const TSHIRT = new Set(['ym', 'yl', 'xs', 's', 'm', 'l', 'xl', 'xxl', 'xxxl'])
@@ -46,10 +47,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // rename/merge). For IQ / under-13 students, student email edits are ignored.
   if (!noStudentEmail) {
     const emailUpd: Record<string, unknown> = {}
-    if (body.communication_email !== undefined) emailUpd.communication_email = String(body.communication_email).trim().toLowerCase() || null
-    if (body.fusion_education_email !== undefined) emailUpd.fusion_education_email = String(body.fusion_education_email).trim().toLowerCase() || null
+    if (body.communication_email !== undefined) emailUpd.communication_email = cleanEmail(body.communication_email) || null
+    if (body.fusion_education_email !== undefined) emailUpd.fusion_education_email = cleanEmail(body.fusion_education_email) || null
     if (body.slack_email !== undefined) {
-      const newVal = String(body.slack_email).trim().toLowerCase() || null
+      const newVal = cleanEmail(body.slack_email) || null
       const current = (student as any).slack_email ?? null
       if (newVal !== current) {
         if (current) return NextResponse.json({ error: 'Changing the Slack email requires an admin — contact info@placerrobotics.org.' }, { status: 400 })

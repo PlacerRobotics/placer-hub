@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, registrationConfirmationHtml } from '@/lib/email'
 import { NEXT_PUBLIC_SLACK_MAIN_INVITE, NEXT_PUBLIC_SLACK_IQ_INVITE } from '@/lib/env'
 import { ageFromDob, isUnder13, needsCoppa as computeNeedsCoppa } from '@/lib/compliance'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = {
@@ -112,8 +113,8 @@ export async function POST(request: NextRequest) {
       tshirt_size: s.tshirt_size || null,
       // No student emails for VEX IQ or ANY under-13 participant (COPPA — parent-managed,
       // regardless of grade; e.g. 12-year-old 7th graders). Enforced server-side.
-      fusion_education_email: (program === 'vex_iq' || under13) ? null : (s.fusion_education_email || null),
-      communication_email: (program === 'vex_iq' || under13) ? null : (s.communication_email || null),
+      fusion_education_email: (program === 'vex_iq' || under13) ? null : (cleanEmail(s.fusion_education_email) || null),
+      communication_email: (program === 'vex_iq' || under13) ? null : (cleanEmail(s.communication_email) || null),
       under_13_confirmed: under13,
       status: 'active',
     })

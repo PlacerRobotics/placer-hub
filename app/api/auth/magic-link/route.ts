@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { sendMagicLinkEmail } from '@/lib/email'
+import { cleanEmail } from '@/lib/email-input'
 
 // POST /api/auth/magic-link — send a branded sign-in link via Resend (not Supabase SMTP).
 // body: { email, redirectTo? }
 export async function POST(req: NextRequest) {
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid request.' }, { status: 400 }) }
-  const email = String(body.email ?? '').trim().toLowerCase()
+  const email = cleanEmail(body.email)
   const redirectTo = typeof body.redirectTo === 'string' && body.redirectTo.startsWith('/') ? body.redirectTo : '/dashboard'
   if (!email.includes('@')) return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 })
 

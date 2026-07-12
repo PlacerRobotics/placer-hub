@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ROLE_VALUES, isSuperAdmin, PROGRAM_SCOPED_ROLES, PROGRAM_SCOPE_VALUES } from '@/lib/auth/roles'
+import { cleanEmail } from '@/lib/email-input'
 
 const nameFromEmail = (e: string) =>
   e.split('@')[0].split(/[._-]/).filter(Boolean).map((s) => s[0].toUpperCase() + s.slice(1)).join(' ')
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   // Resolve the target admin_profile.
   let profileId: string | null = body.admin_profile_id ? String(body.admin_profile_id) : null
   if (!profileId) {
-    const email = String(body.email ?? '').trim().toLowerCase()
+    const email = cleanEmail(body.email)
     if (!email) return NextResponse.json({ error: 'Provide an admin or an email.' }, { status: 400 })
     const { data: existing } = await db.from('admin_profile').select('id').ilike('email', email).maybeSingle()
     if (existing) profileId = existing.id

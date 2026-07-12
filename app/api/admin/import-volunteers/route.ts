@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { APS_VALID_THROUGH } from '@/lib/volunteer'
+import { cleanEmail } from '@/lib/email-input'
 
 const DEFAULT_SEASON = '2026-27'
 
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
   const results: { name: string; email: string; status: string }[] = []
 
   for (const r of rows) {
-    const email = String(r.email ?? '').trim().toLowerCase()
+    const email = cleanEmail(r.email)
     const first = String(r.first_name ?? '').trim()
     const last = String(r.last_name ?? '').trim()
     const name = `${first} ${last}`.trim()

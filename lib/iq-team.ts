@@ -1,4 +1,5 @@
 import { sendMagicLinkEmail } from '@/lib/email'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 
@@ -63,7 +64,7 @@ export async function addIqMembers(db: any, opts: {
 
   for (const m of opts.roster ?? []) {
     const sFirst = String(m.student_first ?? '').trim(), sLast = String(m.student_last ?? '').trim()
-    const pEmail = String(m.parent_email ?? '').trim().toLowerCase()
+    const pEmail = cleanEmail(m.parent_email)
     if (!sFirst || !sLast || !pEmail) continue
     const pFirst = String(m.parent_first ?? '').trim(), pLast = String(m.parent_last ?? '').trim() || sLast
     const grade = Number(m.grade)

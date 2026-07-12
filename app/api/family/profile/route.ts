@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { cleanEmail } from '@/lib/email-input'
 
 // PATCH /api/family/profile — the family's contact info. NOTE: `family` has no
 // address/phone columns in this schema; that lives on the guardian. So this
@@ -25,10 +26,10 @@ export async function PATCH(req: NextRequest) {
   if (body.zip_code !== undefined) upd.zip_code = String(body.zip_code).trim() || null
   if (body.phone !== undefined) upd.phone = String(body.phone).trim() || guardian.phone // phone is NOT NULL
   // Google Workspace / communication email — freely editable.
-  if (body.communication_email !== undefined) upd.communication_email = String(body.communication_email).trim().toLowerCase() || null
+  if (body.communication_email !== undefined) upd.communication_email = cleanEmail(body.communication_email) || null
   // Slack email — settable once; changing it later needs an admin (Slack can't rename/merge).
   if (body.slack_email !== undefined) {
-    const newVal = String(body.slack_email).trim().toLowerCase() || null
+    const newVal = cleanEmail(body.slack_email) || null
     const current = (guardian as any).slack_email ?? null
     if (newVal !== current) {
       if (current) return NextResponse.json({ error: 'Changing your Slack email requires an admin — contact info@placerrobotics.org.' }, { status: 400 })
