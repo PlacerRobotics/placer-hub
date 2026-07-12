@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { AdminShell, PageHeader, AdminDetailPanel } from '@/components/ui'
 import FamilyActions from './family-actions'
 import FamilyMaintenance from './family-maintenance'
+import EmailAliases from './email-aliases'
 import { formatPhoneDisplay } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
@@ -63,6 +64,14 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
   // (all history keys off volunteer_id, so the move carries everything).
   const { data: vps } = await supabase.from('volunteer_profile').select('id, guardian_id, status, aps_user_id').eq('family_id', id)
   const gNameById: Record<string, string> = Object.fromEntries(gList.map((g: any) => [g.id, `${g.first_name} ${g.last_name}`.trim()]))
+
+  // Known-alternate emails (design: docs/design_email_identity_v1_0.md §1).
+  const guardianIds = gList.map((g: any) => g.id)
+  const { data: aliasRows } = guardianIds.length
+    ? await supabase.from('guardian_email_alias').select('id, guardian_id, email, source').in('guardian_id', guardianIds)
+    : { data: [] as any[] }
+  const aliasesByGuardian: Record<string, { id: string; email: string; source: string }[]> = {}
+  for (const a of aliasRows ?? []) (aliasesByGuardian[a.guardian_id] ??= []).push({ id: a.id, email: a.email, source: a.source })
 
   const familyName = g1?.last_name ? `${g1.last_name} Family` : family.display_name ?? family.primary_email
 
@@ -149,6 +158,8 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
           </tbody>
         </table>
       </div>
+
+      <EmailAliases guardians={gList.map((g: any) => ({ id: g.id, name: `${g.first_name} ${g.last_name}`.trim(), aliases: aliasesByGuardian[g.id] ?? [] }))} />
 
       <FamilyMaintenance
         familyId={id}

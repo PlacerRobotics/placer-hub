@@ -6,6 +6,8 @@ import { hasAnyRole } from '@/lib/auth/roles'
 import { AdminShell, PageHeader, StatusBadge } from '@/components/ui'
 import { sendMagicLinkEmail } from '@/lib/email'
 import { dropIqStudent } from '@/lib/iq-team'
+import { cleanEmail } from '@/lib/email-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 import IqApproveButton from '../iq-approve-button'
 
 const SEASON = '2026-27'
@@ -91,20 +93,23 @@ export default async function IqTeamDetail({ params }: { params: Promise<{ id: s
     if (!(await hasAnyRole(adb, a.id, ROLES))) return
     const first = String(formData.get('first') ?? '').trim()
     const last = String(formData.get('last') ?? '').trim()
-    const em = String(formData.get('email') ?? '').trim().toLowerCase()
+    const em = cleanEmail(String(formData.get('email') ?? ''))
     if (!first || !last || !em.includes('@')) return
     // Find or create the coach's account (stub), then attach as coach + invite.
-    let gg = (await adb.from('guardian').select('id, family_id').ilike('login_email', em).maybeSingle()).data
-    if (!gg) {
+    const match = await findGuardianByEmail(adb, em)
+    let ggId: string
+    if (!match) {
       const { data: fam } = await adb.from('family').insert({ primary_email: em, display_name: last }).select('id').single()
-      gg = (await adb.from('guardian').insert({ family_id: fam!.id, first_name: first, last_name: last, login_email: em, phone: '', role: 'primary' }).select('id, family_id').single()).data!
+      const created = (await adb.from('guardian').insert({ family_id: fam!.id, first_name: first, last_name: last, login_email: em, phone: '', role: 'primary' }).select('id').single()).data!
+      ggId = created.id
     } else {
-      await adb.from('guardian').update({ first_name: first, last_name: last }).eq('id', gg.id)
+      ggId = match.id
+      await adb.from('guardian').update({ first_name: first, last_name: last }).eq('id', ggId)
     }
     // Revoke any other active coach on this team (reassignment), then attach the new one.
-    await adb.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('team_id', id).eq('team_role', 'coach').is('revoked_at', null).neq('guardian_id', gg.id)
-    const existing = (await adb.from('team_member').select('id').eq('team_id', id).eq('guardian_id', gg.id).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()).data
-    if (!existing) await adb.from('team_member').insert({ team_id: id, guardian_id: gg.id, season: SEASON, team_role: 'coach', program: 'vex_iq' })
+    await adb.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('team_id', id).eq('team_role', 'coach').is('revoked_at', null).neq('guardian_id', ggId)
+    const existing = (await adb.from('team_member').select('id').eq('team_id', id).eq('guardian_id', ggId).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()).data
+    if (!existing) await adb.from('team_member').insert({ team_id: id, guardian_id: ggId, season: SEASON, team_role: 'coach', program: 'vex_iq' })
     try {
       await sendMagicLinkEmail({
         email: em, redirectPath: '/dashboard',

@@ -4,6 +4,7 @@ import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
 import { cleanEmail } from '@/lib/email-input'
+import { findGuardianByEmail, addGuardianEmailAlias } from '@/lib/guardian-lookup'
 
 const SEASON = '2026-27'
 
@@ -35,12 +36,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const oldEmail = String(g.login_email).toLowerCase()
   if (oldEmail === newEmail) return NextResponse.json({ ok: true, unchanged: true })
 
-  // Guard against collisions with another guardian.
-  const { data: clash } = await db.from('guardian').select('id').ilike('login_email', newEmail).maybeSingle()
+  // Guard against collisions with another guardian — checks known aliases too,
+  // so you can't reassign a login TO an address already on file for someone else.
+  const clash = await findGuardianByEmail(db, newEmail)
   if (clash) return NextResponse.json({ error: 'That email is already associated with another account.' }, { status: 409 })
 
   const { error: gErr } = await db.from('guardian').update({ login_email: newEmail }).eq('id', g.id)
   if (gErr) return NextResponse.json({ error: gErr.message }, { status: 500 })
+
+  // The old login becomes a known alias — so it can never spawn a duplicate
+  // family again if it turns up on a future import, roster-add, or Zeffy
+  // payment (design: docs/design_email_identity_v1_0.md §1).
+  await addGuardianEmailAlias(db, g.id, oldEmail, 'former_login', admin.id)
 
   // Update the auth user, if one exists for the old email.
   let authUpdated = false

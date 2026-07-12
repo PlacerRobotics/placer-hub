@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, iqTeamSubmittedHtml } from '@/lib/email'
 import { cleanEmail } from '@/lib/email-input'
 import { cleanPhone } from '@/lib/phone-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 const SEASON = '2026-27'
 
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
       const res = await addMemberStub(db, coachFamilyId, sFirst, sLast, teamId, grade, schoolId, school)
       results.push({ student: `${sFirst} ${sLast}`, under: res.error ? `error: ${res.error}` : 'your family' }); continue
     }
-    let pg = (await db.from('guardian').select('id, family_id').ilike('login_email', pEmail).maybeSingle()).data
+    let pg = await findGuardianByEmail(db, pEmail)
     let familyId: string
     if (pg) familyId = pg.family_id
     else {

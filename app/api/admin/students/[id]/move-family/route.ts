@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cleanEmail } from '@/lib/email-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 // POST /api/admin/students/[id]/move-family — the duplicate-family merge
 // primitive: move a NOT-YET-REGISTERED student (a stub created by an import or
@@ -31,8 +32,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!targetFamilyId) {
     const email = cleanEmail(body.target_guardian_email)
     if (!email) return NextResponse.json({ error: 'Provide a target family or a target guardian email.' }, { status: 400 })
-    const { data: g } = await db.from('guardian').select('family_id').ilike('login_email', email).maybeSingle()
-    if (!g) return NextResponse.json({ error: `No guardian found with login email ${email}.` }, { status: 404 })
+    const g = await findGuardianByEmail(db, email)
+    if (!g) return NextResponse.json({ error: `No guardian found with login (or known alternate) email ${email}.` }, { status: 404 })
     targetFamilyId = g.family_id
   } else {
     const { data: fam } = await db.from('family').select('id').eq('id', targetFamilyId).maybeSingle()

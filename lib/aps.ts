@@ -89,7 +89,9 @@ export async function enrollApsTraining(db: any, apiKey: string, volunteerId: st
   }
   const created = await createApsUser(apiKey, { first_name: g.first_name ?? '', last_name: g.last_name ?? '', email: g.login_email, external_id: externalId })
   if (!created?.id) return { ok: false, error: 'APS user creation failed.' }
-  await db.from('volunteer_profile').update({ aps_user_id: String(created.id), aps_external_id: externalId, aps_training_url: created.direct_login_url ?? null }).eq('id', volunteerId)
+  // Hub-created APS accounts always use login_email — recording it now means
+  // this volunteer never joins the "forgot my APS login" class §1.5 exists for.
+  await db.from('volunteer_profile').update({ aps_user_id: String(created.id), aps_external_id: externalId, aps_training_url: created.direct_login_url ?? null, aps_email: g.login_email }).eq('id', volunteerId)
   return { ok: true, url: created.direct_login_url, created: true }
 }
 
@@ -169,6 +171,45 @@ export async function syncApsForAll(db: any, apiKey: string, surveyCode?: string
       if (!exists) await db.from('youth_protection_cert').insert({ volunteer_id: v.id, expiration_date: expiry, issued_date: issued, cert_url: t.certificate_url ?? null, aps_cert_id: t.id != null ? String(t.id) : null })
       await db.from('volunteer_step').upsert({ volunteer_id: v.id, step: 'aps_youth_protection', status: 'complete', completed_at: new Date().toISOString() }, { onConflict: 'volunteer_id,step' })
       summary.updated++; results.push({ name, status: `expires ${expiry}` })
+    } catch (e: any) {
+      summary.errors++; results.push({ name, status: `error: ${e?.message ?? 'failed'}` })
+    }
+  }
+  return { summary, results }
+}
+
+// ── APS login email of record (task: docs/design_email_identity_v1_0.md §1.5) ──
+//
+// Backfills volunteer_profile.aps_email — the MinistrySafe account's login
+// email — from the MinistrySafe API itself (GET /users/:id already returns
+// it), so nobody has to remember a years-old yahoo/outlook address. Also
+// records that address as a guardian_email_alias (source 'aps_legacy') so a
+// future import/roster-add under the same address resolves to the real
+// guardian instead of minting a duplicate family. Only fills volunteers
+// missing aps_email — safe to re-run, and cheap since it usually touches
+// nothing after the first pass.
+export async function backfillApsEmails(db: any, apiKey: string) {
+  const { data: vols } = await db
+    .from('volunteer_profile')
+    .select('id, guardian_id, aps_user_id, guardian:guardian_id ( first_name, last_name )')
+    .not('aps_user_id', 'is', null)
+    .is('aps_email', null)
+
+  const summary = { updated: 0, skipped: 0, errors: 0 }
+  const results: { name: string; status: string }[] = []
+  for (const v of vols ?? []) {
+    const g: any = Array.isArray(v.guardian) ? v.guardian[0] : v.guardian
+    const name = g ? `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim() : v.aps_user_id
+    try {
+      const u = await getApsUser(apiKey, String(v.aps_user_id))
+      const email = (u?.email ?? '').trim().toLowerCase()
+      if (!email) { summary.skipped++; results.push({ name, status: 'MinistrySafe has no email on file' }); continue }
+      await db.from('volunteer_profile').update({ aps_email: email }).eq('id', v.id)
+      // Best-effort — a collision here just means the address is already
+      // known (as someone's login or another alias); never worth failing over.
+      const { data: clash } = await db.from('guardian').select('id').ilike('login_email', email).maybeSingle()
+      if (!clash) await db.from('guardian_email_alias').insert({ guardian_id: v.guardian_id, email, source: 'aps_legacy' })
+      summary.updated++; results.push({ name, status: email })
     } catch (e: any) {
       summary.errors++; results.push({ name, status: `error: ${e?.message ?? 'failed'}` })
     }

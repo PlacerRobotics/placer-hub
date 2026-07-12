@@ -4,6 +4,7 @@ import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cleanEmail } from '@/lib/email-input'
 import { cleanPhone } from '@/lib/phone-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 const SEASON = '2026-27'
 
@@ -98,7 +99,8 @@ export async function POST(request: NextRequest) {
       // (non-duplicate) coach team_member. Coach assignment is identity-only here.
       const coachEmail = cleanEmail(g(r, 'coach_email'))
       if (coachEmail) {
-        let guardian = (await db.from('guardian').select('id').ilike('login_email', coachEmail).maybeSingle()).data
+        const match = await findGuardianByEmail(db, coachEmail)
+        let guardian: { id: string } | null = match ? { id: match.id } : null
         if (!guardian) {
           const cFirst = g(r, 'coach_first_name'), cLast = g(r, 'coach_last_name')
           const { data: fam } = await db.from('family').insert({ primary_email: coachEmail, display_name: cLast || null }).select('id').single()

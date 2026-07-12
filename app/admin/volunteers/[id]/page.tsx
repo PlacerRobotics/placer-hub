@@ -173,6 +173,7 @@ export default async function VolunteerDetailPage({ params }: { params: Promise<
     { label: 'Email', value: guardian?.login_email ?? '—' },
     { label: 'Phone', value: guardian?.phone ?? '—' },
     { label: 'Status', value: <StatusBadge label={bucketMeta.label} variant={bucketMeta.variant} /> },
+    { label: 'APS login email of record', value: vp.aps_user_id ? (vp.aps_email ?? 'Unknown — run "Backfill APS login emails" on the Volunteers page') : '—' },
   ]
 
   const ClearRow = ({ label, ok, detail, action }: { label: string; ok: boolean; detail: React.ReactNode; action?: React.ReactNode }) => (

@@ -72,7 +72,7 @@ export default async function VolunteerPortal() {
     db.from('youth_protection_cert').select('issued_date, expiration_date, cert_url, aps_cert_id').eq('volunteer_id', vol.profileId).order('expiration_date', { ascending: false }).limit(1).maybeSingle(),
     db.from('volunteer_step').select('step, status').eq('volunteer_id', vol.profileId),
     db.from('team_member').select('team_role, team:team_id(team_name, team_number, program)').eq('guardian_id', vol.guardianId).is('revoked_at', null),
-    db.from('volunteer_profile').select('aps_user_id, aps_training_url').eq('id', vol.profileId).maybeSingle(),
+    db.from('volunteer_profile').select('aps_user_id, aps_training_url, aps_email').eq('id', vol.profileId).maybeSingle(),
   ])
   // step type → status ('pending' not started · 'in_progress' submitted/processing ·
   // 'needs_review' admin flag · 'complete'/'waived' done)
@@ -87,6 +87,11 @@ export default async function VolunteerPortal() {
   // one-click training link; prefer it over the generic self-enroll page.
   const apsEnrolled = !!apsProfile?.aps_user_id
   const trainingUrl = apsProfile?.aps_training_url || APS_TRAINING
+  // Shown next to the generic "APS system" sign-in link — the direct training
+  // link above needs no password, but a volunteer who ever has to sign into
+  // MinistrySafe directly (password reset, support) needs to know which email
+  // the account is under, which may not be their current Hub login.
+  const apsLoginNote = apsEnrolled && apsProfile?.aps_email ? ` (sign in with ${apsProfile.aps_email})` : ''
   if (cert?.expiration_date) {
     const completed = cert.issued_date ? `Completed ${cert.issued_date} · ` : ''
     if (cert.expiration_date >= APS_VALID_THROUGH) {
@@ -100,7 +105,7 @@ export default async function VolunteerPortal() {
       apsActions.push({ label: apsEnrolled ? 'Complete my training' : 'Start training', href: trainingUrl, external: true })
     }
     if (cert.cert_url) apsActions.push({ label: cert.aps_cert_id ? `Cert #${cert.aps_cert_id}` : 'View certificate', href: cert.cert_url, external: true, variant: apsTone === 'complete' ? undefined : 'link' })
-    apsActions.push({ label: 'APS system', href: APS_SIGN_IN, external: true, variant: 'link' })
+    apsActions.push({ label: `APS system${apsLoginNote}`, href: APS_SIGN_IN, external: true, variant: 'link' })
   } else {
     // No cert on file: the cert table is authoritative for completion, so only the
     // submitted / admin-flag signals from the step row apply here.
@@ -108,21 +113,21 @@ export default async function VolunteerPortal() {
     if (apsDisp === 'waiting') {
       apsTone = 'waiting'
       apsDetail = `Submitted — ${OWNER_LABELS.placer_robotics.toLowerCase()}. We’re verifying your training certificate; nothing needed from you.`
-      apsActions.push({ label: 'APS system', href: APS_SIGN_IN, external: true, variant: 'link' })
+      apsActions.push({ label: `APS system${apsLoginNote}`, href: APS_SIGN_IN, external: true, variant: 'link' })
     } else if (apsDisp === 'attention') {
       apsTone = 'attention'
       apsDetail = <>We need to take another look at your training certificate. <Contact /></>
-      apsActions.push({ label: 'APS system', href: APS_SIGN_IN, external: true, variant: 'link' })
+      apsActions.push({ label: `APS system${apsLoginNote}`, href: APS_SIGN_IN, external: true, variant: 'link' })
     } else if (apsEnrolled) {
       // Enrolled but no completed training this season — direct link, not the
       // generic "required" copy.
       apsDetail = 'You’ve been enrolled — complete your training. Your certificate syncs to the Hub automatically when you finish.'
       apsActions.push({ label: 'Complete my training', href: trainingUrl, external: true })
-      apsActions.push({ label: 'APS system', href: APS_SIGN_IN, external: true, variant: 'link' })
+      apsActions.push({ label: `APS system${apsLoginNote}`, href: APS_SIGN_IN, external: true, variant: 'link' })
     } else {
       apsDetail = 'Required — complete CA Mandated Reporter (AB 506) training. Your expiry syncs automatically from APS once complete.'
       apsActions.push({ label: 'Start training', href: APS_TRAINING, external: true })
-      apsActions.push({ label: 'APS system', href: APS_SIGN_IN, external: true, variant: 'link' })
+      apsActions.push({ label: `APS system${apsLoginNote}`, href: APS_SIGN_IN, external: true, variant: 'link' })
     }
   }
 

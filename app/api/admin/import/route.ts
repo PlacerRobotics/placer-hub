@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { nearMissDomain } from '@/lib/duplicates'
 import { cleanEmail } from '@/lib/email-input'
 import { cleanPhone } from '@/lib/phone-input'
+import { findGuardianByEmail } from '@/lib/guardian-lookup'
 
 const SEASON = '2026-27'
 
@@ -86,22 +87,32 @@ export async function POST(request: NextRequest) {
       const zipVal = String(r.zip ?? '').trim()
       const familyAddress = { street_address: street, city: cityVal || null, state: stateVal, zip_code: zipVal || null }
 
-      // 1. family (by guardian1 email)
+      // 1. family — an alias-aware guardian match (a re-import under a known
+      // alternate email — APS-legacy, abandoned login) takes priority over the
+      // legacy family.primary_email lookup, so this never mints a duplicate
+      // family for someone we already know under a different address.
       let familyId: string
-      const { data: existingFam } = await db.from('family').select('id').ilike('primary_email', g1email).maybeSingle()
-      if (existingFam) {
-        familyId = existingFam.id
+      const g1Match = await findGuardianByEmail(db, g1email)
+      if (g1Match) {
+        familyId = g1Match.family_id
         const famUpd = Object.fromEntries(Object.entries(familyAddress).filter(([, v]) => v != null))
         if (Object.keys(famUpd).length) await db.from('family').update(famUpd).eq('id', familyId)
       } else {
-        const { data: fam, error } = await db
-          .from('family')
-          .insert({ primary_email: g1email, display_name: g1last ? `${g1last} Family` : null, ...familyAddress })
-          .select('id')
-          .single()
-        if (error) throw new Error(error.message)
-        familyId = fam.id
-        familiesCreated++
+        const { data: existingFam } = await db.from('family').select('id').ilike('primary_email', g1email).maybeSingle()
+        if (existingFam) {
+          familyId = existingFam.id
+          const famUpd = Object.fromEntries(Object.entries(familyAddress).filter(([, v]) => v != null))
+          if (Object.keys(famUpd).length) await db.from('family').update(famUpd).eq('id', familyId)
+        } else {
+          const { data: fam, error } = await db
+            .from('family')
+            .insert({ primary_email: g1email, display_name: g1last ? `${g1last} Family` : null, ...familyAddress })
+            .select('id')
+            .single()
+          if (error) throw new Error(error.message)
+          familyId = fam.id
+          familiesCreated++
+        }
       }
 
       // 2. guardians (employer fields on guardian1)
@@ -119,19 +130,36 @@ export async function POST(request: NextRequest) {
         const pct = String(r.employer_match_pct ?? '').trim()
         g1.employer_match_pct = pct ? Number(pct) : null
       }
-      const guardianRows: Record<string, unknown>[] = [g1]
+      const guardianRows: Record<string, unknown>[] = []
+      // g1Match resolved via login_email OR an alias (§1). upsert(onConflict:
+      // 'login_email') can only match the FIRST kind — matching row that on an
+      // alias-only hit would insert a phantom second "primary" guardian under
+      // the CSV's email instead of updating the real one. Update in place when
+      // the match came through an alias; otherwise the upsert below is exactly
+      // the original (identical) behavior for a straight login_email match.
+      if (g1Match?.matchedVia === 'alias') {
+        const { role: _r, login_email: _le, ...g1Fields } = g1
+        await db.from('guardian').update(g1Fields).eq('id', g1Match.id)
+      } else {
+        guardianRows.push(g1)
+      }
       const g2email = cleanEmail(r.guardian2_email)
       if (g2email) {
-        guardianRows.push({
-          family_id: familyId,
-          role: 'secondary',
-          first_name: String(r.guardian2_first ?? '').trim(),
-          last_name: String(r.guardian2_last ?? '').trim(),
-          login_email: g2email,
-          phone: cleanPhone(r.guardian2_phone) || '',
-        })
+        const g2Match = await findGuardianByEmail(db, g2email)
+        if (g2Match?.matchedVia === 'alias') {
+          await db.from('guardian').update({ first_name: String(r.guardian2_first ?? '').trim(), last_name: String(r.guardian2_last ?? '').trim(), phone: cleanPhone(r.guardian2_phone) || '' }).eq('id', g2Match.id)
+        } else {
+          guardianRows.push({
+            family_id: familyId,
+            role: 'secondary',
+            first_name: String(r.guardian2_first ?? '').trim(),
+            last_name: String(r.guardian2_last ?? '').trim(),
+            login_email: g2email,
+            phone: cleanPhone(r.guardian2_phone) || '',
+          })
+        }
       }
-      await db.from('guardian').upsert(guardianRows, { onConflict: 'login_email' })
+      if (guardianRows.length) await db.from('guardian').upsert(guardianRows, { onConflict: 'login_email' })
 
       // 3. student (city/zip_code are NOT NULL) — reuses the household address above.
       const grade = parseGrade(r.grade_fall_2026)
