@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, iqTeamSubmittedHtml } from '@/lib/email'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest) {
   }
   for (const r of others) {
     const sFirst = String(r.student_first).trim(), sLast = String(r.student_last).trim()
-    const pEmail = String(r.parent_email).trim().toLowerCase()
+    const pEmail = cleanEmail(r.parent_email)
     const pFirst = String(r.parent_first ?? '').trim(), pLast = String(r.parent_last ?? '').trim() || sLast
     const grade = Number(r.grade), schoolId = r.school_id, school = r.school
     const isCoachChild = pEmail === coachEmail || (sLast.toLowerCase() === coachLast && !pEmail)

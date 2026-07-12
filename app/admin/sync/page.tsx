@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { requireSection } from '@/lib/auth/admin-access'
 import { AdminShell, PageHeader, StatusBadge, EmptyState } from '@/components/ui'
+import { cleanEmail } from '@/lib/email-input'
 
 const inputStyle: React.CSSProperties = { flex: 1, padding: '8px 10px', fontSize: '0.9375rem', border: '1.5px solid var(--color-border)', borderRadius: '6px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: 'var(--color-surface)' }
 
@@ -22,7 +23,7 @@ export default async function SyncPage() {
 
   async function addExclusion(formData: FormData) {
     'use server'
-    const email = String(formData.get('email') ?? '').trim().toLowerCase()
+    const email = cleanEmail(String(formData.get('email') ?? ''))
     if (!email) return
     const db = await createClient()
     await db.from('sync_exclusion').upsert(

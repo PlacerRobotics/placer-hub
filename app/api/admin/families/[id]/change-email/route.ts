@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid body.' }, { status: 400 }) }
-  const newEmail = String(body.new_email ?? '').trim().toLowerCase()
+  const newEmail = cleanEmail(body.new_email)
   if (!newEmail || !newEmail.includes('@')) return NextResponse.json({ error: 'A valid new email is required.' }, { status: 400 })
 
   const db = createAdminClient()

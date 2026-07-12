@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { nearMissDomain } from '@/lib/duplicates'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 
@@ -66,13 +67,13 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const g1email = String(r.guardian1_email ?? '').trim().toLowerCase()
+      const g1email = cleanEmail(r.guardian1_email)
       if (!g1email) throw new Error('missing guardian1_email')
       const g1last = String(r.guardian1_last ?? '').trim()
 
       // Typo'd provider domains (hotmil→hotmail) create phantom duplicate guardians
       // because login_email is the only match key — warn, don't block.
-      for (const [label, email] of [['guardian1_email', g1email], ['guardian2_email', String(r.guardian2_email ?? '').trim().toLowerCase()]] as const) {
+      for (const [label, email] of [['guardian1_email', g1email], ['guardian2_email', cleanEmail(r.guardian2_email)]] as const) {
         const miss = email ? nearMissDomain(email) : null
         if (miss) warnings.push({ row: rowNo, message: `${label} "${email}" — did you mean @${miss.suggestion}? A typo'd domain creates a duplicate guardian.` })
       }
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
         g1.employer_match_pct = pct ? Number(pct) : null
       }
       const guardianRows: Record<string, unknown>[] = [g1]
-      const g2email = String(r.guardian2_email ?? '').trim().toLowerCase()
+      const g2email = cleanEmail(r.guardian2_email)
       if (g2email) {
         guardianRows.push({
           family_id: familyId,
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
       const grade = parseGrade(r.grade_fall_2026)
       if (!cityVal || !zipVal) throw new Error('missing city or zip (required for student)')
       if (grade == null) throw new Error('missing/invalid grade_fall_2026')
-      const studentEmail = String(r.student_email ?? '').trim().toLowerCase() || null
+      const studentEmail = cleanEmail(r.student_email) || null
       const studentFields = {
         first_name: String(r.student_first_name ?? '').trim(),
         last_name: String(r.student_last_name ?? '').trim(),

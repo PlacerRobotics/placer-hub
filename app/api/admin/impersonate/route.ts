@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSuperAdmin } from '@/lib/auth/roles'
+import { cleanEmail } from '@/lib/email-input'
 
 // POST /api/admin/impersonate — super-admin generates a one-click sign-in link for
 // ANY existing user (debugging / support). Returns the link; opening it signs you in
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid body.' }, { status: 400 }) }
-  const email = String(body.email ?? '').trim().toLowerCase()
+  const email = cleanEmail(body.email)
   if (!email.includes('@')) return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 })
   const redirectTo = typeof body.redirectTo === 'string' && body.redirectTo.startsWith('/') ? body.redirectTo : '/dashboard'
 

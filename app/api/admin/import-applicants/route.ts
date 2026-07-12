@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { nearMissDomain } from '@/lib/duplicates'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 
@@ -10,7 +11,7 @@ function g(r: any, key: string) {
   return String(r?.[key] ?? '').trim()
 }
 function firstEmail(v: string) {
-  return v.split(/[/,]/)[0].trim().toLowerCase()
+  return cleanEmail(v.split(/[/,]/)[0])
 }
 function parseGrade(v: string) {
   const d = (v ?? '').replace(/[^\d]/g, '')
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
     try {
       // Guardian email: Parent/Guardian Email (first if multiple), else "Email Address".
       const pgEmailRaw = g(r, 'Parent/Guardian Email')
-      const gEmail = pgEmailRaw ? firstEmail(pgEmailRaw) : g(r, 'Email Address').toLowerCase()
+      const gEmail = pgEmailRaw ? firstEmail(pgEmailRaw) : cleanEmail(g(r, 'Email Address'))
       if (!gEmail) throw new Error('missing guardian email')
       const gLast = g(r, 'Parent/Guardian Last Name')
 
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
       const grade = parseGrade(g(r, 'Grade Entering (Fall 2026)'))
       if (grade == null) throw new Error('missing/invalid grade')
       const addr = parseAddress(g(r, 'Home Address (City, State, ZIP)'))
-      const studentEmail = g(r, 'Student Email').toLowerCase() || null
+      const studentEmail = cleanEmail(g(r, 'Student Email')) || null
       const studentFields = {
         first_name: g(r, 'Student First Name'), last_name: g(r, 'Student Last Name'),
         communication_email: studentEmail, phone: g(r, 'Student Phone Number') || null,

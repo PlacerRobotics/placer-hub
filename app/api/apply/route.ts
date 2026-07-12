@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, studentApplicationReceivedHtml } from '@/lib/email'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', both: 'VEX V5 & Combat', not_sure: 'Not sure yet' }
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
   }
 
   const db = createAdminClient()
-  const g1email = guardian1.email.trim().toLowerCase()
+  const g1email = cleanEmail(guardian1.email)
 
   // 1. Resolve or create the family (matched by guardian 1 email).
   let familyId: string | null = null
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
       role: 'secondary',
       first_name: guardian2.first_name ?? '',
       last_name: guardian2.last_name ?? '',
-      login_email: guardian2.email.trim().toLowerCase(),
+      login_email: cleanEmail(guardian2.email),
       phone: guardian2.phone ?? '',
     })
   }

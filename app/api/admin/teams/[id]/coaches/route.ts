@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 const COACH_ROLES = new Set(['coach', 'assistant_coach', 'mentor'])
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Create a new (coach-only) guardian inline when no existing one was picked.
   if (!guardianId && body.new_guardian) {
     const ng = body.new_guardian
-    const email = String(ng?.email ?? '').trim().toLowerCase()
+    const email = cleanEmail(ng?.email)
     const first = String(ng?.first_name ?? '').trim()
     const last = String(ng?.last_name ?? '').trim()
     const phone = String(ng?.phone ?? '').trim()

@@ -4,6 +4,7 @@ import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isSuperAdmin } from '@/lib/auth/roles'
 import { sendMagicLinkEmail } from '@/lib/email'
+import { cleanEmail } from '@/lib/email-input'
 
 // POST /api/admin/admins/send-link — super-admin sends an admin a branded sign-in
 // link (via Resend) so they can onboard. body: { admin_profile_id } or { email }
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   let body: any
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid body.' }, { status: 400 }) }
-  let email = String(body.email ?? '').trim().toLowerCase()
+  let email = cleanEmail(body.email)
   if (!email && body.admin_profile_id) {
     const { data } = await db.from('admin_profile').select('email').eq('id', String(body.admin_profile_id)).maybeSingle()
     email = (data?.email ?? '').toLowerCase()

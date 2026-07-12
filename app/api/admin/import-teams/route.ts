@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
 
       // Assign the coach when an email is given: find/create the guardian, then add a
       // (non-duplicate) coach team_member. Coach assignment is identity-only here.
-      const coachEmail = g(r, 'coach_email').toLowerCase()
+      const coachEmail = cleanEmail(g(r, 'coach_email'))
       if (coachEmail) {
         let guardian = (await db.from('guardian').select('id').ilike('login_email', coachEmail).maybeSingle()).data
         if (!guardian) {

@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
+import { cleanEmail } from '@/lib/email-input'
 
 const SEASON = '2026-27'
 
@@ -34,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const map: Record<string, string> = { first_name: 'first_name', last_name: 'last_name', communication_email: 'communication_email', phone: 'phone' }
   for (const f of Object.keys(map)) {
     if (body[f] === undefined) continue
-    let v: any = String(body[f]).trim()
+    let v: any = f === 'communication_email' ? cleanEmail(body[f]) : String(body[f]).trim()
     if (f === 'phone') v = v || g.phone // NOT NULL
     else v = v || null
     upd[f] = v

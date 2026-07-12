@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { cleanEmail } from '@/lib/email-input'
 
 // PATCH /api/family/guardian2 — add/update a second guardian (contact only).
 // guardian.login_email is NOT NULL + UNIQUE, so the email is stored there with
@@ -20,8 +21,8 @@ export async function PATCH(req: NextRequest) {
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid body.' }, { status: 400 }) }
   const first = String(body.first_name ?? '').trim()
   const last = String(body.last_name ?? '').trim()
-  const emailIn = String(body.email ?? '').trim().toLowerCase()
-  const commIn = body.communication_email !== undefined ? String(body.communication_email).trim().toLowerCase() || null : undefined
+  const emailIn = cleanEmail(body.email)
+  const commIn = body.communication_email !== undefined ? cleanEmail(body.communication_email) || null : undefined
   const phone = String(body.phone ?? '').trim()
   const addr = {
     street_address: body.street_address !== undefined ? String(body.street_address).trim() || null : undefined,
@@ -47,7 +48,7 @@ export async function PATCH(req: NextRequest) {
     }
     // Slack email — settable once, then admin-only (Slack can't rename/merge).
     if (body.slack_email !== undefined) {
-      const newVal = String(body.slack_email).trim().toLowerCase() || null
+      const newVal = cleanEmail(body.slack_email) || null
       const current = existing.slack_email ?? null
       if (newVal !== current) {
         if (current) return NextResponse.json({ error: 'Changing the Slack email requires an admin — contact info@placerrobotics.org.' }, { status: 400 })
@@ -70,7 +71,7 @@ export async function PATCH(req: NextRequest) {
     last_name: last,
     login_email: emailIn,
     communication_email: commIn ?? emailIn,
-    slack_email: body.slack_email ? String(body.slack_email).trim().toLowerCase() || null : null,
+    slack_email: body.slack_email ? cleanEmail(body.slack_email) || null : null,
     street_address: addr.street_address ?? null,
     city: addr.city ?? null,
     state: addr.state ?? null,
