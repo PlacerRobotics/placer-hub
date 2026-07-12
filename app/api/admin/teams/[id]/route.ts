@@ -43,6 +43,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (body.active !== undefined) updates.active = !!body.active
   if (body.notes !== undefined) updates.notes = typeof body.notes === 'string' ? body.notes.trim() || null : null
   if (typeof body.kit_number === 'string') updates.kit_number = body.kit_number.trim() || null
+  if (typeof body.slack_channel_id === 'string') updates.slack_channel_id = body.slack_channel_id.trim() || null
   if (body.kit_checkout_date !== undefined) updates.kit_checkout_date = body.kit_checkout_date || null
   if (body.kit_return_date !== undefined) updates.kit_return_date = body.kit_return_date || null
   if (body.kit_return_verified !== undefined) updates.kit_return_verified = !!body.kit_return_verified

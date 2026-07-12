@@ -201,6 +201,14 @@ Do **NOT** re-add `volunteerlocal_email` (PRD §18/26 removed it deliberately �
   failures; reinstate always → `cleared_to_register`; `family_season.updated_at` not
   set; `registration_audit_log` isn't append-only; `/admin/guardians/new` 404 from the
   coach flow.
-- Google/Slack sync (`sync_log`) and volunteer-clearance integrations not built.
+- Slack invite + reconciliation (`/admin/slack`, `lib/slack.ts`/`lib/slack-recon.ts`,
+  nightly `/api/cron/slack-reconcile`) and Google Groups compare (`/admin/google-groups`)
+  are both built and merged, but Slack reconciliation is a no-op in production: none of
+  `SLACK_MAIN_BOT_TOKEN` / `NEXT_PUBLIC_SLACK_MAIN_INVITE` / `NEXT_PUBLIC_SLACK_IQ_INVITE`
+  are set (checked live 2026-07-12). Needs a Slack bot token (scopes `users:read`,
+  `users:read.email`, `channels:manage` or `groups:write`) plus the two invite links.
+  `/admin/teams` now has a Slack channel ID field (team.slack_channel_id) so
+  post-join channel placement has something to place people into — it was schema-only
+  before, no UI existed to set it.
 
 See `docs/KNOWN_ISSUES.md` for the full, severity-tagged list.
