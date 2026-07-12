@@ -11,6 +11,7 @@ import { getAdminAccess } from '@/lib/auth/admin-access'
 import { adminHome } from '@/lib/auth/roles'
 import { NEXT_PUBLIC_SLACK_MAIN_INVITE, NEXT_PUBLIC_SLACK_IQ_INVITE, FEATURE_FINANCIAL_AID } from '@/lib/env'
 import { deriveStudentStatus, CHECK_META, BADGE_META, OWNER_LABELS, type Check, type StudentBadge } from '@/lib/dashboard-status'
+import { resolveIqStatus, nonIqEnrollments } from '@/lib/iq-status'
 
 const SEASON = '2026-27'
 
@@ -166,20 +167,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       }
 
       for (const s of students) {
-        const enrs = enrByStudent[s.id] ?? []
+        const team = teamByStudent[s.id]
+        const hasTeam = !!team
+        // See lib/iq-status.ts — isIqKid must never hinge on triage_notes alone
+        // (production incident: a desync there showed a still-rostered IQ camper a
+        // live V5/Combat payment demand she was never billed for).
+        const iq = resolveIqStatus({ triageLabel: iqLabelByStudent[s.id], triageTeamId: iqTeamIdByStudent[s.id], triageDivision: iqDivisionByStudent[s.id], team })
+        const { isIqKid, label: iqLabel, teamId: iqTeamId, division: iqDivision } = iq
+        const enrs = nonIqEnrollments(enrByStudent[s.id] ?? [])
         const registered = enrs.some((e: any) => e.submitted_at)
         const programVal = enrs.length > 1 ? 'both' : (enrs[0]?.program ?? progByStudent[s.id] ?? 'not_sure')
         const feeStatuses = enrs.map((e: any) => e.registration_fee_status)
         const paid = enrs.length > 0 && !feeStatuses.includes('unpaid')
         const isSigned = signed.has(s.id)
-        const team = teamByStudent[s.id]
-        const hasTeam = !!team
         const ec = ecByStudent[s.id]
         const pay = enrs.map((e: any) => payByEnrollment[e.id]).find(Boolean)
         const level = pay ? supporterLevel(Number(pay.amount)) : null
 
-        const iqLabel = iqLabelByStudent[s.id]
-        const isIqKid = !!iqLabel
         const name = `${s.first_name} ${s.last_name}`.trim()
 
         const st = deriveStudentStatus({
@@ -196,7 +200,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           waiverFlagged: enrs.some((e: any) => e.waiver_status === 'needs_review'),
           hasTeam,
           teamProvisional: !!team?.is_provisional,
-          teamLabel: isIqKid ? iqLabel : familyTeamLabel(team),
+          teamLabel: isIqKid ? (iqLabel as string) : familyTeamLabel(team),
           paymentPendingReconciliation: hasUnreconciledPayment,
           paymentFlagged: hasFlaggedPayment,
           paidLabel: level ? `Paid · ${level}` : 'Paid',
@@ -229,7 +233,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           payUrl: ((s.school_id && tierBySchool[s.school_id] === 'cavitt' && enrs.length === 1 && enrs[0]?.program === 'vex_v5' ? zeffyCavittUrl || zeffyStudentUrl : zeffyStudentUrl) || ZEFFY_REGISTRATION_URL),
         })
 
-        if (isIqKid) kidTeams.push({ name, teamLabel: iqLabel, teamId: iqTeamIdByStudent[s.id], program: 'VEX IQ', division: iqDivisionByStudent[s.id] ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
+        if (isIqKid && iqTeamId) kidTeams.push({ name, teamLabel: iqLabel as string, teamId: iqTeamId, program: 'VEX IQ', division: iqDivision ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })
         else if (hasTeam) kidTeams.push({ name, teamLabel: familyTeamLabel(team), teamId: team.id, program: PROGRAM_LABELS[team.program] ?? team.program, division: team.division, isIq: false, studentId: s.id, dropRequested: false })
       }
 

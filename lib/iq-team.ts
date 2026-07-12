@@ -104,3 +104,43 @@ export async function addIqMembers(db: any, opts: {
   }
   return results
 }
+
+// Drop a student off an IQ team. Previously two independent, unchecked writes
+// (student_application then team_member) — if the team_member update matched zero
+// rows (e.g. a stale team_id, or any transient failure) it failed silently, leaving
+// triage_notes saying "dropped" while the team_member row stayed active. That
+// desync is what let a still-rostered IQ camper's dashboard fall through to the
+// normal V5/Combat branch and demand an individual payment IQ never charges.
+// Now: look up the actual active team_member row first (so there's no ambiguity
+// about which row we're touching), revoke it by id, and only mark the application
+// dropped once that succeeds — surfacing an error otherwise instead of swallowing it.
+export async function dropIqStudent(db: any, teamId: string, studentId: string, season = SEASON): Promise<{ ok: boolean; error?: string }> {
+  const { data: tm, error: tmSelErr } = await db
+    .from('team_member')
+    .select('id')
+    .eq('team_id', teamId)
+    .eq('student_id', studentId)
+    .eq('team_role', 'student')
+    .is('revoked_at', null)
+    .maybeSingle()
+  if (tmSelErr) return { ok: false, error: tmSelErr.message }
+
+  if (tm) {
+    const { error: revokeErr } = await db.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('id', tm.id)
+    if (revokeErr) return { ok: false, error: revokeErr.message }
+  } else {
+    // No active team_member row for this team/student — proceed (idempotent: they
+    // may never have registered yet, or were already dropped) but this is worth
+    // knowing about if it happens unexpectedly.
+    console.warn(`[dropIqStudent] no active team_member row for team ${teamId} / student ${studentId} — dropping application only`)
+  }
+
+  const { error: appErr } = await db
+    .from('student_application')
+    .update({ status: 'withdrawn', triage_notes: `iq_team_dropped:${teamId}` })
+    .eq('student_id', studentId)
+    .eq('season', season)
+  if (appErr) return { ok: false, error: appErr.message }
+
+  return { ok: true }
+}

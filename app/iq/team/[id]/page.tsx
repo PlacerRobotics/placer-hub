@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FamilyShell, PageHeader, FormSection, TextInput, PrimaryButton, StatusBadge, InfoAlert } from '@/components/ui'
 import IqRosterBuilder from './roster-builder'
+import { dropIqStudent } from '@/lib/iq-team'
 
 const SEASON = '2026-27'
 const STATUS: Record<string, [string, 'success' | 'warning' | 'info' | 'error' | 'neutral']> = {
@@ -87,8 +88,8 @@ async function CoachTeamView(id: string) {
     const studentId = String(formData.get('studentId') ?? '')
     if (!studentId) return
     const adb = createAdminClient()
-    await adb.from('student_application').update({ status: 'withdrawn', triage_notes: `iq_team_dropped:${id}` }).eq('student_id', studentId).eq('season', SEASON)
-    await adb.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('team_id', id).eq('student_id', studentId).eq('team_role', 'student').is('revoked_at', null)
+    const res = await dropIqStudent(adb, id, studentId, SEASON)
+    if (!res.ok) { console.error('[iq/team dropMember] failed:', res.error); return }
     redirect(`/iq/team/${id}`)
   }
   async function renameTeam(formData: FormData) {
