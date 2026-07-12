@@ -103,4 +103,30 @@ describe('findDuplicateGroups', () => {
     ])
     expect(groups).toHaveLength(0)
   })
+
+  it('never flags an @placerrobotics.org staff login against a personal family login (Amity Chavez case, D§2)', () => {
+    const groups = findDuplicateGroups([
+      g('1', 'famStaff', 'Amity', 'Chavez', 'amity.chavez@placerrobotics.org'),
+      g('2', 'famFamily', 'Amity', 'Chavez', 'amitychavez@gmail.com'),
+    ])
+    expect(groups).toHaveLength(0)
+  })
+
+  it('is case-insensitive about the staff domain', () => {
+    const groups = findDuplicateGroups([
+      g('1', 'famStaff', 'Amity', 'Chavez', 'Amity.Chavez@PlacerRobotics.ORG'),
+      g('2', 'famFamily', 'Amity', 'Chavez', 'amitychavez@gmail.com'),
+    ])
+    expect(groups).toHaveLength(0)
+  })
+
+  it('still flags a REAL duplicate pair even when one of them also happens to be staff elsewhere', () => {
+    const groups = findDuplicateGroups([
+      g('1', 'famA', 'Terry', 'Wheeler', 'terry.old@yahoo.com'),
+      g('2', 'famB', 'Terry', 'Wheeler', 'terry.new@gmail.com'),
+      g('3', 'famStaff', 'Terry', 'Wheeler', 'terry@placerrobotics.org'),
+    ])
+    expect(groups).toHaveLength(1)
+    expect(groups[0].guardians.map((x) => x.id).sort()).toEqual(['1', '2'])
+  })
 })

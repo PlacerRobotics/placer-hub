@@ -52,7 +52,7 @@ export default async function SuspectedDuplicatesPage() {
     <AdminShell activePath="/admin/families">
       <PageHeader
         title="Suspected duplicate guardians"
-        subtitle="Read-only report — same name under different login emails, plus likely email-domain typos. Review and fix from the family detail pages; nothing is merged automatically."
+        subtitle="Read-only report — same name under different login emails, plus likely email-domain typos. @placerrobotics.org staff logins are excluded (an admin can legitimately hold one alongside their own family login). Review and fix from the family detail pages; nothing is merged automatically."
       />
 
       <div style={{ marginBottom: '1.25rem' }}>
