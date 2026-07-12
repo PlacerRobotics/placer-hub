@@ -2,8 +2,9 @@ import { requireSection } from '@/lib/auth/admin-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AdminShell, PageHeader, WarningAlert } from '@/components/ui'
 import { SLACK_MAIN_BOT_TOKEN } from '@/lib/env'
-import { runSlackReconciliation, type SlackReconRun } from '@/lib/slack-recon'
+import { runSlackReconciliation, computeFuzzyMatches, type SlackReconRun } from '@/lib/slack-recon'
 import RemovalQueue, { type FlaggedRow } from './removal-queue'
+import AltEmailMatches, { type MatchRow } from './alt-email-matches'
 
 const SEASON = '2026-27'
 
@@ -18,9 +19,12 @@ export default async function SlackAdminPage() {
 
   let run: SlackReconRun | null = null
   let error: string | null = null
+  let fuzzyMatches: MatchRow[] = []
   if (SLACK_MAIN_BOT_TOKEN) {
     try {
-      run = await runSlackReconciliation(createAdminClient(), SLACK_MAIN_BOT_TOKEN, SEASON, false)
+      const db = createAdminClient()
+      run = await runSlackReconciliation(db, SLACK_MAIN_BOT_TOKEN, SEASON, false)
+      fuzzyMatches = await computeFuzzyMatches(db, SEASON, run.recon)
     } catch (e: any) {
       error = e?.message ?? 'Slack reconciliation failed.'
     }
@@ -95,6 +99,11 @@ export default async function SlackAdminPage() {
                 </div>
               ))
             )}
+          </div>
+
+          <div style={subhead}>Possible matches — same person, different email</div>
+          <div style={panel}>
+            <AltEmailMatches rows={fuzzyMatches} />
           </div>
 
           <div style={subhead}>In Slack but not expected — review only</div>

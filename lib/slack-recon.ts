@@ -2,21 +2,78 @@
 // The bucket math itself is pure and lives in lib/slack.ts; this file owns the
 // database reads (service-role client) and the additive bot actions.
 
-import { listSlackUsers, reconcileSlack, inviteToChannel, type HubPerson, type SlackReconciliation } from './slack'
+import { listSlackUsers, reconcileSlack, inviteToChannel, fuzzyMatchUnexpected, type HubPerson, type SlackReconciliation, type FuzzyMatch, type FuzzyMatchCandidate } from './slack'
 import { isUnder13 } from './compliance'
 
+// Programs already wired into THIS (main HS/MS) workspace. VEX IQ has its own,
+// separate Slack workspace — a different invite link is already live for it,
+// but no bot token yet, so there's nothing to reconcile IQ people against.
+// Until that's wired in, a guardian/volunteer whose ONLY program affiliation is
+// IQ must not be flagged "not joined" here — they were never expected in this
+// workspace. Someone with BOTH V5/Combat and IQ kids still counts (their
+// V5/Combat side IS expected here).
+const MAIN_WORKSPACE_PROGRAMS = new Set(['vex_v5', 'combat'])
+
+// guardianId -> set of programs (this season), from (a) their family's
+// enrolled students and (b) any team they coach/manage. An empty set means no
+// determinable program affiliation (e.g. a non-parent board member) — that
+// never excludes someone, only a KNOWN all-IQ affiliation does.
+async function gatherGuardianPrograms(db: any, season: string): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>()
+  const add = (gid: string | null | undefined, program: string | null | undefined) => {
+    if (!gid || !program) return
+    if (!out.has(gid)) out.set(gid, new Set())
+    out.get(gid)!.add(program)
+  }
+
+  const { data: guardians } = await db.from('guardian').select('id, family_id')
+  const familyToGuardians: Record<string, string[]> = {}
+  for (const g of (guardians ?? []) as any[]) (familyToGuardians[g.family_id] ??= []).push(g.id)
+
+  const { data: enrs } = await db.from('enrollment').select('student_id, program').eq('season', season)
+  const studentIds = [...new Set(((enrs ?? []) as any[]).map((e) => e.student_id).filter(Boolean))]
+  if (studentIds.length) {
+    const { data: studs } = await db.from('student').select('id, family_id').in('id', studentIds)
+    const familyByStudent: Record<string, string> = Object.fromEntries(((studs ?? []) as any[]).map((s) => [s.id, s.family_id]))
+    for (const e of (enrs ?? []) as any[]) {
+      for (const gid of familyToGuardians[familyByStudent[e.student_id]] ?? []) add(gid, e.program)
+    }
+  }
+
+  const { data: tms } = await db.from('team_member').select('team_id, guardian_id').eq('season', season).is('revoked_at', null).not('guardian_id', 'is', null)
+  const teamIds = [...new Set(((tms ?? []) as any[]).map((t) => t.team_id).filter(Boolean))]
+  if (teamIds.length) {
+    const { data: teams } = await db.from('team').select('id, program').in('id', teamIds)
+    const programByTeam: Record<string, string> = Object.fromEntries(((teams ?? []) as any[]).map((t) => [t.id, t.program]))
+    for (const t of (tms ?? []) as any[]) add(t.guardian_id, programByTeam[t.team_id])
+  }
+
+  return out
+}
+
+function isMainWorkspaceExpected(programs: Set<string> | undefined): boolean {
+  if (!programs || programs.size === 0) return true // no determinable affiliation — don't exclude
+  return [...programs].some((p) => MAIN_WORKSPACE_PROGRAMS.has(p))
+}
+
 // Who is EXPECTED in the main workspace: guardians of registered families this
-// season, plus cleared volunteers. Identity = slack_email || login_email (PRD §19).
+// season, plus cleared volunteers — excluding anyone whose ONLY program
+// affiliation is VEX IQ (see MAIN_WORKSPACE_PROGRAMS above). Identity =
+// slack_email || login_email, plus any known guardian_email_alias rows (design:
+// docs/design_email_identity_v1_0.md §1) — a match on an alias counts too.
 export async function gatherExpectedMembers(db: any, season: string): Promise<HubPerson[]> {
   const expected: HubPerson[] = []
+  const programsByGuardian = await gatherGuardianPrograms(db, season)
+  const guardianIds: string[] = []
 
   const { data: fseasons } = await db.from('family_season').select('family_id').eq('season', season).eq('status', 'registered')
   const familyIds = [...new Set(((fseasons ?? []) as any[]).map((f) => f.family_id).filter(Boolean))]
   if (familyIds.length) {
     const { data: gs } = await db.from('guardian').select('id, first_name, last_name, login_email, slack_email').in('family_id', familyIds)
     for (const g of (gs ?? []) as any[]) {
+      if (!isMainWorkspaceExpected(programsByGuardian.get(g.id))) continue
       const email = g.slack_email || g.login_email
-      if (email) expected.push({ email, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), kind: 'guardian', guardianId: g.id })
+      if (email) { expected.push({ email, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), kind: 'guardian', guardianId: g.id }); guardianIds.push(g.id) }
     }
   }
 
@@ -26,8 +83,18 @@ export async function gatherExpectedMembers(db: any, season: string): Promise<Hu
     const { data: vps } = await db.from('volunteer_profile').select('id, guardian:guardian_id ( id, first_name, last_name, login_email, slack_email )').in('id', volIds)
     for (const vp of (vps ?? []) as any[]) {
       const g = Array.isArray(vp.guardian) ? vp.guardian[0] : vp.guardian
-      const email = g?.slack_email || g?.login_email
-      if (email) expected.push({ email, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), kind: 'volunteer', guardianId: g.id ?? null })
+      if (!g || !isMainWorkspaceExpected(programsByGuardian.get(g.id))) continue
+      const email = g.slack_email || g.login_email
+      if (email) { expected.push({ email, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), kind: 'volunteer', guardianId: g.id ?? null }); if (g.id) guardianIds.push(g.id) }
+    }
+  }
+
+  if (guardianIds.length) {
+    const { data: aliases } = await db.from('guardian_email_alias').select('guardian_id, email').in('guardian_id', [...new Set(guardianIds)])
+    const aliasesByGuardian: Record<string, string[]> = {}
+    for (const a of (aliases ?? []) as any[]) (aliasesByGuardian[a.guardian_id] ??= []).push(a.email)
+    for (const p of expected) {
+      if (p.guardianId && aliasesByGuardian[p.guardianId]?.length) p.altEmails = aliasesByGuardian[p.guardianId]
     }
   }
 
@@ -138,4 +205,38 @@ export async function runSlackReconciliation(db: any, token: string, season: str
   }
 
   return run
+}
+
+// Candidate pool for fuzzy name matching: guardians we're specifically missing
+// (notJoined — from this same reconciliation pass, so already program-scoped)
+// plus every student on a registered/cleared family this season. Students
+// aren't part of "expected" at all today (no per-student Slack expectation is
+// tracked), so all of them are offered as candidates rather than a filtered
+// "not joined" subset.
+export async function gatherFuzzyMatchCandidates(db: any, season: string, notJoined: HubPerson[]): Promise<FuzzyMatchCandidate[]> {
+  const candidates: FuzzyMatchCandidate[] = []
+  for (const p of notJoined) {
+    if (p.guardianId) candidates.push({ id: p.guardianId, name: p.name, kind: 'guardian' })
+  }
+
+  const { data: fseasons } = await db.from('family_season').select('family_id').eq('season', season).in('status', ['registered', 'cleared_to_register'])
+  const familyIds = [...new Set(((fseasons ?? []) as any[]).map((f) => f.family_id).filter(Boolean))]
+  if (familyIds.length) {
+    const { data: studs } = await db.from('student').select('id, family_id, first_name, last_name').in('family_id', familyIds)
+    for (const s of (studs ?? []) as any[]) {
+      const name = `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim()
+      if (name) candidates.push({ id: s.id, name, kind: 'student' })
+    }
+  }
+
+  return candidates
+}
+
+// Fuzzy-match "unexpected" Slack members (in the workspace, but not matched to
+// anyone we know) against people we're missing, by name. Read-only / proposal
+// only — see app/api/admin/slack/confirm-alt-email/route.ts for the write side
+// an admin triggers after reviewing each suggestion.
+export async function computeFuzzyMatches(db: any, season: string, recon: SlackReconciliation): Promise<FuzzyMatch[]> {
+  const candidates = await gatherFuzzyMatchCandidates(db, season, recon.notJoined)
+  return fuzzyMatchUnexpected(recon.unexpected, candidates)
 }

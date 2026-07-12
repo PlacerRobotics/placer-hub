@@ -74,4 +74,22 @@ describe('reconcileSlack', () => {
     expect(r.matched).toHaveLength(1)
     expect(r.notJoined).toEqual([])
   })
+
+  it('matches on a known alt email (guardian_email_alias), not just the primary one', () => {
+    const p = { ...person('primary@ex.com'), altEmails: ['personal.gmail@ex.com'] }
+    const r = reconcileSlack({
+      expected: [p],
+      under13Emails: [],
+      slackUsers: [slack('U1', 'personal.gmail@ex.com')],
+    })
+    expect(r.matched.map((m) => m.person.email)).toEqual(['primary@ex.com'])
+    expect(r.notJoined).toEqual([])
+    expect(r.unexpected).toEqual([])
+  })
+
+  it('a person with an unmatched alt email appears once in notJoined, not once per email', () => {
+    const p = { ...person('primary@ex.com'), altEmails: ['old.alias@ex.com'] }
+    const r = reconcileSlack({ expected: [p], under13Emails: [], slackUsers: [] })
+    expect(r.notJoined).toHaveLength(1)
+  })
 })
