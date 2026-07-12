@@ -537,6 +537,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                           </div>
                           <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             {tm.status ? <StatusBadge label={lbl} variant={variant} /> : null}
+                            {tm.isIq && tm.feeStatus === 'paid' && <StatusBadge label="Paid" variant="success" />}
+                            {tm.isIq && tm.feeStatus === 'not_applicable' && <StatusBadge label="Fee waived" variant="neutral" />}
                             {tm.isIq && tm.feeStatus !== 'paid' && tm.feeStatus !== 'not_applicable' && zeffyIqUrl && <Link href={zeffyIqUrl} target="_blank" style={smallLink}>Pay ${(tm.feeAmount || 1200).toLocaleString()} →</Link>}
                             {tm.isIq
                               ? <Link href={`/iq/team/${tm.id}`} style={smallLink}>{tm.status === 'active' ? 'Manage →' : 'Set up team →'}</Link>
