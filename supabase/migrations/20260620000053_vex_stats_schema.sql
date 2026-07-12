@@ -42,7 +42,9 @@ create type vex_program as enum ('vex_v5', 'vex_iq');
 create type vex_category as enum ('v5rc', 'viqrc', 'cyber9537');
 create type championship_scope as enum ('State', 'Region');  -- null = not a state/region championship award
 create type vex_award_source as enum ('api', 'worlds-html', 'manual');
-create type vex_banner_type as enum ('Excellence', 'Tournament Champions', 'Design', 'Robot Skills');
+-- 'Innovate' is classified for per-type totals only — it is NEVER banner-eligible
+-- (is_banner stays false for Innovate everywhere).
+create type vex_banner_type as enum ('Excellence', 'Tournament Champions', 'Design', 'Robot Skills', 'Innovate');
 
 -- ----------------------------------------------------------------------------
 -- vex_team
@@ -154,6 +156,12 @@ select t.category,
   count(distinct (w.team_number, w.season)) filter (where w.made_semi)  as worlds_semi_plus,
   count(distinct (w.team_number, w.season)) filter (where w.made_final) as worlds_finalist,
   count(distinct a.id) filter (where a.is_worlds)                   as worlds_awards,
+  -- per-type totals across ALL events (championship or not) — supporting
+  -- numbers for the brag book; distinct from banner counts above.
+  count(distinct a.id) filter (where a.banner_type = 'Excellence')           as excellence_awards,
+  count(distinct a.id) filter (where a.banner_type = 'Tournament Champions') as tournament_champ_awards,
+  count(distinct a.id) filter (where a.banner_type = 'Design')               as design_awards,
+  count(distinct a.id) filter (where a.banner_type = 'Innovate')             as innovate_awards,
   count(distinct a.id)                                              as total_awards
 from vex_team t
 left join vex_award a       on a.team_number = t.team_number and a.program = t.program

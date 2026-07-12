@@ -295,7 +295,14 @@ def banner_type(title):
         return "Design"
     if "robot skills champion" in t:
         return "Robot Skills"
+    if "innovate" in t:
+        return "Innovate"   # tracked for per-type totals only — NEVER a banner
     return None
+
+
+# Titles that can earn a banner (at a championship — see is_banner()).
+# Innovate is classified above for totals breakouts but is not banner-eligible.
+BANNER_TYPES = {"Excellence", "Tournament Champions", "Design", "Robot Skills"}
 
 
 def is_banner(title, is_worlds, is_states):
@@ -306,7 +313,7 @@ def is_banner(title, is_worlds, is_states):
     only. Design is EXCLUDED at Worlds (it's a division-level award there).
     The same titles at a regular tournament/league are NOT banners."""
     bt = banner_type(title)
-    if bt is None:
+    if bt not in BANNER_TYPES:
         return False
     if is_states:
         return True
@@ -509,8 +516,11 @@ def seasons_of(data):
 
 def agg(data, seasons):
     A = dict(teams=0, seasons=0, events=0, awards=0, prestige=0, banners=0, banner_state=0,
+             excellence_total=0, tc_total=0, design_total=0, innovate_total=0,
              state_aw=0, region_aw=0, state_appear=0, wq=0, wq_seasons=0,
              welim=0, wsemi=0, wfinal=0, waws=0)
+    TYPE_KEY = {"Excellence": "excellence_total", "Tournament Champions": "tc_total",
+                "Design": "design_total", "Innovate": "innovate_total"}
     active = set()
     for t in data:
         tactive = False
@@ -525,6 +535,10 @@ def agg(data, seasons):
             A["prestige"] += sum(1 for a in nd["awards"] if a["is_prestige"])
             A["banners"] += sum(1 for a in nd["awards"] if a["is_banner"])
             A["banner_state"] += sum(1 for a in nd["awards"] if a["is_banner"] and a["is_states"])
+            for a in nd["awards"]:
+                k = TYPE_KEY.get(banner_type(a["award"]) or "")
+                if k:
+                    A[k] += 1
             A["state_aw"] += sum(1 for a in nd["awards"] if a["is_states"] and a["state_scope"] == "State")
             A["region_aw"] += sum(1 for a in nd["awards"] if a["is_states"] and a["state_scope"] == "Region")
             if nd["made_states"]:
@@ -731,8 +745,9 @@ def headline_sheet(wb, cats):
         r = detail(r, f'      Excellence {bcount["Excellence"]}  ·  Tournament Champions {bcount["Tournament Champions"]}'
                       f'  ·  Design {bcount["Design"]}  ·  Robot Skills {bcount["Robot Skills"]}', color="555555")
         r = stat(r, "   — of which at a State/Region championship", A["banner_state"])
-        r = stat(r, "Banner-list titles at any event", A["prestige"],
-                 "same titles at regular tournaments/leagues — NOT banners")
+        r = stat(r, "Award totals by type (all events — not banners)", "", "")
+        r = detail(r, f'      Excellence {A["excellence_total"]}  ·  Tournament Champions {A["tc_total"]}'
+                      f'  ·  Design {A["design_total"]}  ·  Innovate {A["innovate_total"]}', color="555555")
         r = stat(r, "State/Region championship awards", A["state_aw"] + A["region_aw"],
                  f'({A["state_aw"]} all-CA State · {A["region_aw"]} Region)')
         r = stat(r, "State/Region championship appearances", A["state_appear"], "(team-seasons)")
@@ -773,7 +788,10 @@ def totals_sheet(wb, cats):
     rows = [("Seasons active", "seasons"), ("Total events", "events"), ("Total awards", "awards"),
             ("Banner awards (championship-level only)", "banners"),
             ("  — of which at a State/Region championship", "banner_state"),
-            ("Banner-list titles at any event (not banners)", "prestige"),
+            ("Excellence awards (all events)", "excellence_total"),
+            ("Tournament Champions (all events)", "tc_total"),
+            ("Design awards (all events)", "design_total"),
+            ("Innovate awards (all events)", "innovate_total"),
             ("State championship awards (all-CA)", "state_aw"),
             ("Region championship awards", "region_aw"),
             ("State/Region championship appearances", "state_appear"),
