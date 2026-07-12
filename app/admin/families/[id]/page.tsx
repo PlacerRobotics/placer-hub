@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { AdminShell, PageHeader, AdminDetailPanel } from '@/components/ui'
 import FamilyActions from './family-actions'
+import { formatPhoneDisplay } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 const PROGRAM_LABELS: Record<string, string> = { vex_v5: 'VEX V5', combat: 'Combat', vex_iq: 'VEX IQ', not_sure: 'Not sure', both: 'VEX V5 & Combat' }
@@ -58,7 +59,7 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
         fields={[
           { label: 'Name', value: g1 ? `${g1.first_name} ${g1.last_name}` : '—' },
           { label: 'Login email', value: g1?.login_email ?? '—' },
-          { label: 'Phone', value: g1?.phone ?? '—' },
+          { label: 'Phone', value: g1?.phone ? formatPhoneDisplay(g1.phone) : '—' },
         ]}
       />
       <AdminDetailPanel
@@ -66,7 +67,7 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
         fields={[
           { label: 'Name', value: g2 ? `${g2.first_name} ${g2.last_name}` : 'Not added' },
           { label: 'Email', value: g2?.communication_email || g2?.login_email || '—' },
-          { label: 'Phone', value: g2?.phone ?? '—' },
+          { label: 'Phone', value: g2?.phone ? formatPhoneDisplay(g2.phone) : '—' },
         ]}
       />
 
@@ -90,7 +91,7 @@ export default async function FamilyDetailPage({ params }: { params: Promise<{ i
               { label: 'Team', value: team ? (team.team_number || team.team_name || 'Assigned') : 'Pending' },
               { label: 'Fee status', value: enrs[0]?.registration_fee_status ?? '—' },
               { label: 'T-shirt', value: s.tshirt_size ?? '—' },
-              { label: 'Emergency contact', value: ec ? `${ec.first_name} ${ec.last_name} · ${ec.phone}` : '—' },
+              { label: 'Emergency contact', value: ec ? `${ec.first_name} ${ec.last_name} · ${formatPhoneDisplay(ec.phone)}` : '—' },
             ]}
           />
         )

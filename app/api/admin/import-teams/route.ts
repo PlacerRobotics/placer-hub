@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
         if (!guardian) {
           const cFirst = g(r, 'coach_first_name'), cLast = g(r, 'coach_last_name')
           const { data: fam } = await db.from('family').insert({ primary_email: coachEmail, display_name: cLast || null }).select('id').single()
-          guardian = (await db.from('guardian').insert({ family_id: fam!.id, first_name: cFirst || cLast || 'Coach', last_name: cLast || '', login_email: coachEmail, phone: g(r, 'coach_phone') || '', role: 'primary' }).select('id').single()).data
+          guardian = (await db.from('guardian').insert({ family_id: fam!.id, first_name: cFirst || cLast || 'Coach', last_name: cLast || '', login_email: coachEmail, phone: cleanPhone(g(r, 'coach_phone')) || '', role: 'primary' }).select('id').single()).data
         }
         if (guardian) {
           const existingCoach = (await db.from('team_member').select('id').eq('team_id', teamId).eq('guardian_id', guardian.id).eq('team_role', 'coach').is('revoked_at', null).maybeSingle()).data

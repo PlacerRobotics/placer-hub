@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendEmail, volunteerApplicationReceivedHtml, volunteerAdminNotifyHtml } from '@/lib/email'
 import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone, isValidPhone } from '@/lib/phone-input'
 
 const SEASON = '2026-27'
 const STANDARD_STEPS = ['policy_acknowledgment', 'background_check', 'aps_youth_protection', 'youth_protection_quiz', 'lab_orientation']
@@ -22,9 +23,10 @@ export async function POST(request: NextRequest) {
   const first = String(b.first_name ?? '').trim()
   const last = String(b.last_name ?? '').trim()
   const email = cleanEmail(b.email)
-  const phone = String(b.phone ?? '').trim()
+  const phone = cleanPhone(b.phone)
   const signature = String(b.signature ?? '').trim()
   if (!first || !last || !email || !phone) return NextResponse.json({ error: 'Please complete your name, email, and phone.' }, { status: 400 })
+  if (!isValidPhone(phone)) return NextResponse.json({ error: 'Please enter a valid phone number.' }, { status: 400 })
   if (!b.agreed_yp || !b.agreed_rc) return NextResponse.json({ error: 'You must agree to both policies.' }, { status: 400 })
   if (!signature) return NextResponse.json({ error: 'Please type your name to sign.' }, { status: 400 })
 

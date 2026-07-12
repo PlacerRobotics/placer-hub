@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { requireWriteAdmin } from '@/lib/auth/admin'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { cleanEmail } from '@/lib/email-input'
+import { cleanPhone } from '@/lib/phone-input'
 
 export async function POST(request: NextRequest) {
   const admin = await requireWriteAdmin()
@@ -40,8 +42,8 @@ export async function POST(request: NextRequest) {
       sponsor_type: ['company', 'family', 'individual'].includes(stype) ? stype : 'company',
       contact_first: String(form.get('contact_first') ?? '').trim() || null,
       contact_last: String(form.get('contact_last') ?? '').trim() || null,
-      contact_email: String(form.get('contact_email') ?? '').trim() || null,
-      contact_phone: String(form.get('contact_phone') ?? '').trim() || null,
+      contact_email: cleanEmail(String(form.get('contact_email') ?? '')) || null,
+      contact_phone: cleanPhone(String(form.get('contact_phone') ?? '')) || null,
       website_url: String(form.get('website_url') ?? '').trim() || null,
       part_contact: String(form.get('part_contact') ?? '').trim() || null,
       is_returning: form.get('is_returning') === 'on' || form.get('is_returning') === 'true',
