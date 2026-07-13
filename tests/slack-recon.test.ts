@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { makeAdminClient, type Tables } from './helpers/supabase-mock'
-import { gatherExpectedMembers } from '@/lib/slack-recon'
+import { gatherExpectedMembers, gatherKnownStudents } from '@/lib/slack-recon'
 
 const SEASON = '2026-27'
 
@@ -115,5 +115,34 @@ describe('gatherExpectedMembers — alt emails', () => {
     const expected = await gatherExpectedMembers(makeAdminClient(t), SEASON)
     expect(expected).toHaveLength(1)
     expect(expected[0].altEmails).toEqual(['personal.gmail@ex.com'])
+  })
+})
+
+describe('gatherKnownStudents', () => {
+  it('returns a registered student with a known slack_email, kind=student', async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'cleared_to_register' }]
+    t.student = [{ id: 's1', family_id: 'fam1', first_name: 'Rahul', last_name: 'Veluru', slack_email: 'rahul@ex.com', communication_email: null, fusion_education_email: null }]
+
+    const students = await gatherKnownStudents(makeAdminClient(t), SEASON)
+    expect(students).toEqual([{ email: 'rahul@ex.com', name: 'Rahul Veluru', kind: 'student', guardianId: null }])
+  })
+
+  it('skips a student with no email on file at all', async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'registered' }]
+    t.student = [{ id: 's1', family_id: 'fam1', first_name: 'No', last_name: 'Email', slack_email: null, communication_email: null, fusion_education_email: null }]
+
+    const students = await gatherKnownStudents(makeAdminClient(t), SEASON)
+    expect(students).toEqual([])
+  })
+
+  it('falls back to communication_email then fusion_education_email', async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'registered' }]
+    t.student = [{ id: 's1', family_id: 'fam1', first_name: 'Comm', last_name: 'Email', slack_email: null, communication_email: 'comm@ex.com', fusion_education_email: 'fusion@ex.com' }]
+
+    const students = await gatherKnownStudents(makeAdminClient(t), SEASON)
+    expect(students[0].email).toBe('comm@ex.com')
   })
 })

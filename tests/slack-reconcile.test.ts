@@ -92,4 +92,22 @@ describe('reconcileSlack', () => {
     const r = reconcileSlack({ expected: [p], under13Emails: [], slackUsers: [] })
     expect(r.notJoined).toHaveLength(1)
   })
+
+  it('a known student with a matching Slack account is recognized as matched', () => {
+    const student = { email: 'rahul@ex.com', name: 'Rahul Veluru', kind: 'student' as const, guardianId: null }
+    const r = reconcileSlack({
+      expected: [student],
+      under13Emails: [],
+      slackUsers: [slack('U1', 'rahul@ex.com')],
+    })
+    expect(r.matched.map((m) => m.person.email)).toEqual(['rahul@ex.com'])
+    expect(r.unexpected).toEqual([])
+  })
+
+  it('a known student who has NOT joined never appears in notJoined or departed', () => {
+    const student = { email: 'rahul@ex.com', name: 'Rahul Veluru', kind: 'student' as const, guardianId: null }
+    const r = reconcileSlack({ expected: [student], under13Emails: [], slackUsers: [] })
+    expect(r.notJoined).toEqual([])
+    expect(r.departed).toEqual([])
+  })
 })

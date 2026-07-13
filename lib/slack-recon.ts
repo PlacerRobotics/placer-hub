@@ -101,6 +101,29 @@ export async function gatherExpectedMembers(db: any, season: string): Promise<Hu
   return expected
 }
 
+// Registered/cleared students who already have a known email on file
+// (slack_email / communication_email / fusion_education_email). Students are
+// never "expected" to join (many legally can't — COPPA), but if one is
+// already correctly recorded and it happens to match a real Slack account,
+// that must be recognized — otherwise the reconciliation has no way to know
+// they're accounted for and endlessly re-flags them as "unexpected" even
+// though there's nothing to review. No program scoping here (unlike
+// gatherExpectedMembers): once an email is genuinely on file, it's on file
+// regardless of which workspace-scoping question applies to invites.
+export async function gatherKnownStudents(db: any, season: string): Promise<HubPerson[]> {
+  const { data: fseasons } = await db.from('family_season').select('family_id').eq('season', season).in('status', ['registered', 'cleared_to_register'])
+  const familyIds = [...new Set(((fseasons ?? []) as any[]).map((f) => f.family_id).filter(Boolean))]
+  if (!familyIds.length) return []
+  const { data: studs } = await db.from('student').select('id, family_id, first_name, last_name, slack_email, communication_email, fusion_education_email').in('family_id', familyIds)
+  const out: HubPerson[] = []
+  for (const s of (studs ?? []) as any[]) {
+    const email = s.slack_email || s.communication_email || s.fusion_education_email
+    if (!email) continue
+    out.push({ email, name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim(), kind: 'student', guardianId: null })
+  }
+  return out
+}
+
 // Every email on file for an under-13 student — none of these may hold a Slack
 // account (COPPA policy; register flow already blocks consent under 13).
 export async function gatherUnder13Emails(db: any): Promise<string[]> {
@@ -166,12 +189,13 @@ export type SlackReconRun = {
 // `act: true` (nightly cron) also records matches on guardian rows and performs
 // the ADDITIVE channel placement — removals always stay in the admin queue (D11).
 export async function runSlackReconciliation(db: any, token: string, season: string, act: boolean): Promise<SlackReconRun> {
-  const [expected, under13Emails, slackUsers] = await Promise.all([
+  const [expected, knownStudents, under13Emails, slackUsers] = await Promise.all([
     gatherExpectedMembers(db, season),
+    gatherKnownStudents(db, season),
     gatherUnder13Emails(db),
     listSlackUsers(token),
   ])
-  const recon = reconcileSlack({ expected, under13Emails, slackUsers })
+  const recon = reconcileSlack({ expected: [...expected, ...knownStudents], under13Emails, slackUsers })
   const run: SlackReconRun = { recon, expectedCount: expected.length, invitesSent: 0, inviteErrors: 0, matchedRecorded: 0 }
   if (!act) return run
 

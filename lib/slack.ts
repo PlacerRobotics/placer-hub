@@ -73,7 +73,12 @@ export async function kickFromChannel(token: string, channelId: string, slackUse
 export type HubPerson = {
   email: string
   name: string
-  kind: 'guardian' | 'volunteer'
+  /** 'student' is never expected to join (many legally can't — COPPA) and
+   * never appears in notJoined/departed; it exists purely so an
+   * already-correctly-recorded student (a known slack_email that happens to
+   * match) is recognized as accounted for instead of endlessly showing up in
+   * "unexpected". */
+  kind: 'guardian' | 'volunteer' | 'student'
   guardianId: string | null
   /** Other known-good addresses for this same person (guardian_email_alias) —
    * a match on any of these counts the same as matching `email` itself. */
@@ -131,9 +136,10 @@ export function reconcileSlack(input: {
 
   for (const { person, emails } of byIdentity.values()) {
     const activeMatch = [...emails].map((e) => activeByEmail.get(e)).find(Boolean)
+    if (activeMatch) { out.matched.push({ person, slackUserId: activeMatch.id }); continue }
+    if (person.kind === 'student') continue // never flag a missing/departed student — never expected to join
     const deletedMatch = [...emails].map((e) => deletedByEmail.get(e)).find(Boolean)
-    if (activeMatch) out.matched.push({ person, slackUserId: activeMatch.id })
-    else if (deletedMatch) out.departed.push({ person, slackUserId: deletedMatch.id })
+    if (deletedMatch) out.departed.push({ person, slackUserId: deletedMatch.id })
     else out.notJoined.push(person)
   }
 
