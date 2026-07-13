@@ -3,7 +3,8 @@
 
 import { describe, it, expect } from 'vitest'
 import { makeAdminClient, type Tables } from './helpers/supabase-mock'
-import { gatherExpectedMembers, gatherKnownStudents, gatherSlackDispositions } from '@/lib/slack-recon'
+import { gatherExpectedMembers, gatherKnownStudents, gatherSlackDispositions, gatherFamiliesNotOnSlack } from '@/lib/slack-recon'
+import type { SlackReconciliation } from '@/lib/slack'
 
 const SEASON = '2026-27'
 
@@ -18,7 +19,12 @@ function baseFixture(): Tables {
     volunteer_clearance: [],
     volunteer_profile: [],
     guardian_email_alias: [],
+    family: [],
   }
+}
+
+function emptyRecon(overrides: Partial<SlackReconciliation> = {}): SlackReconciliation {
+  return { notJoined: [], departed: [], under13Present: [], unexpected: [], matched: [], ...overrides }
 }
 
 describe('gatherExpectedMembers — IQ program scoping', () => {
@@ -196,6 +202,51 @@ describe('gatherKnownStudents — program/team enrichment', () => {
     const students = await gatherKnownStudents(makeAdminClient(t), SEASON)
     expect(students[0].programs).toEqual(['vex_iq'])
     expect(students[0].teamNumbers).toEqual(['1234A'])
+  })
+})
+
+describe('gatherFamiliesNotOnSlack', () => {
+  it('excludes a family where another guardian already matched', async () => {
+    const t = baseFixture()
+    t.guardian = [
+      { id: 'g1', family_id: 'fam1', first_name: 'Amy', last_name: 'Chen', login_email: 'amy@ex.com', role: 'primary' },
+      { id: 'g2', family_id: 'fam1', first_name: 'Bob', last_name: 'Chen', login_email: 'bob@ex.com', role: 'secondary' },
+    ]
+    const recon = emptyRecon({
+      notJoined: [{ email: 'bob@ex.com', name: 'Bob Chen', kind: 'guardian', guardianId: 'g2', programs: ['vex_v5'], teamNumbers: ['295A'] }],
+      matched: [{ person: { email: 'amy@ex.com', name: 'Amy Chen', kind: 'guardian', guardianId: 'g1' }, slackUserId: 'U1' }],
+    })
+
+    const families = await gatherFamiliesNotOnSlack(makeAdminClient(t), recon)
+    expect(families).toEqual([])
+  })
+
+  it('includes a family with zero matched guardians, naming it and attaching program/team/students', async () => {
+    const t = baseFixture()
+    t.guardian = [{ id: 'g1', family_id: 'fam1', first_name: 'Cara', last_name: 'Diaz', login_email: 'cara@ex.com', role: 'primary' }]
+    t.family = [{ id: 'fam1', display_name: null, primary_email: 'cara@ex.com' }]
+    t.student = [{ family_id: 'fam1', first_name: 'Leo', last_name: 'Diaz' }]
+    const recon = emptyRecon({
+      notJoined: [{ email: 'cara@ex.com', name: 'Cara Diaz', kind: 'guardian', guardianId: 'g1', programs: ['combat'], teamNumbers: ['9537X'] }],
+    })
+
+    const families = await gatherFamiliesNotOnSlack(makeAdminClient(t), recon)
+    expect(families).toEqual([{
+      familyId: 'fam1',
+      familyName: 'Diaz Family',
+      guardianNames: ['Cara Diaz'],
+      guardianEmails: ['cara@ex.com'],
+      studentNames: ['Leo Diaz'],
+      programs: ['combat'],
+      teamNumbers: ['9537X'],
+    }])
+  })
+
+  it('ignores student-kind notJoined entries (students are never expected to join)', async () => {
+    const t = baseFixture()
+    const recon = emptyRecon({ notJoined: [{ email: 's@ex.com', name: 'Stu Dent', kind: 'student', guardianId: null }] })
+    const families = await gatherFamiliesNotOnSlack(makeAdminClient(t), recon)
+    expect(families).toEqual([])
   })
 })
 

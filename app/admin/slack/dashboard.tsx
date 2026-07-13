@@ -5,6 +5,7 @@ import RemovalQueue, { type FlaggedRow } from './removal-queue'
 import AltEmailMatches, { type MatchRow } from './alt-email-matches'
 import SlackDispositionList, { type UnexpectedRow, type Disposition } from './disposition-editor'
 import { ProgramBadges, PROGRAM_FILTERS, matchesProgramFilter, matchesDispositionFilter, matchesSearch, type ProgramFilter } from './program-badges'
+import type { FamilyNotOnSlack } from '@/lib/slack-recon'
 
 type PersonLike = { email: string; name: string; kind: string; programs?: string[]; teamNumbers?: string[] }
 
@@ -52,6 +53,54 @@ function PersonTable({ people }: { people: PersonLike[] }) {
   )
 }
 
+// Family names + guardian emails carry the search, since the family row has
+// no single email/name pair the way a PersonLike row does.
+function familyMatchesSearch(query: string, f: FamilyNotOnSlack): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  if (f.familyName.toLowerCase().includes(q)) return true
+  if (f.guardianNames.some((n) => n.toLowerCase().includes(q))) return true
+  if (f.guardianEmails.some((e) => e.toLowerCase().includes(q))) return true
+  if (f.studentNames.some((n) => n.toLowerCase().includes(q))) return true
+  return false
+}
+
+function FamilyTable({ families }: { families: FamilyNotOnSlack[] }) {
+  if (!families.length) return <p style={empty}>Every registered family has at least one guardian on Slack.</p>
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th}>Family</th>
+            <th style={th}>Guardians</th>
+            <th style={th}>Students</th>
+            <th style={th}>Program</th>
+            <th style={th}>Team</th>
+          </tr>
+        </thead>
+        <tbody>
+          {families.map((f, i) => {
+            const last = i === families.length - 1
+            const cell = last ? { ...td, borderBottom: 'none' } : td
+            return (
+              <tr key={f.familyId}>
+                <td style={{ ...cell, fontWeight: 600 }}>{f.familyName}</td>
+                <td style={{ ...cell, color: 'var(--color-text-muted)' }}>
+                  {f.guardianNames.map((n, gi) => <div key={gi}>{n} <span style={{ color: 'var(--color-text-muted)' }}>· {f.guardianEmails[gi] ?? ''}</span></div>)}
+                </td>
+                <td style={{ ...cell, color: 'var(--color-text-muted)' }}>{f.studentNames.join(', ')}</td>
+                <td style={cell}><ProgramBadges programs={f.programs} /></td>
+                <td style={cell}><ProgramBadges teamNumbers={f.teamNumbers} /></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function SlackDashboard({
   removalRows,
   notJoined,
@@ -59,6 +108,7 @@ export default function SlackDashboard({
   fuzzyMatches,
   unexpectedRows,
   dispositions,
+  familiesNotOnSlack,
 }: {
   removalRows: FlaggedRow[]
   notJoined: PersonLike[]
@@ -66,6 +116,7 @@ export default function SlackDashboard({
   fuzzyMatches: MatchRow[]
   unexpectedRows: UnexpectedRow[]
   dispositions: Record<string, Disposition>
+  familiesNotOnSlack: FamilyNotOnSlack[]
 }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ProgramFilter>('all')
@@ -76,8 +127,9 @@ export default function SlackDashboard({
     for (const p of notJoined) for (const t of p.teamNumbers ?? []) set.add(t)
     for (const d of departed) for (const t of d.person.teamNumbers ?? []) set.add(t)
     for (const m of fuzzyMatches) for (const t of m.candidateTeamNumbers ?? []) set.add(t)
+    for (const f of familiesNotOnSlack) for (const t of f.teamNumbers ?? []) set.add(t)
     return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-  }, [notJoined, departed, fuzzyMatches])
+  }, [notJoined, departed, fuzzyMatches, familiesNotOnSlack])
 
   const matchesTeam = (teamNumbers?: string[]) => team === 'all' || (teamNumbers ?? []).includes(team)
 
@@ -92,6 +144,12 @@ export default function SlackDashboard({
   // Removal queue is a safety feature (under-13 in the workspace) — always
   // shown regardless of the program/team filter, search still applies.
   const filteredRemoval = removalRows.filter((r) => matchesSearch(query, r.name, r.email))
+  const familyMatchesProgram = (f: FamilyNotOnSlack) => {
+    if (filter === 'all') return true
+    if (filter === 'volunteer') return false // families aren't volunteers — this pill never applies here
+    return f.programs.includes(filter)
+  }
+  const filteredFamilies = familiesNotOnSlack.filter((f) => familyMatchesSearch(query, f) && familyMatchesProgram(f) && matchesTeam(f.teamNumbers))
 
   return (
     <div>
@@ -128,6 +186,11 @@ export default function SlackDashboard({
       <div style={subhead}>Removal queue — confirm each (never automatic)</div>
       <div style={panel}>
         <RemovalQueue rows={filteredRemoval} />
+      </div>
+
+      <div style={subhead}>Families with zero Slack presence — not one guardian has joined ({filteredFamilies.length})</div>
+      <div style={panel}>
+        <FamilyTable families={filteredFamilies} />
       </div>
 
       <div style={subhead}>Not joined — expected members without a Slack account ({filteredNotJoined.length})</div>

@@ -2,7 +2,7 @@ import { requireSection } from '@/lib/auth/admin-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AdminShell, PageHeader, WarningAlert } from '@/components/ui'
 import { SLACK_MAIN_BOT_TOKEN } from '@/lib/env'
-import { runSlackReconciliation, computeFuzzyMatches, gatherSlackDispositions, type SlackReconRun } from '@/lib/slack-recon'
+import { runSlackReconciliation, computeFuzzyMatches, gatherSlackDispositions, gatherFamiliesNotOnSlack, type SlackReconRun, type FamilyNotOnSlack } from '@/lib/slack-recon'
 import { type FlaggedRow } from './removal-queue'
 import { type MatchRow } from './alt-email-matches'
 import SlackDashboard from './dashboard'
@@ -22,13 +22,15 @@ export default async function SlackAdminPage() {
   let error: string | null = null
   let fuzzyMatches: MatchRow[] = []
   let dispositions: Record<string, { tags: string[]; notes: string | null }> = {}
+  let familiesNotOnSlack: FamilyNotOnSlack[] = []
   if (SLACK_MAIN_BOT_TOKEN) {
     try {
       const db = createAdminClient()
       run = await runSlackReconciliation(db, SLACK_MAIN_BOT_TOKEN, SEASON, false)
-      ;[fuzzyMatches, dispositions] = await Promise.all([
+      ;[fuzzyMatches, dispositions, familiesNotOnSlack] = await Promise.all([
         computeFuzzyMatches(db, SEASON, run.recon),
         gatherSlackDispositions(db),
+        gatherFamiliesNotOnSlack(db, run.recon),
       ])
     } catch (e: any) {
       error = e?.message ?? 'Slack reconciliation failed.'
@@ -63,6 +65,7 @@ export default async function SlackAdminPage() {
               { label: 'Departed', value: run.recon.departed.length, color: '#C9971B' },
               { label: 'Under-13 present', value: run.recon.under13Present.length, color: 'var(--color-error)' },
               { label: 'Unexpected — needs review', value: needsReviewCount, color: needsReviewCount ? '#C9971B' : 'var(--color-text-muted)' },
+              { label: 'Families with zero Slack presence', value: familiesNotOnSlack.length, color: familiesNotOnSlack.length ? '#C9971B' : 'var(--color-text-muted)' },
             ].map((s) => (
               <div key={s.label} style={statCard}>
                 <div style={{ fontSize: '1.375rem', fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -78,6 +81,7 @@ export default async function SlackAdminPage() {
             fuzzyMatches={fuzzyMatches}
             unexpectedRows={run.recon.unexpected.map((u) => ({ slackUserId: u.slackUserId, email: u.email, name: u.slackName }))}
             dispositions={dispositions}
+            familiesNotOnSlack={familiesNotOnSlack}
           />
         </>
       )}

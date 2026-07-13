@@ -337,6 +337,90 @@ export async function computeFuzzyMatches(db: any, season: string, recon: SlackR
   return fuzzyMatchUnexpected(recon.unexpected, candidates)
 }
 
+export type FamilyNotOnSlack = {
+  familyId: string
+  familyName: string
+  guardianNames: string[]
+  guardianEmails: string[]
+  studentNames: string[]
+  programs: string[]
+  teamNumbers: string[]
+}
+
+// Families with ZERO Slack presence — distinct from the per-guardian "Not
+// joined" list, which can't tell you whether a family already has a foothold
+// through its OTHER parent. A family qualifies only if at least one of its
+// guardians is main-workspace-expected but missing (i.e. shows up in
+// recon.notJoined) AND none of its guardians (including ones outside the
+// expected/scoped set, e.g. a stay-home parent with no program affiliation)
+// already matched. Guardian/family/student tables aren't seasonal, so this
+// only needs the already-computed recon pass, not a fresh season query.
+export async function gatherFamiliesNotOnSlack(db: any, recon: SlackReconciliation): Promise<FamilyNotOnSlack[]> {
+  const notJoinedGuardians = recon.notJoined.filter((p) => p.kind === 'guardian' && p.guardianId)
+  if (!notJoinedGuardians.length) return []
+  const notJoinedGuardianIds = notJoinedGuardians.map((p) => p.guardianId as string)
+  const matchedGuardianIds = new Set(recon.matched.filter((m) => m.person.kind === 'guardian' && m.person.guardianId).map((m) => m.person.guardianId as string))
+
+  const { data: guardianFamilies } = await db.from('guardian').select('id, family_id').in('id', notJoinedGuardianIds)
+  const familyByGuardian: Record<string, string> = {}
+  for (const g of (guardianFamilies ?? []) as any[]) familyByGuardian[g.id] = g.family_id
+  const familyIds = [...new Set(Object.values(familyByGuardian))] as string[]
+  if (!familyIds.length) return []
+
+  const { data: allFamilyGuardians } = await db.from('guardian').select('id, family_id, first_name, last_name, login_email, role').in('family_id', familyIds)
+  const familiesWithAMatch = new Set(((allFamilyGuardians ?? []) as any[]).filter((g) => matchedGuardianIds.has(g.id)).map((g) => g.family_id))
+  const qualifyingFamilyIds = familyIds.filter((fid) => !familiesWithAMatch.has(fid))
+  if (!qualifyingFamilyIds.length) return []
+
+  // "Guardian 1" = primary role, matching the /admin/families naming convention.
+  const roleRank = (r: string) => (r === 'primary' || r === 'single_guardian' ? 0 : 1)
+  const guardiansByFamily: Record<string, any[]> = {}
+  for (const g of (allFamilyGuardians ?? []) as any[]) {
+    if (!qualifyingFamilyIds.includes(g.family_id)) continue
+    ;(guardiansByFamily[g.family_id] ??= []).push(g)
+  }
+
+  const { data: families } = await db.from('family').select('id, display_name, primary_email').in('id', qualifyingFamilyIds)
+  const familyById: Record<string, any> = Object.fromEntries(((families ?? []) as any[]).map((f) => [f.id, f]))
+
+  const { data: students } = await db.from('student').select('family_id, first_name, last_name').in('family_id', qualifyingFamilyIds)
+  const studentsByFamily: Record<string, string[]> = {}
+  for (const s of (students ?? []) as any[]) (studentsByFamily[s.family_id] ??= []).push(`${s.first_name ?? ''} ${s.last_name ?? ''}`.trim())
+
+  const notJoinedByFamily: Record<string, HubPerson[]> = {}
+  for (const p of notJoinedGuardians) {
+    const fid = familyByGuardian[p.guardianId as string]
+    if (fid) (notJoinedByFamily[fid] ??= []).push(p)
+  }
+
+  return qualifyingFamilyIds
+    .map((fid) => {
+      const gs = [...(guardiansByFamily[fid] ?? [])].sort((a, b) => roleRank(a.role) - roleRank(b.role))
+      const g1 = gs[0]
+      const f = familyById[fid]
+      const programs = new Set<string>()
+      const teamNumbers = new Set<string>()
+      for (const p of notJoinedByFamily[fid] ?? []) {
+        for (const pr of p.programs ?? []) programs.add(pr)
+        for (const t of p.teamNumbers ?? []) teamNumbers.add(t)
+      }
+      return {
+        familyId: fid,
+        familyName: g1?.last_name ? `${g1.last_name} Family` : f?.display_name ?? f?.primary_email ?? fid,
+        // Not independently filtered — guardianEmails[i] must stay the email
+        // for guardianNames[i] (both are NOT NULL columns, so this never
+        // actually drops anything, but filtering separately would silently
+        // misalign the two arrays if it ever did).
+        guardianNames: gs.map((g) => `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim()),
+        guardianEmails: gs.map((g) => g.login_email),
+        studentNames: studentsByFamily[fid] ?? [],
+        programs: [...programs],
+        teamNumbers: [...teamNumbers],
+      }
+    })
+    .sort((a, b) => a.familyName.localeCompare(b.familyName))
+}
+
 export type SlackDisposition = { tags: string[]; notes: string | null }
 
 // Standing per-account decisions (Alumni, Volunteer, Dropped, etc. — see
