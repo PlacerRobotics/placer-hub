@@ -192,18 +192,30 @@ function tokenScore(a: string, b: string): number {
   return bigramDice(a, b)
 }
 
+// First and last token of a normalized name — the two positions that actually
+// distinguish "same person" from "different person, same surname". A
+// single-token name (just "Vivek") falls back to using it as both, which
+// still lets it match a two-token name that repeats it in both slots.
+function outerTokens(normalized: string): { first: string; last: string } {
+  const tokens = normalized.split(' ').filter(Boolean)
+  return { first: tokens[0] ?? '', last: tokens[tokens.length - 1] ?? '' }
+}
+
 /**
- * 0–1 similarity between two display names. Every token on EACH side must
- * find a good partner on the other side (the worst-matched token sets the
- * score, both directions) — this is deliberately strict, not an average.
- *
- * Whole-string bigram comparison (the earlier version of this function) lets
- * a long shared surname dominate the score even when the given name is
- * completely different — "Arjun Dhillon" vs "Robin Dhillon" scored 0.67 on
- * shared surname alone, a false match between two different real people
- * (sibling/parent/spouse), the exact mistake this tool exists to avoid making.
- * Requiring every token to independently match closes that hole while still
- * tolerating reordering ("Smith, John" vs "John Smith") and typos.
+ * 0–1 similarity between two display names, comparing first and last name
+ * independently (middle names/initials are ignored — present on one side or
+ * not, they don't block or help a match). Requires BOTH ends to resemble each
+ * other, in either token order, so:
+ *  - "Kevin Miller" vs "Kevin E. Miller" scores 1 (middle initial ignored)
+ *  - "Jonathan Smith" vs "Jonathon Smith" scores high (typo tolerance)
+ *  - "Rob Smith" vs "Robert Smith" scores moderately (nickname/prefix)
+ *  - "Smith, John" vs "John Smith" scores 1 (reordering tolerance)
+ *  - "Arjun Dhillon" vs "Robin Dhillon" scores 0 — shared surname alone is
+ *    NOT a match; these are different real people (sibling/parent/spouse),
+ *    which a naive whole-string bigram comparison got wrong (0.67, on
+ *    surname-bigram volume alone) and a first version of this function that
+ *    required EVERY token including middle initials to match also got wrong
+ *    in the other direction (0, rejecting genuine middle-initial variants).
  */
 export function nameSimilarity(a: string, b: string): number {
   const na = normalizeName(a)
@@ -211,12 +223,11 @@ export function nameSimilarity(a: string, b: string): number {
   if (!na || !nb) return 0
   if (na === nb) return 1
 
-  const tokensA = na.split(' ').filter(Boolean)
-  const tokensB = nb.split(' ').filter(Boolean)
-  const bestFor = (token: string, others: string[]) => Math.max(0, ...others.map((o) => tokenScore(token, o)))
-  const minA = Math.min(...tokensA.map((t) => bestFor(t, tokensB)))
-  const minB = Math.min(...tokensB.map((t) => bestFor(t, tokensA)))
-  return Math.min(minA, minB)
+  const outerA = outerTokens(na)
+  const outerB = outerTokens(nb)
+  const direct = Math.min(tokenScore(outerA.first, outerB.first), tokenScore(outerA.last, outerB.last))
+  const swapped = Math.min(tokenScore(outerA.first, outerB.last), tokenScore(outerA.last, outerB.first))
+  return Math.max(direct, swapped)
 }
 
 export const FUZZY_MATCH_THRESHOLD = 0.5

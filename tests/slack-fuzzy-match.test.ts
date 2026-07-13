@@ -19,6 +19,17 @@ describe('nameSimilarity', () => {
     expect(nameSimilarity('Juan Chavez', 'Amity Chavez')).toBeLessThan(0.3)
   })
 
+  it('ignores a middle name/initial present on only one side', () => {
+    expect(nameSimilarity('Kevin Miller', 'Kevin E Miller')).toBe(1)
+    expect(nameSimilarity('Kevin Miller', 'Kevin E. Miller')).toBe(1)
+  })
+
+  it('scores a nickname/prefix moderately', () => {
+    const score = nameSimilarity('Rob Smith', 'Robert Smith')
+    expect(score).toBeGreaterThan(0.5)
+    expect(score).toBeLessThan(1)
+  })
+
   it('scores reordered names highly (token overlap)', () => {
     expect(nameSimilarity('Smith, John', 'John Smith')).toBeGreaterThan(0.7)
   })
