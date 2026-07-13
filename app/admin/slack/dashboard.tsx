@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import RemovalQueue, { type FlaggedRow } from './removal-queue'
 import AltEmailMatches, { type MatchRow } from './alt-email-matches'
 import SlackDispositionList, { type UnexpectedRow, type Disposition } from './disposition-editor'
@@ -10,20 +10,44 @@ type PersonLike = { email: string; name: string; kind: string; programs?: string
 
 const panel: React.CSSProperties = { backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden', marginBottom: '1.25rem' }
 const subhead: React.CSSProperties = { fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', fontWeight: 700, margin: '0 0 0.5rem' }
-const listRow: React.CSSProperties = { padding: '0.625rem 1.25rem', fontSize: '0.875rem', borderBottom: '1px solid var(--color-border)' }
 const empty: React.CSSProperties = { margin: 0, padding: '0.875rem 1.25rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }
+const th: React.CSSProperties = { textAlign: 'left', padding: '0.5rem 1.25rem', fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)', fontWeight: 700 }
+const td: React.CSSProperties = { padding: '0.625rem 1.25rem', fontSize: '0.875rem', borderBottom: '1px solid var(--color-border)', verticalAlign: 'middle' }
+const selectStyle: React.CSSProperties = { padding: '8px 12px', fontSize: '0.875rem', border: '1.5px solid var(--color-border)', borderRadius: 8, fontFamily: 'inherit', background: 'var(--color-surface)', color: 'var(--color-text-primary)' }
 
-function PersonList({ people }: { people: PersonLike[] }) {
+// A real table on desktop — was a single stacked column that wasted the
+// width and gave no way to scan/sort by team. overflow-x on the wrapper
+// keeps it usable on narrow viewports instead of squeezing columns.
+function PersonTable({ people }: { people: PersonLike[] }) {
   if (!people.length) return <p style={empty}>Nothing here right now.</p>
   return (
-    <div>
-      {people.map((p, i) => (
-        <div key={`${p.email}-${i}`} style={{ ...listRow, borderBottom: i < people.length - 1 ? listRow.borderBottom : 'none' }}>
-          <span style={{ fontWeight: 600 }}>{p.name}</span>
-          <span style={{ color: 'var(--color-text-muted)' }}> · {p.email} · {p.kind}</span>
-          <ProgramBadges programs={p.programs} teamNumbers={p.teamNumbers} />
-        </div>
-      ))}
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={th}>Name</th>
+            <th style={th}>Email</th>
+            <th style={th}>Kind</th>
+            <th style={th}>Program</th>
+            <th style={th}>Team</th>
+          </tr>
+        </thead>
+        <tbody>
+          {people.map((p, i) => {
+            const last = i === people.length - 1
+            const cell = last ? { ...td, borderBottom: 'none' } : td
+            return (
+              <tr key={`${p.email}-${i}`}>
+                <td style={{ ...cell, fontWeight: 600 }}>{p.name}</td>
+                <td style={{ ...cell, color: 'var(--color-text-muted)' }}>{p.email}</td>
+                <td style={{ ...cell, color: 'var(--color-text-muted)' }}>{p.kind}</td>
+                <td style={cell}><ProgramBadges programs={p.programs} /></td>
+                <td style={cell}><ProgramBadges teamNumbers={p.teamNumbers} /></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -45,15 +69,28 @@ export default function SlackDashboard({
 }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ProgramFilter>('all')
+  const [team, setTeam] = useState('all')
 
-  const filteredNotJoined = notJoined.filter((p) => matchesSearch(query, p.name, p.email) && matchesProgramFilter(filter, p.kind, p.programs))
-  const filteredDeparted = departed.filter((d) => matchesSearch(query, d.person.name, d.person.email) && matchesProgramFilter(filter, d.person.kind, d.person.programs))
+  const allTeamNumbers = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of notJoined) for (const t of p.teamNumbers ?? []) set.add(t)
+    for (const d of departed) for (const t of d.person.teamNumbers ?? []) set.add(t)
+    for (const m of fuzzyMatches) for (const t of m.candidateTeamNumbers ?? []) set.add(t)
+    return [...set].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  }, [notJoined, departed, fuzzyMatches])
+
+  const matchesTeam = (teamNumbers?: string[]) => team === 'all' || (teamNumbers ?? []).includes(team)
+
+  const filteredNotJoined = notJoined.filter((p) =>
+    matchesSearch(query, p.name, p.email) && matchesProgramFilter(filter, p.kind, p.programs) && matchesTeam(p.teamNumbers))
+  const filteredDeparted = departed.filter((d) =>
+    matchesSearch(query, d.person.name, d.person.email) && matchesProgramFilter(filter, d.person.kind, d.person.programs) && matchesTeam(d.person.teamNumbers))
   const filteredFuzzy = fuzzyMatches.filter((m) =>
-    matchesSearch(query, m.slackName, m.slackEmail) && matchesProgramFilter(filter, m.candidateKind, m.candidatePrograms))
+    matchesSearch(query, m.slackName, m.slackEmail) && matchesProgramFilter(filter, m.candidateKind, m.candidatePrograms) && matchesTeam(m.candidateTeamNumbers))
   const filteredUnexpected = unexpectedRows.filter((r) =>
     matchesSearch(query, r.name, r.email) && matchesDispositionFilter(filter, dispositions[r.slackUserId]?.tags ?? []))
   // Removal queue is a safety feature (under-13 in the workspace) — always
-  // shown regardless of the program pill, search still applies.
+  // shown regardless of the program/team filter, search still applies.
   const filteredRemoval = removalRows.filter((r) => matchesSearch(query, r.name, r.email))
 
   return (
@@ -65,6 +102,10 @@ export default function SlackDashboard({
           placeholder="Search name or email…"
           style={{ flex: '1 1 240px', padding: '8px 12px', fontSize: '0.875rem', border: '1.5px solid var(--color-border)', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }}
         />
+        <select value={team} onChange={(e) => setTeam(e.target.value)} style={selectStyle}>
+          <option value="all">All teams</option>
+          {allTeamNumbers.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
         <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
           {PROGRAM_FILTERS.map((f) => (
             <button
@@ -91,7 +132,7 @@ export default function SlackDashboard({
 
       <div style={subhead}>Not joined — expected members without a Slack account ({filteredNotJoined.length})</div>
       <div style={panel}>
-        <PersonList people={filteredNotJoined} />
+        <PersonTable people={filteredNotJoined} />
       </div>
 
       <div style={subhead}>Departed — expected members whose Slack account is deactivated ({filteredDeparted.length})</div>
@@ -99,7 +140,7 @@ export default function SlackDashboard({
         {filteredDeparted.length === 0 ? (
           <p style={empty}>None.</p>
         ) : (
-          <PersonList people={filteredDeparted.map((d) => d.person)} />
+          <PersonTable people={filteredDeparted.map((d) => d.person)} />
         )}
       </div>
 
