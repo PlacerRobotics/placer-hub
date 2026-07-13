@@ -13,8 +13,17 @@
 type Row = Record<string, any>
 export type Tables = Record<string, Row[]>
 
-type FilterKind = 'eq' | 'neq' | 'ilike' | 'is' | 'in' | 'gte' | 'lte' | 'gt' | 'lt' | 'not_is' | 'not_eq'
+type FilterKind = 'eq' | 'neq' | 'ilike' | 'is' | 'in' | 'gte' | 'lte' | 'gt' | 'lt' | 'not_is' | 'not_eq' | 'or'
 type Filter = { kind: FilterKind; col: string; val: any }
+
+// SQL LIKE pattern (% = any run of chars, _ = any single char) -> RegExp.
+// A pattern with no wildcards degrades to an exact (anchored) match, so this
+// is a strict superset of the old "ilike = case-insensitive equality" mock
+// behavior — every existing exact-match caller still works unchanged.
+function likeToRegExp(pattern: string): RegExp {
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.')
+  return new RegExp(`^${escaped}$`, 'i')
+}
 
 let idCounter = 0
 
@@ -63,6 +72,16 @@ class Query implements PromiseLike<{ data: any; error: any }> {
     this.filters.push({ kind: op === 'is' ? 'not_is' : 'not_eq', col, val })
     return this
   }
+  // PostgREST or-filter string: "col1.ilike.%x%,col2.ilike.%x%" — only the
+  // ilike/eq sub-filters this codebase actually emits are parsed.
+  or(filterString: string) {
+    const subFilters: Filter[] = filterString.split(',').map((clause) => {
+      const [col, kind, ...rest] = clause.split('.')
+      return { kind: kind as FilterKind, col, val: rest.join('.') }
+    })
+    this.filters.push({ kind: 'or', col: '', val: subFilters })
+    return this
+  }
   order(_col?: string, _opts?: any) { return this }
   limit(n: number) { this.limitN = n; return this }
 
@@ -81,8 +100,7 @@ class Query implements PromiseLike<{ data: any; error: any }> {
     switch (f.kind) {
       case 'eq': return v === f.val || String(v) === String(f.val)
       case 'neq': return !(v === f.val || String(v) === String(f.val))
-      // No wildcards are used by the audited routes; treat ilike as case-insensitive equality.
-      case 'ilike': return typeof v === 'string' && typeof f.val === 'string' && v.toLowerCase() === f.val.toLowerCase()
+      case 'ilike': return typeof v === 'string' && typeof f.val === 'string' && likeToRegExp(f.val).test(v)
       case 'is': return v === f.val
       case 'in': return Array.isArray(f.val) && f.val.map(String).includes(String(v))
       case 'gte': return v >= f.val
@@ -91,6 +109,7 @@ class Query implements PromiseLike<{ data: any; error: any }> {
       case 'lt': return v < f.val
       case 'not_is': return v !== f.val
       case 'not_eq': return !(v === f.val || String(v) === String(f.val))
+      case 'or': return (f.val as Filter[]).some((sub) => this.test(r, sub))
     }
   }
 

@@ -44,6 +44,16 @@ describe('gatherExpectedMembers — IQ program scoping', () => {
     expect(expected.map((p) => p.email)).toEqual(['v5@ex.com'])
   })
 
+  it('includes a guardian on a cleared_to_register family, not just registered', async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'cleared_to_register' }]
+    t.guardian = [{ id: 'g1', family_id: 'fam1', first_name: 'Cleared', last_name: 'Parent', login_email: 'cleared@ex.com', slack_email: null }]
+    t.student = [{ id: 's1', family_id: 'fam1' }]
+    t.enrollment = [{ student_id: 's1', season: SEASON, program: 'vex_v5' }]
+    const expected = await gatherExpectedMembers(makeAdminClient(t), SEASON)
+    expect(expected.map((p) => p.email)).toEqual(['cleared@ex.com'])
+  })
+
   it('includes a guardian with BOTH a V5 and an IQ student (still expected on the V5 side)', async () => {
     const t = baseFixture()
     t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'registered' }]

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 export type UnexpectedRow = { slackUserId: string; email: string | null; name: string }
 export type Disposition = { tags: string[]; notes: string | null }
+type SearchResult = { id: string; kind: 'guardian' | 'student'; name: string; email: string }
 
 const TAG_OPTIONS: { value: string; label: string }[] = [
   { value: 'volunteer', label: 'Volunteer' },
@@ -26,10 +27,90 @@ const tagBtn = (active: boolean): React.CSSProperties => ({
   background: active ? 'var(--color-navy-deep)' : 'var(--color-surface)',
   color: active ? '#fff' : 'var(--color-text-muted)',
 })
+const smallBtn: React.CSSProperties = { padding: '5px 10px', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 6, fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }
+
+// "Link to a person" — for cases the automated fuzzy match on this same page
+// doesn't suggest (a nickname, a very different display name) but an admin
+// recognizes by hand ("this is so-and-so's parent"). Searches ALL guardians
+// and students by name, then confirms via the same
+// /api/admin/slack/confirm-alt-email route the auto-suggested matches use.
+function LinkPerson({ row, onDone }: { row: UnexpectedRow; onDone: () => void }) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [selected, setSelected] = useState<SearchResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  async function search(q: string) {
+    setQuery(q); setSelected(null)
+    if (q.trim().length < 2) { setResults([]); return }
+    setSearching(true)
+    try {
+      const res = await fetch(`/api/admin/slack/search-people?q=${encodeURIComponent(q.trim())}`)
+      const d = await res.json().catch(() => ({ results: [] }))
+      setResults(d.results ?? [])
+    } finally { setSearching(false) }
+  }
+
+  async function confirm() {
+    if (!selected || !row.email) return
+    setBusy(true); setMsg('')
+    try {
+      const res = await fetch('/api/admin/slack/confirm-alt-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slackEmail: row.email, candidateId: selected.id, candidateKind: selected.kind }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) setMsg(d.error || 'Failed.')
+      else onDone()
+    } catch { setMsg('Network error.') } finally { setBusy(false) }
+  }
+
+  return (
+    <div style={{ marginTop: '0.625rem', paddingTop: '0.625rem', borderTop: '1px solid var(--color-border)' }}>
+      {!row.email ? (
+        <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>No email visible for this Slack account — can&apos;t link it.</p>
+      ) : (
+        <>
+          <input
+            value={query} onChange={(e) => search(e.target.value)} placeholder="Search guardians and students by name…"
+            style={{ width: '100%', padding: '6px 10px', fontSize: '0.8125rem', border: '1.5px solid var(--color-border)', borderRadius: 6, fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: '0.5rem' }}
+          />
+          {searching && <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Searching…</div>}
+          {results.length > 0 && (
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 6, marginBottom: '0.5rem', maxHeight: 180, overflowY: 'auto' }}>
+              {results.map((r) => (
+                <button key={`${r.kind}-${r.id}`} type="button" onClick={() => setSelected(r)}
+                  style={{
+                    display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', borderBottom: '1px solid var(--color-border)',
+                    background: selected?.id === r.id ? 'var(--color-bg-light)' : 'var(--color-surface)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8125rem',
+                  }}>
+                  <strong>{r.name}</strong> <span style={{ color: 'var(--color-text-muted)' }}>· {r.kind} · {r.email || 'no email on file'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {selected && (
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8125rem' }}>Link <strong>{row.name}</strong> ({row.email}) to <strong>{selected.name}</strong> ({selected.kind})?</span>
+              <button type="button" disabled={busy} onClick={confirm}
+                style={{ padding: '5px 12px', background: 'var(--color-navy-deep)', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {busy ? 'Linking…' : 'Confirm'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+      {msg && <div style={{ marginTop: '0.375rem', fontSize: '0.75rem', color: 'var(--color-error)' }}>{msg}</div>}
+    </div>
+  )
+}
 
 function Row({ row, disposition }: { row: UnexpectedRow; disposition?: Disposition }) {
   const router = useRouter()
-  const [editing, setEditing] = useState(false)
+  const [mode, setMode] = useState<'none' | 'tag' | 'link'>('none')
   const [tags, setTags] = useState<string[]>(disposition?.tags ?? [])
   const [notes, setNotes] = useState(disposition?.notes ?? '')
   const [busy, setBusy] = useState(false)
@@ -50,7 +131,7 @@ function Row({ row, disposition }: { row: UnexpectedRow; disposition?: Dispositi
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) setMsg(d.error || 'Failed.')
-      else { setEditing(false); router.refresh() }
+      else { setMode('none'); router.refresh() }
     } catch { setMsg('Network error.') } finally { setBusy(false) }
   }
 
@@ -74,12 +155,12 @@ function Row({ row, disposition }: { row: UnexpectedRow; disposition?: Dispositi
         <span>
           <span style={{ fontWeight: 600 }}>{row.name}</span>
           <span style={{ color: 'var(--color-text-muted)' }}> · {row.email ?? 'email not visible'}</span>
-          {!editing && disposition?.tags.length ? (
+          {mode === 'none' && disposition?.tags.length ? (
             <span style={{ marginLeft: '0.5rem' }}>
               {disposition.tags.map((t) => <span key={t} style={{ ...tagBtn(true), marginRight: 4, cursor: 'default' }}>{TAG_LABEL[t] ?? t}</span>)}
             </span>
           ) : null}
-          {!editing && disposition?.notes && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}> — {disposition.notes}</span>}
+          {mode === 'none' && disposition?.notes && <span style={{ color: 'var(--color-text-muted)', fontSize: '0.8125rem' }}> — {disposition.notes}</span>}
         </span>
         <span style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexShrink: 0 }}>
           {disposition?.tags.includes('dropped') && (
@@ -88,13 +169,15 @@ function Row({ row, disposition }: { row: UnexpectedRow; disposition?: Dispositi
               {removing ? 'Removing…' : 'Remove from channels'}
             </button>
           )}
-          <button type="button" onClick={() => setEditing((v) => !v)}
-            style={{ padding: '5px 10px', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 6, fontWeight: 600, fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'inherit' }}>
-            {editing ? 'Cancel' : disposition?.tags.length ? 'Edit' : 'Tag'}
+          <button type="button" onClick={() => setMode((m) => (m === 'link' ? 'none' : 'link'))} style={smallBtn}>
+            {mode === 'link' ? 'Cancel' : 'Link to person'}
+          </button>
+          <button type="button" onClick={() => setMode((m) => (m === 'tag' ? 'none' : 'tag'))} style={smallBtn}>
+            {mode === 'tag' ? 'Cancel' : disposition?.tags.length ? 'Edit tags' : 'Tag'}
           </button>
         </span>
       </div>
-      {editing && (
+      {mode === 'tag' && (
         <div style={{ marginTop: '0.625rem', paddingTop: '0.625rem', borderTop: '1px solid var(--color-border)' }}>
           <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
             {TAG_OPTIONS.map((t) => (
@@ -111,6 +194,7 @@ function Row({ row, disposition }: { row: UnexpectedRow; disposition?: Dispositi
           </button>
         </div>
       )}
+      {mode === 'link' && <LinkPerson row={row} onDone={() => { setMode('none'); router.refresh() }} />}
       {msg && <div style={{ marginTop: '0.375rem', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{msg}</div>}
     </div>
   )

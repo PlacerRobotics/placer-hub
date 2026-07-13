@@ -57,16 +57,22 @@ function isMainWorkspaceExpected(programs: Set<string> | undefined): boolean {
 }
 
 // Who is EXPECTED in the main workspace: guardians of registered families this
-// season, plus cleared volunteers — excluding anyone whose ONLY program
-// affiliation is VEX IQ (see MAIN_WORKSPACE_PROGRAMS above). Identity =
-// slack_email || login_email, plus any known guardian_email_alias rows (design:
-// docs/design_email_identity_v1_0.md §1) — a match on an alias counts too.
+// season OR cleared to register, plus cleared volunteers — excluding anyone
+// whose ONLY program affiliation is VEX IQ (see MAIN_WORKSPACE_PROGRAMS
+// above). 'registered'-only under-counted: a cleared_to_register family is
+// functionally done (accepted, onboarding) and gatherKnownStudents already
+// recognized their kids — leaving guardians on 'registered'-only made an
+// entire cleared_to_register family's parents show up as "unexpected" in
+// Slack instead of "not joined", even though they're clearly expected.
+// Identity = slack_email || login_email, plus any known guardian_email_alias
+// rows (design: docs/design_email_identity_v1_0.md §1) — a match on an alias
+// counts too.
 export async function gatherExpectedMembers(db: any, season: string): Promise<HubPerson[]> {
   const expected: HubPerson[] = []
   const programsByGuardian = await gatherGuardianPrograms(db, season)
   const guardianIds: string[] = []
 
-  const { data: fseasons } = await db.from('family_season').select('family_id').eq('season', season).eq('status', 'registered')
+  const { data: fseasons } = await db.from('family_season').select('family_id').eq('season', season).in('status', ['registered', 'cleared_to_register'])
   const familyIds = [...new Set(((fseasons ?? []) as any[]).map((f) => f.family_id).filter(Boolean))]
   if (familyIds.length) {
     const { data: gs } = await db.from('guardian').select('id, first_name, last_name, login_email, slack_email').in('family_id', familyIds)
