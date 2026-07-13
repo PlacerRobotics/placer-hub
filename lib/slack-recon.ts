@@ -14,46 +14,66 @@ import { isUnder13 } from './compliance'
 // V5/Combat side IS expected here).
 const MAIN_WORKSPACE_PROGRAMS = new Set(['vex_v5', 'combat'])
 
-// guardianId -> set of programs (this season), from (a) their family's
-// enrolled students and (b) any team they coach/manage. An empty set means no
-// determinable program affiliation (e.g. a non-parent board member) — that
-// never excludes someone, only a KNOWN all-IQ affiliation does.
-async function gatherGuardianPrograms(db: any, season: string): Promise<Map<string, Set<string>>> {
-  const out = new Map<string, Set<string>>()
-  const add = (gid: string | null | undefined, program: string | null | undefined) => {
-    if (!gid || !program) return
-    if (!out.has(gid)) out.set(gid, new Set())
-    out.get(gid)!.add(program)
+export type Affiliation = { programs: Set<string>; teamNumbers: Set<string> }
+
+// guardianId -> {programs, teamNumbers} (this season), from (a) their
+// family's enrolled students' teams and (b) any team they coach/manage. An
+// empty affiliation means nothing determinable (e.g. a non-parent board
+// member) — that never excludes someone from the main workspace, only a
+// KNOWN all-IQ affiliation does (see isMainWorkspaceExpected). Also used to
+// enrich the /admin/slack dashboard's program/team display + filter pills.
+async function gatherGuardianAffiliations(db: any, season: string): Promise<Map<string, Affiliation>> {
+  const out = new Map<string, Affiliation>()
+  const add = (gid: string | null | undefined, program: string | null | undefined, teamNumber: string | null | undefined) => {
+    if (!gid) return
+    if (!out.has(gid)) out.set(gid, { programs: new Set(), teamNumbers: new Set() })
+    const entry = out.get(gid)!
+    if (program) entry.programs.add(program)
+    if (teamNumber) entry.teamNumbers.add(teamNumber)
   }
 
   const { data: guardians } = await db.from('guardian').select('id, family_id')
   const familyToGuardians: Record<string, string[]> = {}
   for (const g of (guardians ?? []) as any[]) (familyToGuardians[g.family_id] ??= []).push(g.id)
 
-  const { data: enrs } = await db.from('enrollment').select('student_id, program').eq('season', season)
-  const studentIds = [...new Set(((enrs ?? []) as any[]).map((e) => e.student_id).filter(Boolean))]
-  if (studentIds.length) {
-    const { data: studs } = await db.from('student').select('id, family_id').in('id', studentIds)
-    const familyByStudent: Record<string, string> = Object.fromEntries(((studs ?? []) as any[]).map((s) => [s.id, s.family_id]))
-    for (const e of (enrs ?? []) as any[]) {
-      for (const gid of familyToGuardians[familyByStudent[e.student_id]] ?? []) add(gid, e.program)
-    }
+  const { data: teamMembers } = await db.from('team_member').select('team_id, guardian_id, student_id').eq('season', season).is('revoked_at', null)
+  const allTeamIds = [...new Set(((teamMembers ?? []) as any[]).map((t) => t.team_id).filter(Boolean))]
+  const teamById: Record<string, { program: string; team_number: string | null }> = {}
+  if (allTeamIds.length) {
+    const { data: teams } = await db.from('team').select('id, program, team_number').in('id', allTeamIds)
+    for (const t of (teams ?? []) as any[]) teamById[t.id] = { program: t.program, team_number: t.team_number }
   }
 
-  const { data: tms } = await db.from('team_member').select('team_id, guardian_id').eq('season', season).is('revoked_at', null).not('guardian_id', 'is', null)
-  const teamIds = [...new Set(((tms ?? []) as any[]).map((t) => t.team_id).filter(Boolean))]
-  if (teamIds.length) {
-    const { data: teams } = await db.from('team').select('id, program').in('id', teamIds)
-    const programByTeam: Record<string, string> = Object.fromEntries(((teams ?? []) as any[]).map((t) => [t.id, t.program]))
-    for (const t of (tms ?? []) as any[]) add(t.guardian_id, programByTeam[t.team_id])
+  // (a) via enrolled students' team placement — a family's guardians inherit
+  // their kid's program/team even before/without a coach-role team_member row.
+  const { data: enrs } = await db.from('enrollment').select('student_id, program').eq('season', season)
+  const studentIds = [...new Set(((enrs ?? []) as any[]).map((e) => e.student_id).filter(Boolean))]
+  const familyByStudent: Record<string, string> = {}
+  if (studentIds.length) {
+    const { data: studs } = await db.from('student').select('id, family_id').in('id', studentIds)
+    for (const s of (studs ?? []) as any[]) familyByStudent[s.id] = s.family_id
+  }
+  const studentTeamNumber: Record<string, string> = {}
+  for (const tm of (teamMembers ?? []) as any[]) {
+    if (tm.student_id && teamById[tm.team_id]) studentTeamNumber[tm.student_id] = teamById[tm.team_id].team_number ?? ''
+  }
+  for (const e of (enrs ?? []) as any[]) {
+    const teamNumber = studentTeamNumber[e.student_id] || null
+    for (const gid of familyToGuardians[familyByStudent[e.student_id]] ?? []) add(gid, e.program, teamNumber)
+  }
+
+  // (b) via the guardian's own coach/manager/mentor team_member row.
+  for (const tm of (teamMembers ?? []) as any[]) {
+    if (!tm.guardian_id || !teamById[tm.team_id]) continue
+    add(tm.guardian_id, teamById[tm.team_id].program, teamById[tm.team_id].team_number)
   }
 
   return out
 }
 
-function isMainWorkspaceExpected(programs: Set<string> | undefined): boolean {
-  if (!programs || programs.size === 0) return true // no determinable affiliation — don't exclude
-  return [...programs].some((p) => MAIN_WORKSPACE_PROGRAMS.has(p))
+function isMainWorkspaceExpected(affiliation: Affiliation | undefined): boolean {
+  if (!affiliation || affiliation.programs.size === 0) return true // no determinable affiliation — don't exclude
+  return [...affiliation.programs].some((p) => MAIN_WORKSPACE_PROGRAMS.has(p))
 }
 
 // Who is EXPECTED in the main workspace: guardians of registered families this
@@ -69,17 +89,21 @@ function isMainWorkspaceExpected(programs: Set<string> | undefined): boolean {
 // counts too.
 export async function gatherExpectedMembers(db: any, season: string): Promise<HubPerson[]> {
   const expected: HubPerson[] = []
-  const programsByGuardian = await gatherGuardianPrograms(db, season)
+  const affiliationByGuardian = await gatherGuardianAffiliations(db, season)
   const guardianIds: string[] = []
+  const meta = (gid: string) => {
+    const a = affiliationByGuardian.get(gid)
+    return { programs: a ? [...a.programs] : [], teamNumbers: a ? [...a.teamNumbers] : [] }
+  }
 
   const { data: fseasons } = await db.from('family_season').select('family_id').eq('season', season).in('status', ['registered', 'cleared_to_register'])
   const familyIds = [...new Set(((fseasons ?? []) as any[]).map((f) => f.family_id).filter(Boolean))]
   if (familyIds.length) {
     const { data: gs } = await db.from('guardian').select('id, first_name, last_name, login_email, slack_email').in('family_id', familyIds)
     for (const g of (gs ?? []) as any[]) {
-      if (!isMainWorkspaceExpected(programsByGuardian.get(g.id))) continue
+      if (!isMainWorkspaceExpected(affiliationByGuardian.get(g.id))) continue
       const email = g.slack_email || g.login_email
-      if (email) { expected.push({ email, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), kind: 'guardian', guardianId: g.id }); guardianIds.push(g.id) }
+      if (email) { expected.push({ email, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), kind: 'guardian', guardianId: g.id, ...meta(g.id) }); guardianIds.push(g.id) }
     }
   }
 
@@ -89,9 +113,9 @@ export async function gatherExpectedMembers(db: any, season: string): Promise<Hu
     const { data: vps } = await db.from('volunteer_profile').select('id, guardian:guardian_id ( id, first_name, last_name, login_email, slack_email )').in('id', volIds)
     for (const vp of (vps ?? []) as any[]) {
       const g = Array.isArray(vp.guardian) ? vp.guardian[0] : vp.guardian
-      if (!g || !isMainWorkspaceExpected(programsByGuardian.get(g.id))) continue
+      if (!g || !isMainWorkspaceExpected(affiliationByGuardian.get(g.id))) continue
       const email = g.slack_email || g.login_email
-      if (email) { expected.push({ email, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), kind: 'volunteer', guardianId: g.id ?? null }); if (g.id) guardianIds.push(g.id) }
+      if (email) { expected.push({ email, name: `${g.first_name ?? ''} ${g.last_name ?? ''}`.trim(), kind: 'volunteer', guardianId: g.id ?? null, ...meta(g.id) }); if (g.id) guardianIds.push(g.id) }
     }
   }
 
@@ -116,16 +140,54 @@ export async function gatherExpectedMembers(db: any, season: string): Promise<Hu
 // though there's nothing to review. No program scoping here (unlike
 // gatherExpectedMembers): once an email is genuinely on file, it's on file
 // regardless of which workspace-scoping question applies to invites.
+// studentId -> {programs, teamNumbers} this season, from their own enrollment
+// + team_member placement. Shared by gatherKnownStudents and the fuzzy-match
+// candidate pool, both of which want the same "what team is this kid on"
+// answer for display/filtering.
+async function gatherStudentAffiliations(db: any, season: string, studentIds: string[]): Promise<Map<string, Affiliation>> {
+  const out = new Map<string, Affiliation>()
+  if (!studentIds.length) return out
+  const add = (sid: string, program: string | null | undefined, teamNumber: string | null | undefined) => {
+    if (!out.has(sid)) out.set(sid, { programs: new Set(), teamNumbers: new Set() })
+    const entry = out.get(sid)!
+    if (program) entry.programs.add(program)
+    if (teamNumber) entry.teamNumbers.add(teamNumber)
+  }
+
+  const { data: enrs } = await db.from('enrollment').select('student_id, program').eq('season', season).in('student_id', studentIds)
+  for (const e of (enrs ?? []) as any[]) add(e.student_id, e.program, null)
+
+  const { data: tms } = await db.from('team_member').select('team_id, student_id').eq('season', season).is('revoked_at', null).in('student_id', studentIds)
+  const teamIds = [...new Set(((tms ?? []) as any[]).map((t) => t.team_id).filter(Boolean))]
+  if (teamIds.length) {
+    const { data: teams } = await db.from('team').select('id, program, team_number').in('id', teamIds)
+    const teamById: Record<string, { program: string; team_number: string | null }> = {}
+    for (const t of (teams ?? []) as any[]) teamById[t.id] = { program: t.program, team_number: t.team_number }
+    for (const tm of (tms ?? []) as any[]) {
+      const t = teamById[tm.team_id]
+      if (t) add(tm.student_id, t.program, t.team_number)
+    }
+  }
+
+  return out
+}
+
 export async function gatherKnownStudents(db: any, season: string): Promise<HubPerson[]> {
   const { data: fseasons } = await db.from('family_season').select('family_id').eq('season', season).in('status', ['registered', 'cleared_to_register'])
   const familyIds = [...new Set(((fseasons ?? []) as any[]).map((f) => f.family_id).filter(Boolean))]
   if (!familyIds.length) return []
   const { data: studs } = await db.from('student').select('id, family_id, first_name, last_name, slack_email, communication_email, fusion_education_email').in('family_id', familyIds)
+  const studentIds = ((studs ?? []) as any[]).map((s) => s.id)
+  const affiliations = await gatherStudentAffiliations(db, season, studentIds)
   const out: HubPerson[] = []
   for (const s of (studs ?? []) as any[]) {
     const email = s.slack_email || s.communication_email || s.fusion_education_email
     if (!email) continue
-    out.push({ email, name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim(), kind: 'student', guardianId: null })
+    const a = affiliations.get(s.id)
+    out.push({
+      email, name: `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim(), kind: 'student', guardianId: null,
+      programs: a ? [...a.programs] : [], teamNumbers: a ? [...a.teamNumbers] : [],
+    })
   }
   return out
 }
@@ -246,16 +308,20 @@ export async function runSlackReconciliation(db: any, token: string, season: str
 export async function gatherFuzzyMatchCandidates(db: any, season: string, notJoined: HubPerson[]): Promise<FuzzyMatchCandidate[]> {
   const candidates: FuzzyMatchCandidate[] = []
   for (const p of notJoined) {
-    if (p.guardianId) candidates.push({ id: p.guardianId, name: p.name, kind: 'guardian' })
+    if (p.guardianId) candidates.push({ id: p.guardianId, name: p.name, kind: 'guardian', programs: p.programs, teamNumbers: p.teamNumbers })
   }
 
   const { data: fseasons } = await db.from('family_season').select('family_id').eq('season', season).in('status', ['registered', 'cleared_to_register'])
   const familyIds = [...new Set(((fseasons ?? []) as any[]).map((f) => f.family_id).filter(Boolean))]
   if (familyIds.length) {
     const { data: studs } = await db.from('student').select('id, family_id, first_name, last_name').in('family_id', familyIds)
+    const studentIds = ((studs ?? []) as any[]).map((s) => s.id)
+    const affiliations = await gatherStudentAffiliations(db, season, studentIds)
     for (const s of (studs ?? []) as any[]) {
       const name = `${s.first_name ?? ''} ${s.last_name ?? ''}`.trim()
-      if (name) candidates.push({ id: s.id, name, kind: 'student' })
+      if (!name) continue
+      const a = affiliations.get(s.id)
+      candidates.push({ id: s.id, name, kind: 'student', programs: a ? [...a.programs] : [], teamNumbers: a ? [...a.teamNumbers] : [] })
     }
   }
 

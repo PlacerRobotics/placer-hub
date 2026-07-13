@@ -135,7 +135,7 @@ describe('gatherKnownStudents', () => {
     t.student = [{ id: 's1', family_id: 'fam1', first_name: 'Rahul', last_name: 'Veluru', slack_email: 'rahul@ex.com', communication_email: null, fusion_education_email: null }]
 
     const students = await gatherKnownStudents(makeAdminClient(t), SEASON)
-    expect(students).toEqual([{ email: 'rahul@ex.com', name: 'Rahul Veluru', kind: 'student', guardianId: null }])
+    expect(students).toEqual([{ email: 'rahul@ex.com', name: 'Rahul Veluru', kind: 'student', guardianId: null, programs: [], teamNumbers: [] }])
   })
 
   it('skips a student with no email on file at all', async () => {
@@ -154,6 +154,48 @@ describe('gatherKnownStudents', () => {
 
     const students = await gatherKnownStudents(makeAdminClient(t), SEASON)
     expect(students[0].email).toBe('comm@ex.com')
+  })
+})
+
+describe('gatherExpectedMembers — program/team enrichment for the dashboard', () => {
+  it('attaches the team_number a guardian coaches', async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'registered' }]
+    t.guardian = [{ id: 'g1', family_id: 'fam1', first_name: 'Coach', last_name: 'Only', login_email: 'coach@ex.com', slack_email: null }]
+    t.team = [{ id: 'team1', program: 'vex_v5', team_number: '295A' }]
+    t.team_member = [{ team_id: 'team1', guardian_id: 'g1', student_id: null, season: SEASON, team_role: 'coach', revoked_at: null }]
+
+    const expected = await gatherExpectedMembers(makeAdminClient(t), SEASON)
+    expect(expected[0].programs).toEqual(['vex_v5'])
+    expect(expected[0].teamNumbers).toEqual(['295A'])
+  })
+
+  it("attaches the guardian's kid's team_number even without a coach role", async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'registered' }]
+    t.guardian = [{ id: 'g1', family_id: 'fam1', first_name: 'Parent', last_name: 'Only', login_email: 'parent@ex.com', slack_email: null }]
+    t.student = [{ id: 's1', family_id: 'fam1' }]
+    t.enrollment = [{ student_id: 's1', season: SEASON, program: 'vex_v5' }]
+    t.team = [{ id: 'team1', program: 'vex_v5', team_number: '295B' }]
+    t.team_member = [{ team_id: 'team1', guardian_id: null, student_id: 's1', season: SEASON, team_role: 'student', revoked_at: null }]
+
+    const expected = await gatherExpectedMembers(makeAdminClient(t), SEASON)
+    expect(expected[0].teamNumbers).toEqual(['295B'])
+  })
+})
+
+describe('gatherKnownStudents — program/team enrichment', () => {
+  it("attaches the student's own team_number", async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'registered' }]
+    t.student = [{ id: 's1', family_id: 'fam1', first_name: 'Kid', last_name: 'OnTeam', slack_email: 'kid@ex.com', communication_email: null, fusion_education_email: null }]
+    t.enrollment = [{ student_id: 's1', season: SEASON, program: 'vex_iq' }]
+    t.team = [{ id: 'team1', program: 'vex_iq', team_number: '1234A' }]
+    t.team_member = [{ team_id: 'team1', guardian_id: null, student_id: 's1', season: SEASON, team_role: 'student', revoked_at: null }]
+
+    const students = await gatherKnownStudents(makeAdminClient(t), SEASON)
+    expect(students[0].programs).toEqual(['vex_iq'])
+    expect(students[0].teamNumbers).toEqual(['1234A'])
   })
 })
 

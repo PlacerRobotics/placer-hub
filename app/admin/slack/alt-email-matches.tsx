@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ProgramBadges } from './program-badges'
 
 // Fuzzy name-match proposals: a Slack member ("unexpected") whose display name
 // closely resembles someone we're missing. Never applied automatically — an
@@ -15,6 +16,8 @@ export type MatchRow = {
   candidateId: string
   candidateName: string
   candidateKind: 'guardian' | 'student'
+  candidatePrograms?: string[]
+  candidateTeamNumbers?: string[]
   score: number
 }
 
@@ -58,6 +61,7 @@ export default function AltEmailMatches({ rows }: { rows: MatchRow[] }) {
             <span style={{ color: 'var(--color-text-muted)' }}> ({r.slackEmail ?? 'no email visible'}) looks like </span>
             <span style={{ fontWeight: 600 }}>{r.candidateName}</span>
             <span style={{ color: 'var(--color-text-muted)' }}> · {r.candidateKind} · {Math.round(r.score * 100)}% match</span>
+            <ProgramBadges programs={r.candidatePrograms} teamNumbers={r.candidateTeamNumbers} />
             {msg[r.slackUserId] && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 2 }}>{msg[r.slackUserId]}</span>}
           </span>
           <span style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>

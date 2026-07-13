@@ -3,9 +3,9 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { AdminShell, PageHeader, WarningAlert } from '@/components/ui'
 import { SLACK_MAIN_BOT_TOKEN } from '@/lib/env'
 import { runSlackReconciliation, computeFuzzyMatches, gatherSlackDispositions, type SlackReconRun } from '@/lib/slack-recon'
-import RemovalQueue, { type FlaggedRow } from './removal-queue'
-import AltEmailMatches, { type MatchRow } from './alt-email-matches'
-import SlackDispositionList from './disposition-editor'
+import { type FlaggedRow } from './removal-queue'
+import { type MatchRow } from './alt-email-matches'
+import SlackDashboard from './dashboard'
 
 const SEASON = '2026-27'
 
@@ -35,10 +35,7 @@ export default async function SlackAdminPage() {
     }
   }
 
-  const panel: React.CSSProperties = { backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden', marginBottom: '1.25rem' }
-  const subhead: React.CSSProperties = { fontSize: '0.6875rem', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-muted)', fontWeight: 700, margin: '0 0 0.5rem' }
   const statCard: React.CSSProperties = { backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '0.875rem 1.125rem', minWidth: 120 }
-  const listRow: React.CSSProperties = { padding: '0.625rem 1.25rem', fontSize: '0.875rem', borderBottom: '1px solid var(--color-border)' }
 
   const removalRows: FlaggedRow[] = run
     ? run.recon.under13Present.map((u) => ({ slackUserId: u.slackUserId, email: u.email, name: u.slackName, reason: 'matches an under-13 student email' }))
@@ -74,61 +71,14 @@ export default async function SlackAdminPage() {
             ))}
           </div>
 
-          <div style={subhead}>Removal queue — confirm each (never automatic)</div>
-          <div style={panel}>
-            <RemovalQueue rows={removalRows} />
-          </div>
-
-          <div style={subhead}>Not joined — expected members without a Slack account</div>
-          <div style={panel}>
-            {run.recon.notJoined.length === 0 ? (
-              <p style={{ margin: 0, padding: '0.875rem 1.25rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>Everyone expected has joined.</p>
-            ) : (
-              run.recon.notJoined.map((p, i) => (
-                <div key={`${p.email}-${i}`} style={{ ...listRow, borderBottom: i < run!.recon.notJoined.length - 1 ? listRow.borderBottom : 'none' }}>
-                  <span style={{ fontWeight: 600 }}>{p.name}</span>
-                  <span style={{ color: 'var(--color-text-muted)' }}> · {p.email} · {p.kind}</span>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div style={subhead}>Departed — expected members whose Slack account is deactivated</div>
-          <div style={panel}>
-            {run.recon.departed.length === 0 ? (
-              <p style={{ margin: 0, padding: '0.875rem 1.25rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>None.</p>
-            ) : (
-              run.recon.departed.map((d, i) => (
-                <div key={d.slackUserId} style={{ ...listRow, borderBottom: i < run!.recon.departed.length - 1 ? listRow.borderBottom : 'none' }}>
-                  <span style={{ fontWeight: 600 }}>{d.person.name}</span>
-                  <span style={{ color: 'var(--color-text-muted)' }}> · {d.person.email} · {d.person.kind}</span>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div style={subhead}>Possible matches — same person, different email</div>
-          <div style={panel}>
-            <AltEmailMatches rows={fuzzyMatches} />
-          </div>
-
-          <div style={subhead}>In Slack but not expected — tag once, never re-review</div>
-          {run.recon.unexpected.length === 0 ? (
-            <div style={panel}>
-              <p style={{ margin: 0, padding: '0.875rem 1.25rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>None.</p>
-            </div>
-          ) : (
-            <SlackDispositionList
-              rows={run.recon.unexpected.map((u) => ({ slackUserId: u.slackUserId, email: u.email, name: u.slackName }))}
-              dispositions={dispositions}
-            />
-          )}
-
-          <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: '1rem' }}>
-            "Unexpected" includes alumni, board members, and helpers who are fine to keep — flag, don't purge.
-            Tag Dropped to surface a one-click channel removal; workspace-level deactivation still has no API
-            on the standard plan, so that step stays manual in Slack admin.
-          </p>
+          <SlackDashboard
+            removalRows={removalRows}
+            notJoined={run.recon.notJoined}
+            departed={run.recon.departed}
+            fuzzyMatches={fuzzyMatches}
+            unexpectedRows={run.recon.unexpected.map((u) => ({ slackUserId: u.slackUserId, email: u.email, name: u.slackName }))}
+            dispositions={dispositions}
+          />
         </>
       )}
     </AdminShell>

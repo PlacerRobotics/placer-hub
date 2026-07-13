@@ -83,6 +83,14 @@ export type HubPerson = {
   /** Other known-good addresses for this same person (guardian_email_alias) —
    * a match on any of these counts the same as matching `email` itself. */
   altEmails?: string[]
+  /** VEX programs this person is affiliated with this season (their own
+   * coaching assignment, or their kids' enrollment) — for the dashboard's
+   * program filter pills. Empty/absent when no affiliation is determinable
+   * (e.g. a non-parent volunteer). */
+  programs?: string[]
+  /** Team numbers this person is affiliated with (coaching or their kid's
+   * team), for display alongside program. */
+  teamNumbers?: string[]
 }
 
 export type SlackReconciliation = {
@@ -238,7 +246,7 @@ export function nameSimilarity(a: string, b: string): number {
 
 export const FUZZY_MATCH_THRESHOLD = 0.5
 
-export type FuzzyMatchCandidate = { id: string; name: string; kind: 'guardian' | 'student' }
+export type FuzzyMatchCandidate = { id: string; name: string; kind: 'guardian' | 'student'; programs?: string[]; teamNumbers?: string[] }
 export type FuzzyMatch = {
   slackUserId: string
   slackName: string
@@ -246,6 +254,8 @@ export type FuzzyMatch = {
   candidateId: string
   candidateName: string
   candidateKind: 'guardian' | 'student'
+  candidatePrograms?: string[]
+  candidateTeamNumbers?: string[]
   score: number
 }
 
@@ -266,6 +276,7 @@ export function fuzzyMatchUnexpected(
       out.push({
         slackUserId: u.slackUserId, slackName: u.slackName, slackEmail: u.email,
         candidateId: best.c.id, candidateName: best.c.name, candidateKind: best.c.kind,
+        candidatePrograms: best.c.programs, candidateTeamNumbers: best.c.teamNumbers,
         score: Math.round(best.score * 100) / 100,
       })
     }
