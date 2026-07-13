@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { makeAdminClient, type Tables } from './helpers/supabase-mock'
-import { gatherExpectedMembers, gatherKnownStudents } from '@/lib/slack-recon'
+import { gatherExpectedMembers, gatherKnownStudents, gatherSlackDispositions } from '@/lib/slack-recon'
 
 const SEASON = '2026-27'
 
@@ -144,5 +144,19 @@ describe('gatherKnownStudents', () => {
 
     const students = await gatherKnownStudents(makeAdminClient(t), SEASON)
     expect(students[0].email).toBe('comm@ex.com')
+  })
+})
+
+describe('gatherSlackDispositions', () => {
+  it('returns tags and notes keyed by slack_user_id', async () => {
+    const t = baseFixture()
+    t.slack_member_disposition = [
+      { slack_user_id: 'U1', tags: ['alumni', 'employee'], notes: 'left 2024' },
+      { slack_user_id: 'U2', tags: [], notes: null },
+    ]
+    const dispositions = await gatherSlackDispositions(makeAdminClient(t))
+    expect(dispositions['U1']).toEqual({ tags: ['alumni', 'employee'], notes: 'left 2024' })
+    expect(dispositions['U2']).toEqual({ tags: [], notes: null })
+    expect(dispositions['U3']).toBeUndefined()
   })
 })

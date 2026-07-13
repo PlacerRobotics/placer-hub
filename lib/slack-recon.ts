@@ -264,3 +264,17 @@ export async function computeFuzzyMatches(db: any, season: string, recon: SlackR
   const candidates = await gatherFuzzyMatchCandidates(db, season, recon.notJoined)
   return fuzzyMatchUnexpected(recon.unexpected, candidates)
 }
+
+export type SlackDisposition = { tags: string[]; notes: string | null }
+
+// Standing per-account decisions (Alumni, Volunteer, Dropped, etc. — see
+// app/admin/slack/disposition-editor.tsx) keyed by slack_user_id, which is
+// stable across email changes. Lets /admin/slack separate "already reviewed"
+// from "genuinely new" on every future sync instead of re-surfacing the same
+// people every time.
+export async function gatherSlackDispositions(db: any): Promise<Record<string, SlackDisposition>> {
+  const { data } = await db.from('slack_member_disposition').select('slack_user_id, tags, notes')
+  const out: Record<string, SlackDisposition> = {}
+  for (const row of (data ?? []) as any[]) out[row.slack_user_id] = { tags: row.tags ?? [], notes: row.notes ?? null }
+  return out
+}

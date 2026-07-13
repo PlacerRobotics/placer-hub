@@ -2,9 +2,10 @@ import { requireSection } from '@/lib/auth/admin-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { AdminShell, PageHeader, WarningAlert } from '@/components/ui'
 import { SLACK_MAIN_BOT_TOKEN } from '@/lib/env'
-import { runSlackReconciliation, computeFuzzyMatches, type SlackReconRun } from '@/lib/slack-recon'
+import { runSlackReconciliation, computeFuzzyMatches, gatherSlackDispositions, type SlackReconRun } from '@/lib/slack-recon'
 import RemovalQueue, { type FlaggedRow } from './removal-queue'
 import AltEmailMatches, { type MatchRow } from './alt-email-matches'
+import SlackDispositionList from './disposition-editor'
 
 const SEASON = '2026-27'
 
@@ -20,11 +21,15 @@ export default async function SlackAdminPage() {
   let run: SlackReconRun | null = null
   let error: string | null = null
   let fuzzyMatches: MatchRow[] = []
+  let dispositions: Record<string, { tags: string[]; notes: string | null }> = {}
   if (SLACK_MAIN_BOT_TOKEN) {
     try {
       const db = createAdminClient()
       run = await runSlackReconciliation(db, SLACK_MAIN_BOT_TOKEN, SEASON, false)
-      fuzzyMatches = await computeFuzzyMatches(db, SEASON, run.recon)
+      ;[fuzzyMatches, dispositions] = await Promise.all([
+        computeFuzzyMatches(db, SEASON, run.recon),
+        gatherSlackDispositions(db),
+      ])
     } catch (e: any) {
       error = e?.message ?? 'Slack reconciliation failed.'
     }
@@ -38,6 +43,7 @@ export default async function SlackAdminPage() {
   const removalRows: FlaggedRow[] = run
     ? run.recon.under13Present.map((u) => ({ slackUserId: u.slackUserId, email: u.email, name: u.slackName, reason: 'matches an under-13 student email' }))
     : []
+  const needsReviewCount = run ? run.recon.unexpected.filter((u) => !dispositions[u.slackUserId]?.tags.length).length : 0
 
   return (
     <AdminShell activePath="/admin/slack">
@@ -59,7 +65,7 @@ export default async function SlackAdminPage() {
               { label: 'Not joined', value: run.recon.notJoined.length, color: '#C9971B' },
               { label: 'Departed', value: run.recon.departed.length, color: '#C9971B' },
               { label: 'Under-13 present', value: run.recon.under13Present.length, color: 'var(--color-error)' },
-              { label: 'Unexpected', value: run.recon.unexpected.length, color: 'var(--color-text-muted)' },
+              { label: 'Unexpected — needs review', value: needsReviewCount, color: needsReviewCount ? '#C9971B' : 'var(--color-text-muted)' },
             ].map((s) => (
               <div key={s.label} style={statCard}>
                 <div style={{ fontSize: '1.375rem', fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -106,23 +112,22 @@ export default async function SlackAdminPage() {
             <AltEmailMatches rows={fuzzyMatches} />
           </div>
 
-          <div style={subhead}>In Slack but not expected — review only</div>
-          <div style={panel}>
-            {run.recon.unexpected.length === 0 ? (
+          <div style={subhead}>In Slack but not expected — tag once, never re-review</div>
+          {run.recon.unexpected.length === 0 ? (
+            <div style={panel}>
               <p style={{ margin: 0, padding: '0.875rem 1.25rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>None.</p>
-            ) : (
-              run.recon.unexpected.map((u, i) => (
-                <div key={u.slackUserId} style={{ ...listRow, borderBottom: i < run!.recon.unexpected.length - 1 ? listRow.borderBottom : 'none' }}>
-                  <span style={{ fontWeight: 600 }}>{u.slackName}</span>
-                  <span style={{ color: 'var(--color-text-muted)' }}> · {u.email ?? 'email not visible'}</span>
-                </div>
-              ))
-            )}
-          </div>
+            </div>
+          ) : (
+            <SlackDispositionList
+              rows={run.recon.unexpected.map((u) => ({ slackUserId: u.slackUserId, email: u.email, name: u.slackName }))}
+              dispositions={dispositions}
+            />
+          )}
 
-          <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-muted)', marginTop: '1rem' }}>
             "Unexpected" includes alumni, board members, and helpers who are fine to keep — flag, don't purge.
-            Workspace deactivation has no API on the standard plan; use Slack admin for that.
+            Tag Dropped to surface a one-click channel removal; workspace-level deactivation still has no API
+            on the standard plan, so that step stays manual in Slack admin.
           </p>
         </>
       )}
