@@ -67,6 +67,7 @@ export default function RegistrationEdit({
         <div>
           <label style={labelStyle}>Program</label>
           <select style={inputStyle} value={f.program} onChange={(e) => set('program', e.target.value)}>
+            <option value="">— (not yet registered)</option>
             <option value="vex_v5">VEX V5</option>
             <option value="combat">Combat</option>
             <option value="vex_iq">VEX IQ</option>

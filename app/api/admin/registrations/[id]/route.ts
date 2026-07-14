@@ -33,14 +33,59 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await log('tshirt_size', stu?.tshirt_size, v || null)
   }
 
-  // program (enrollment) — a 'both' student has two enrollment rows; update all.
+  // program — registered students update enrollment.program (a 'both' student
+  // has two enrollment rows; update all). A pending applicant (no enrollment
+  // yet) has no row to update, so this instead updates the application's
+  // program_interest — previously a silent no-op for anyone not yet registered.
+  // Either way, a team assignment left over from the old program (team_member
+  // for a registered student, or the triage_notes pending pointer) is cleared
+  // if the new program no longer plays on that team — otherwise switching
+  // VEX -> Combat would leave the student pointed at a VEX team.
   if (body.program !== undefined) {
+    const newProgram = String(body.program || '')
     const { data: enrs } = await db.from('enrollment').select('id, program').eq('student_id', studentId).eq('season', SEASON)
-    for (const enr of (enrs ?? []) as any[]) {
-      if (enr.program === body.program) continue
-      const { error } = await db.from('enrollment').update({ program: body.program }).eq('id', enr.id)
-      if (error) return NextResponse.json({ error: `Program update failed: ${error.message}` }, { status: 400 })
-      await log('program', enr.program, body.program)
+    const enrList = (enrs ?? []) as any[]
+
+    if (enrList.length) {
+      for (const enr of enrList) {
+        if (enr.program === newProgram) continue
+        const { error } = await db.from('enrollment').update({ program: newProgram }).eq('id', enr.id)
+        if (error) return NextResponse.json({ error: `Program update failed: ${error.message}` }, { status: 400 })
+        await log('program', enr.program, newProgram)
+      }
+    } else if (newProgram) {
+      const { data: appn } = await db.from('student_application').select('id, program_interest').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
+      if (appn && appn.program_interest !== newProgram) {
+        await db.from('student_application').update({ program_interest: newProgram }).eq('id', appn.id)
+        await log('program', appn.program_interest, newProgram)
+      }
+    }
+
+    if (newProgram) {
+      const validPrograms = new Set(newProgram === 'both' ? ['vex_v5', 'combat'] : [newProgram])
+      const teamLabel = (t: any) => t?.team_number || t?.team_name || 'team'
+
+      // Clear a live team_member row for a program the student is no longer in.
+      const { data: activeTm } = await db.from('team_member').select('id, team_id').eq('student_id', studentId).eq('season', SEASON).eq('team_role', 'student').is('revoked_at', null)
+      for (const tm of (activeTm ?? []) as any[]) {
+        const { data: t } = await db.from('team').select('program, team_number, team_name').eq('id', tm.team_id).maybeSingle()
+        if (t && !validPrograms.has(t.program)) {
+          await db.from('team_member').update({ revoked_at: new Date().toISOString() }).eq('id', tm.id)
+          await log('team_assignment', teamLabel(t), 'unassigned (program changed)')
+        }
+      }
+
+      // Same idea for a pending (pre-registration) triage_notes team pointer.
+      const { data: appnForPtr } = await db.from('student_application').select('id, triage_notes').eq('student_id', studentId).eq('season', SEASON).maybeSingle()
+      const parts = String(appnForPtr?.triage_notes ?? '').split(' · ').filter(Boolean)
+      const ptr = parts.find((p) => /^(iq_team|team):[0-9a-f-]{36}$/i.test(p))
+      if (appnForPtr && ptr) {
+        const { data: t } = await db.from('team').select('program, team_number, team_name').eq('id', ptr.split(':')[1]).maybeSingle()
+        if (t && !validPrograms.has(t.program)) {
+          await db.from('student_application').update({ triage_notes: parts.filter((p) => p !== ptr).join(' · ') || null }).eq('id', appnForPtr.id)
+          await log('team (pending)', teamLabel(t), 'unassigned (program changed)')
+        }
+      }
     }
   }
 
