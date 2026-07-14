@@ -31,7 +31,7 @@ export default async function FamilyDetailPage({ params, searchParams }: { param
   const g1 = gList[0]
   const g2 = gList[1]
 
-  const { data: studs } = await supabase.from('student').select('id, first_name, last_name, grade, tshirt_size, school_raw, school:school_id ( name )').eq('family_id', id).order('created_at', { ascending: true })
+  const { data: studs } = await supabase.from('student').select('id, first_name, last_name, grade, tshirt_size, school_raw, cavitt_fee_override, cavitt_fee_override_note, school:school_id ( name )').eq('family_id', id).order('created_at', { ascending: true })
   const students = studs ?? []
   const studentIds = students.map((s: any) => s.id)
 
@@ -83,7 +83,7 @@ export default async function FamilyDetailPage({ params, searchParams }: { param
       <FamilyActions
         familyId={id}
         guardians={gList.map((g: any) => ({ id: g.id, first_name: g.first_name, last_name: g.last_name, login_email: g.login_email, communication_email: g.communication_email ?? '', phone: g.phone ?? '' }))}
-        students={students.map((s: any) => ({ id: s.id, first_name: s.first_name, last_name: s.last_name, grade: s.grade ?? '', tshirt_size: s.tshirt_size ?? '' }))}
+        students={students.map((s: any) => ({ id: s.id, first_name: s.first_name, last_name: s.last_name, grade: s.grade ?? '', tshirt_size: s.tshirt_size ?? '', cavitt_fee_override: !!s.cavitt_fee_override, cavitt_fee_override_note: s.cavitt_fee_override_note ?? '' }))}
       />
 
       <AdminDetailPanel
@@ -118,6 +118,7 @@ export default async function FamilyDetailPage({ params, searchParams }: { param
             fields={[
               { label: 'Grade', value: s.grade ?? '—' },
               { label: 'School', value: s.school?.name ?? s.school_raw ?? '—' },
+              ...(s.cavitt_fee_override ? [{ label: 'Cavitt fee exception', value: s.cavitt_fee_override_note || 'Granted (no note on file)' }] : []),
               { label: 'Program', value: PROGRAM_LABELS[program] ?? program },
               { label: 'Division', value: enrs[0]?.division ?? '—' },
               { label: 'Team', value: team ? (team.team_number || team.team_name || 'Assigned') : 'Pending' },

@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   const studentId: string = body.studentId
   const { data: student } = await db
     .from('student')
-    .select('id, family_id')
+    .select('id, family_id, cavitt_fee_override')
     .eq('id', studentId)
     .maybeSingle()
   if (!student || student.family_id !== familyId) {
@@ -140,11 +140,16 @@ export async function POST(request: NextRequest) {
   const isIq = program === 'vex_iq'
   // Cavitt partnership: a V5-ONLY registration from a 'cavitt' fee-tier school pays
   // the Cavitt fee via the Cavitt Zeffy campaign. Combat and 'both' registrations
-  // stay standard — the discount covers V5 participation only.
+  // stay standard — the discount covers V5 participation only. student.cavitt_fee_override
+  // is an admin-granted per-student exception (checked from the DB row, never the
+  // client-submitted school_id, so a family can't grant themselves the exception).
   let cavittV5 = false
-  if (program === 'vex_v5' && s.school_id) {
-    const { data: sch } = await db.from('school').select('fee_tier').eq('id', s.school_id).maybeSingle()
-    cavittV5 = sch?.fee_tier === 'cavitt'
+  if (program === 'vex_v5') {
+    if (student.cavitt_fee_override) cavittV5 = true
+    else if (s.school_id) {
+      const { data: sch } = await db.from('school').select('fee_tier').eq('id', s.school_id).maybeSingle()
+      cavittV5 = sch?.fee_tier === 'cavitt'
+    }
   }
   const fee = isIq
     ? config?.iq_student_registration_fee ?? 0

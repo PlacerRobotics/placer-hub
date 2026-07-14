@@ -47,7 +47,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   const { data: students } = await supabase
     .from('student')
     .select(
-      'id, first_name, last_name, preferred_name, birthdate, grade, school_id, school_raw, tshirt_size, fusion_education_email, communication_email'
+      'id, first_name, last_name, preferred_name, birthdate, grade, school_id, school_raw, tshirt_size, fusion_education_email, communication_email, cavitt_fee_override'
     )
     .eq('family_id', familyId)
     .order('created_at', { ascending: true })

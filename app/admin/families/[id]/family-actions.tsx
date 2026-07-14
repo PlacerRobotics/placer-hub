@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 export type GuardianForEdit = { id: string; first_name: string; last_name: string; login_email: string; communication_email: string; phone: string }
-type Student = { id: string; first_name: string; last_name: string; grade: number | string; tshirt_size: string }
+type Student = { id: string; first_name: string; last_name: string; grade: number | string; tshirt_size: string; cavitt_fee_override: boolean; cavitt_fee_override_note: string }
 
 const TSHIRT: [string, string][] = [
   ['ym', 'Youth Medium'], ['yl', 'Youth Large'], ['xs', 'Adult XS'], ['s', 'Adult Small'],
@@ -96,6 +96,7 @@ export default function FamilyActions({ familyId, guardians, students }: { famil
             {students.map((s) => (
               <button key={s.id} type="button" style={btn} onClick={() => setEditStudent((v) => (v === s.id ? null : s.id))}>
                 {editStudent === s.id ? 'Cancel' : `Edit ${s.first_name}`}
+                {s.cavitt_fee_override && <span title="Cavitt fee exception granted" style={{ marginLeft: '0.375rem' }}>⚠️</span>}
               </button>
             ))}
           </div>
@@ -138,11 +139,17 @@ function StudentEdit({ s, onDone }: { s: Student; onDone: () => void }) {
   const [last, setLast] = useState(s.last_name)
   const [grade, setGrade] = useState(String(s.grade ?? ''))
   const [tshirt, setTshirt] = useState(s.tshirt_size)
+  const [cavittOverride, setCavittOverride] = useState(s.cavitt_fee_override)
+  const [cavittNote, setCavittNote] = useState(s.cavitt_fee_override_note)
   const [busy, setBusy] = useState(false)
   const [m, setM] = useState('')
   async function save() {
     setBusy(true); setM('')
-    const res = await fetch(`/api/admin/students/${s.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ first_name: first, last_name: last, grade, tshirt_size: tshirt }) })
+    const res = await fetch(`/api/admin/students/${s.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ first_name: first, last_name: last, grade, tshirt_size: tshirt, cavitt_fee_override: cavittOverride, cavitt_fee_override_note: cavittNote }),
+    })
     const d = await res.json().catch(() => ({}))
     setBusy(false); setM(res.ok ? 'saved' : (d.error || 'Save failed.'))
     if (res.ok) onDone()
@@ -153,6 +160,18 @@ function StudentEdit({ s, onDone }: { s: Student; onDone: () => void }) {
       <div><label style={lbl}>Last name</label><input style={input} value={last} onChange={(e) => setLast(e.target.value)} /></div>
       <div><label style={lbl}>Grade</label><input style={input} type="number" value={grade} onChange={(e) => setGrade(e.target.value)} /></div>
       <div><label style={lbl}>T-shirt</label><select style={input} value={tshirt} onChange={(e) => setTshirt(e.target.value)}><option value="">—</option>{TSHIRT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+          <input type="checkbox" checked={cavittOverride} onChange={(e) => setCavittOverride(e.target.checked)} />
+          Cavitt fee exception — bill this student at the Cavitt V5 fee/fundraising tier even though they aren't enrolled at Cavitt Jr. High
+        </label>
+      </div>
+      {cavittOverride && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label style={lbl}>Exception reason (visible on the family record)</label>
+          <input style={input} value={cavittNote} onChange={(e) => setCavittNote(e.target.value)} placeholder="e.g. approved one-time exception, teammate of Cavitt kids" />
+        </div>
+      )}
       <div style={{ gridColumn: '1 / -1' }}><button type="button" style={navyBtn} disabled={busy} onClick={save}>Save student</button><Msg m={m} /></div>
     </div>
   )

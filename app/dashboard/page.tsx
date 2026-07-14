@@ -107,7 +107,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const g2 = (gAll ?? []).find((g: any) => g.id !== guardian.id)
     guardian2 = g2 ? { name: `${g2.first_name} ${g2.last_name}`.trim(), email: g2.communication_email || g2.login_email || '' } : null
 
-    const { data: studs } = await supabase.from('student').select('id, first_name, last_name, preferred_name, tshirt_size, school_id').eq('family_id', familyId).order('created_at', { ascending: true })
+    const { data: studs } = await supabase.from('student').select('id, first_name, last_name, preferred_name, tshirt_size, school_id, cavitt_fee_override').eq('family_id', familyId).order('created_at', { ascending: true })
     const students = studs ?? []
     const studentIds = students.map((s: any) => s.id)
 
@@ -229,8 +229,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           fundReceivedAt: (enrs.map((e: any) => e.fundraising_received_at).find(Boolean) ?? null) as string | null,
           // Fee from the enrollment snapshot (set at registration); Cavitt V5-only
           // students pay through the Cavitt campaign so prices are never side-by-side.
+          // cavitt_fee_override is an admin-granted per-student exception, independent
+          // of the student's actual school.
           feeAmount: Number(enrs.find((e: any) => Number(e.registration_fee_amount) > 0)?.registration_fee_amount ?? 40),
-          payUrl: ((s.school_id && tierBySchool[s.school_id] === 'cavitt' && enrs.length === 1 && enrs[0]?.program === 'vex_v5' ? zeffyCavittUrl || zeffyStudentUrl : zeffyStudentUrl) || ZEFFY_REGISTRATION_URL),
+          payUrl: (((s.cavitt_fee_override || (s.school_id && tierBySchool[s.school_id] === 'cavitt')) && enrs.length === 1 && enrs[0]?.program === 'vex_v5' ? zeffyCavittUrl || zeffyStudentUrl : zeffyStudentUrl) || ZEFFY_REGISTRATION_URL),
         })
 
         if (isIqKid && iqTeamId) kidTeams.push({ name, teamLabel: iqLabel as string, teamId: iqTeamId, program: 'VEX IQ', division: iqDivision ?? 'ES', isIq: true, studentId: s.id, dropRequested: String(tnByStudent[s.id] ?? '').includes('drop_requested') })

@@ -83,6 +83,7 @@ type Props = {
     tshirt_size: string | null
     fusion_education_email: string | null
     communication_email: string | null
+    cavitt_fee_override?: boolean
   }
   schools: { id: string; name: string; grade_min: number | null; grade_max: number | null; fee_tier?: string | null }[]
   waivers: { id: string; waiver_type: string; version: string; title: string; body_markdown: string; body_hash: string }[]
@@ -230,7 +231,9 @@ export default function RegisterWizard({
   // Cavitt partnership: a V5-only registration whose selected school is fee_tier
   // 'cavitt' pays the Cavitt fee via the Cavitt Zeffy campaign (same ticket
   // structure). Tracks the school dropdown live; 'both'/combat stay standard.
-  const isCavittV5 = !isIq && program === 'vex_v5' && schools.find((sc) => sc.id === schoolId)?.fee_tier === 'cavitt'
+  // cavitt_fee_override is an admin-granted per-student exception (independent
+  // of whichever school is selected) — see student edit in /admin/families.
+  const isCavittV5 = !isIq && program === 'vex_v5' && (schools.find((sc) => sc.id === schoolId)?.fee_tier === 'cavitt' || !!student.cavitt_fee_override)
   const feeAmount = isCavittV5 ? cavittFee : standardFee
   const fundTarget = isCavittV5 ? cavittFundraisingTarget : fundraisingTarget
   // Zeffy is the default payment path. Always have a working URL (config or fallback).

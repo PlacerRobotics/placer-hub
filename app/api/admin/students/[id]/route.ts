@@ -5,7 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { logRegAudit } from '@/lib/admin/reg-audit'
 
 const SEASON = '2026-27'
-const FIELDS = ['first_name', 'last_name', 'preferred_name', 'grade', 'school_id', 'school_raw', 'tshirt_size', 'communication_email', 'phone', 'birthdate']
+const FIELDS = ['first_name', 'last_name', 'preferred_name', 'grade', 'school_id', 'school_raw', 'tshirt_size', 'communication_email', 'phone', 'birthdate', 'cavitt_fee_override', 'cavitt_fee_override_note']
 
 // PATCH /api/admin/students/[id] — admin edits a student; logs each changed field.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
