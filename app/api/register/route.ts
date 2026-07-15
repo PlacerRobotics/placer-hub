@@ -113,12 +113,16 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 5. Update the student record with the registration details.
+  // 5. Update the student record with the registration details. first_name/last_name
+  // are deliberately NOT written here — the wizard shows them read-only precisely so a
+  // parent switching between siblings mid-flow can't repoint studentId's identity (see
+  // register-wizard.tsx for the incident this fixed: a parent retyped a name over an
+  // existing student instead of navigating to that sibling's own session, silently
+  // renaming one child's record while the payment ref and auto-team-link — both keyed
+  // off the ORIGINAL student — stayed pointed at the wrong kid).
   const { error: stuErr } = await db
     .from('student')
     .update({
-      first_name: s.first_name,
-      last_name: s.last_name,
       preferred_name: s.preferred_name || null,
       birthdate: s.birthdate || null,
       grade,

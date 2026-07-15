@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   FamilyShell,
   PageHeader,
@@ -103,6 +104,9 @@ type Props = {
     methods: string[]; employer_company: string; employer_pct: string; employer_portal: string
     sponsor_business: string; sponsor_contact: string; sponsor_amount: string
   } | null
+  // Other children on this family, for the "wrong student?" switcher — each link is a
+  // real navigation (full remount), never an in-place edit of this session's fields.
+  siblings: { id: string; name: string }[]
 }
 
 const labelStyle: React.CSSProperties = {
@@ -187,6 +191,7 @@ export default function RegisterWizard({
   consent,
   signed,
   fundraising,
+  siblings,
 }: Props) {
   const router = useRouter()
   const alreadySigned = !!signed
@@ -221,9 +226,18 @@ export default function RegisterWizard({
   const [spContact, setSpContact] = useState(fundraising?.sponsor_contact ?? '')
   const [spAmount, setSpAmount] = useState(fundraising?.sponsor_amount ?? '')
 
-  // Step 1
-  const [first, setFirst] = useState(student.first_name ?? '')
-  const [last, setLast] = useState(student.last_name ?? '')
+  // Step 1 — legal first/last name are NOT editable here (see the read-only
+  // display + sibling switcher below). A real incident: a parent got partway
+  // through Zoe's registration, realized she meant Carter, and used the
+  // in-wizard Back button to retype the name fields — but studentId (and every
+  // server write keyed on it: the student row, the payment reference, the
+  // auto-team-link off THAT student's own pending-team pointer) never changed,
+  // so Zoe's record got renamed to "Carter" and linked to Zoe's team, not
+  // Carter's. Editing a name field can never again repoint which student a
+  // session writes to — switching students is only ever a real navigation
+  // (see the sibling links) that remounts with a fresh studentId.
+  const first = (student.first_name ?? '').trim()
+  const last = (student.last_name ?? '').trim()
   const [preferred, setPreferred] = useState(student.preferred_name ?? '')
   const [dob, setDob] = useState(student.birthdate ?? '')
   const [grade, setGrade] = useState(student.grade ? String(student.grade) : '')
@@ -435,8 +449,20 @@ export default function RegisterWizard({
     <FamilyShell familyName={guardianName} maxWidth="lg">
       <PageHeader
         title="Complete Registration"
-        subtitle={`Registering ${first || student.first_name} for the ${season} season`}
+        subtitle={`Registering ${first} ${last} for the ${season} season`}
       />
+      {siblings.length > 0 && (
+        <p style={{ margin: '-0.75rem 0 1.25rem', fontSize: '0.875rem', color: 'var(--color-text-muted)' }}>
+          Not {first}? Switch to{' '}
+          {siblings.map((sib, i) => (
+            <span key={sib.id}>
+              <Link href={`/register?student=${sib.id}`} style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>{sib.name}</Link>
+              {i < siblings.length - 1 ? ', ' : ''}
+            </span>
+          ))}
+          {' '}instead.
+        </p>
+      )}
       <Stepper step={step} steps={STEPS} />
 
       {error && (
@@ -449,11 +475,12 @@ export default function RegisterWizard({
       {step === 1 && (
         <>
           <FormSection title="Student Information" description="Tell us about the student you’re registering.">
-            <FormField label="Legal first name" htmlFor="first" required>
-              <TextInput id="first" value={first} onChange={(e) => setFirst(e.target.value)} />
-            </FormField>
-            <FormField label="Legal last name" htmlFor="last" required>
-              <TextInput id="last" value={last} onChange={(e) => setLast(e.target.value)} />
+            <FormField label="Legal name">
+              <p style={{ margin: 0, padding: '9px 0', fontSize: '0.9375rem', fontWeight: 600 }}>{first} {last}</p>
+              <p style={helpTextStyle}>
+                Wrong name on file? {siblings.length > 0 ? 'Use the switcher above if this should be a different child, or c' : 'C'}ontact us at{' '}
+                <a href="mailto:info@placerrobotics.org" style={{ color: 'var(--color-navy-deep)', fontWeight: 600 }}>info@placerrobotics.org</a> to correct it.
+              </p>
             </FormField>
             <FormField label="Preferred name" htmlFor="preferred">
               <TextInput id="preferred" value={preferred} onChange={(e) => setPreferred(e.target.value)} />

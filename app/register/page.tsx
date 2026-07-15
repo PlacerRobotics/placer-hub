@@ -154,6 +154,8 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
   const paymentRef =
     enrollment?.payment_reference_code ?? makePaymentRef(student.first_name, student.last_name)
 
+  const siblings = list.filter((s) => s.id !== student.id).map((s) => ({ id: s.id, name: `${s.first_name} ${s.last_name}`.trim() }))
+
   return (
     <RegisterWizard
       season={SEASON}
@@ -175,6 +177,7 @@ export default async function RegisterPage({ searchParams }: { searchParams: Pro
       consent={enrollment ? { slackConsent: !!enrollment.student_slack_consent, emailCertified: !!enrollment.parent_email_access_certified } : null}
       signed={signed}
       fundraising={fundraising}
+      siblings={siblings}
     />
   )
 }
