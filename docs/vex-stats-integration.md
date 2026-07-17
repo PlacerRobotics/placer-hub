@@ -231,6 +231,18 @@ an anon-key client from placer-site would see zero rows. Two ways that actually 
   fully decoupled from the team-hub DB. More moving parts; choose this only if you want the
   public site to have zero runtime dependency on placer-hub at all.
 
+**SHIPPED (Jul 2026), with one deliberate extension:** Option A is live
+(`app/api/public/vex-stats/route.ts` + placer-site's `lib/vexStats.ts`). In addition, the
+"rollups only" boundary above was deliberately relaxed for ONE case:
+`app/api/public/vex-team-stats/route.ts` returns **row-level award history for a single team**
+(`?team_number=X&program=Y`), consumed by placer-site's `/teams/[number]` pages. Rationale: the
+§5 per-team Competition Record turned out to be needed on the PUBLIC team pages, not just the
+hub's own UI, and the hand-maintained summary prose in placer-site's `lib/content.ts` kept
+missing real awards. Award rows are public competition results (no PII), so exposing them
+row-level for one team at a time stays within the spirit of rule 8. `vex_award.event_date`
+was added (migration 20260620000057) so the site can list a team's awards newest-to-oldest;
+rows synced before that migration have it null until the next backfill run.
+
 Then swap the hard-coded figures (`orgFacts.vexWorldsQualifications: 7`, the homepage
 "track record" grid, the impact prose) for the live numbers — publishing the **by-team
 count (17× PART)** Kevin chose over the season-based 7×. Keep the static fallback so an empty
@@ -273,8 +285,8 @@ stay manual in `orgFacts` / `lib/content.ts`.
 4. [ ] Run `workflow_dispatch → backfill` once; verify rows + view in Supabase.
 5. [ ] Confirm the 2×/day schedule keeps the current season fresh (spot-check after a comp).
 6. [ ] Team hub: per-team Competition Record + **dedicated Cavitt section** (`category='cyber9537'`).
-7. [ ] Public site: `lib/vexStats.ts` (Option A) or Sanity mirror (Option B); swap hard-coded
-       VEX numbers for live ones with fallback.
+7. [x] Public site: `lib/vexStats.ts` (Option A) — headline numbers live, plus per-team award
+       history on `/teams/[number]` via `/api/public/vex-team-stats` (see §6). Static fallback kept.
 8. [ ] Non-VEX: leave manual; note the parking-lot source-repo plan.
 9. [ ] Update `CLAUDE.md` to document this second pipeline + Supabase store; remove the stale
        "implement stub vexevents.ts" note (it's already implemented).
