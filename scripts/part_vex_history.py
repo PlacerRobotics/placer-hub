@@ -425,7 +425,8 @@ def pull(headers, team_numbers, program_code, label, rename, min_season=0, only_
             loc = ev.get("location") or {}
             eid = ev.get("id")
             if eid is not None:
-                emap[eid] = {"season": s, "is_w": is_w, "is_s": is_s, "scope": scope}
+                emap[eid] = {"season": s, "is_w": is_w, "is_s": is_s, "scope": scope,
+                    "start": safe(ev.get("start", ""))[:10] or None}
             nd = data[cn][s]
             nd["events"].append({"name": safe(ev.get("name")), "sku": safe(ev.get("sku")),
                 "loc": f"{safe(loc.get('city'))} {safe(loc.get('region'))}".strip(),
@@ -462,17 +463,19 @@ def pull(headers, team_numbers, program_code, label, rename, min_season=0, only_
                 is_w = meta["is_w"]
                 is_s = meta["is_s"]
                 scope = meta["scope"]
+                event_date = meta["start"]
             else:
                 m = re.search(r'RE-\w+-(\d\d)-', safe(ev_obj.get("code")))
                 s = 2000 + int(m.group(1)) if m else 0
                 is_w = is_worlds_name(ev_name)
                 is_s = False
                 scope = ""
+                event_date = None
             if not in_scope(s):
                 continue
             is_p = is_prestige(aw_name)
             data[cn][s]["awards"].append({"award": aw_name, "event": ev_name,
-                "event_sku": safe(ev_obj.get("code")) or None,
+                "event_sku": safe(ev_obj.get("code")) or None, "event_date": event_date,
                 "is_worlds": is_w, "is_states": is_s, "state_scope": scope, "is_prestige": is_p,
                 "is_banner": is_banner(aw_name, is_w, is_s),
                 "tier": tier_rank(is_w, is_s, is_p), "source": "api"})
@@ -497,8 +500,9 @@ def pull(headers, team_numbers, program_code, label, rename, min_season=0, only_
                         if any(a["is_worlds"] and norm_title(a["award"]) == nt for a in nd["awards"]):
                             continue
                         is_p = is_prestige(title)
+                        ev_date = next((e["start"] for e in nd["events"] if e["sku"] == sku and e["start"]), None)
                         nd["awards"].append({"award": title, "event": f"VEX Worlds {season_label(s)}",
-                            "event_sku": sku,
+                            "event_sku": sku, "event_date": ev_date,
                             "is_worlds": True, "is_states": False, "state_scope": "", "is_prestige": is_p,
                             "is_banner": is_banner(title, True, False),
                             "tier": 3, "source": "worlds-html"})
@@ -948,6 +952,7 @@ def to_supabase_rows(cats, only_season):
                         "team_number": tn, "program": prog, "season": season_label(s),
                         "title": a["award"],
                         "event_name": a["event"] or None, "event_sku": a.get("event_sku"),
+                        "event_date": a.get("event_date"),
                         "is_worlds": a["is_worlds"], "scope": (a["state_scope"] or None),
                         "is_banner": a["is_banner"], "banner_type": banner_type(a["award"]),
                         "source": a["source"],
