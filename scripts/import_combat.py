@@ -17,7 +17,12 @@ order — matched by name):
                  the same event so one combat_event row is created per event)
     series       SBB | IRL | NHRL | other
     weight_class plastic_ant | antweight | 15lb | beetleweight
-    bot          bot display name (bot_slug is derived by slugifying this)
+    bot          bot display name (bot_slug is derived by slugifying this).
+                 Each rebuild/generation is its OWN bot — name them distinctly
+                 ("Washing Machine", "Washing Machine Mk2"), never merged.
+    lineage      optional family name shared across a bot's generations
+                 ("Washing Machine" on both rows above) so legacy views can
+                 group them without conflating each machine's record
 
 Usage:
     python scripts/import_combat.py --template history.xlsx   # write a fillable template
@@ -40,10 +45,10 @@ except ModuleNotFoundError:  # optional — only needed when reading env from a 
         return False
 
 COLUMNS = [
-    "event_slug", "event_name", "date", "location", "series", "bot",
-    "weight_class", "placement", "wins", "losses", "ko_wins", "award", "notes",
+    "event_slug", "event_name", "date", "location", "series", "challonge", "bot", "lineage",
+    "weight_class", "placement", "field_size", "wins", "losses", "ko_wins", "award", "notes",
 ]
-SERIES_VALUES = ["SBB", "IRL", "NHRL", "other"]
+SERIES_VALUES = ["SBB", "IRL", "NRL", "NHRL", "other"]
 WEIGHT_VALUES = ["plastic_ant", "antweight", "15lb", "beetleweight"]
 
 
@@ -66,6 +71,18 @@ def slugify(name):
 def to_int(v):
     v = (v or "").strip()
     return int(float(v)) if v else None  # float() first: Excel numerics arrive as "1.0"
+
+
+def parse_placement(v):
+    """Placement int, tolerating tie notation: 'T5' / 't5' -> (5, tied=True)."""
+    v = (v or "").strip()
+    if not v:
+        return None, False
+    tied = v[:1].lower() == "t"
+    try:
+        return int(float(v[1:] if tied else v)), tied
+    except ValueError:
+        raise ValueError(f"unparseable placement {v!r}")
 
 
 class Stats:
@@ -156,9 +173,9 @@ def write_template(path):
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="0B2544")
     ws.append([
-        "sbb-2025", "Sacramento Bot Battles 2025", "2025-04-12", "Roseville, CA",
-        "SBB", "Lunar Eclipse", "15lb", 1, 4, 0, 2,
-        "California BotsIQ 15lb Champion", "example row — delete me",
+        "sbb-2025", "Sacramento Bot Battles 2025", "2025-04-05", "Roseville, CA",
+        "NRL", "https://challonge.com/SacBotBattles2025_NRL", "Washing Machine Mk2", "Washing Machine",
+        "15lb", 1, 16, 4, 0, 2, "California NRL/BotsIQ 15lb Champion", "example row — delete me",
     ])
 
     dv_series = DataValidation(type="list", formula1=f'"{",".join(SERIES_VALUES)}"', allow_blank=True)
@@ -170,8 +187,8 @@ def write_template(path):
     dv_series.add(f"{series_col}2:{series_col}500")
     dv_weight.add(f"{weight_col}2:{weight_col}500")
 
-    widths = {"event_slug": 16, "event_name": 34, "date": 12, "location": 18,
-              "series": 9, "bot": 20, "weight_class": 13, "award": 28, "notes": 30}
+    widths = {"event_slug": 16, "event_name": 34, "date": 12, "location": 18, "series": 9,
+              "challonge": 40, "bot": 22, "lineage": 18, "weight_class": 13, "award": 30, "notes": 34}
     for name, width in widths.items():
         ws.column_dimensions[get_column_letter(COLUMNS.index(name) + 1)].width = width
 
@@ -212,21 +229,38 @@ def import_file(path, db, live, limit=None):
             "series": series,
             "source": "manual",
         }
+        challonge = (row.get("challonge") or "").strip()
+        if challonge:
+            event_payload["external_url"] = challonge.split(",")[0].strip()
         bot_payload = {
             "bot_slug": bot_slug,
             "name": bot_name,
             "weight_class": weight_class,
         }
+        lineage = (row.get("lineage") or "").strip()
+        if lineage:
+            bot_payload["lineage_slug"] = slugify(lineage)
+        try:
+            placement, tied = parse_placement(row.get("placement"))
+        except ValueError as exc:
+            stats.error(row_no, str(exc))
+            continue
+        notes_bits = [(row.get("notes") or "").strip()]
+        if tied:
+            notes_bits.append("tied placement")
+        field_size = to_int(row.get("field_size"))
+        if field_size:
+            notes_bits.append(f"field of {field_size}")
         result_payload = {
             "event_slug": event_slug,
             "bot_slug": bot_slug,
             "weight_class": weight_class,
-            "placement": to_int(row.get("placement")),
+            "placement": placement,
             "wins": to_int(row.get("wins")) or 0,
             "losses": to_int(row.get("losses")) or 0,
             "ko_wins": to_int(row.get("ko_wins")),
             "award": (row.get("award") or "").strip() or None,
-            "notes": (row.get("notes") or "").strip() or None,
+            "notes": "; ".join(b for b in notes_bits if b) or None,
             "source": "manual",
         }
 
