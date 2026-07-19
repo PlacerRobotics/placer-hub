@@ -47,11 +47,16 @@ export async function PATCH(req: NextRequest) {
   await db.from('family_season').update({ fundraising_methods: union, fundraising_method: primary }).eq('family_id', familyId).eq('season', SEASON)
 
   // Employer match lives on the family (parent's employer) — set when matched here.
+  // employer_match_submitted_at is family self-reported (the date they submitted the
+  // match request in Benevity/etc) — distinct from fundraising_received_at, which is
+  // admin-only and marks money actually received by PART.
   if (methods.includes('corporate_match')) {
+    const submittedAt = String(body.employer_match_submitted_at ?? '').trim()
     await db.from('family').update({
       employer_match_company: String(body.employer_company ?? '').trim() || null,
       employer_match_pct: body.employer_pct ? Number(body.employer_pct) : null,
       employer_match_portal: String(body.employer_portal ?? '').trim() || null,
+      employer_match_submitted_at: /^\d{4}-\d{2}-\d{2}$/.test(submittedAt) ? submittedAt : null,
     }).eq('id', familyId)
   }
 

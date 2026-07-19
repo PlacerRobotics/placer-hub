@@ -16,7 +16,7 @@ export default function RegistrationEdit({
   studentId: string
   current: {
     tshirt_size: string; program: string; division: string; emergency_name: string; emergency_phone: string
-    fundraising_methods: string[]; employer_company: string; employer_pct: string; employer_portal: string
+    fundraising_methods: string[]; employer_company: string; employer_pct: string; employer_portal: string; employer_match_submitted_at: string
     sponsor_business: string; sponsor_contact: string; sponsor_amount: string
   }
 }) {
@@ -116,6 +116,7 @@ export default function RegistrationEdit({
                   <option value="">—</option><option value="benevity">Benevity</option><option value="yourcause">YourCause</option><option value="employer_portal">Employer portal</option><option value="other">Other</option>
                 </select>
               </div>
+              <div><label style={labelStyle}>Match submitted</label><input style={inputStyle} type="date" value={f.employer_match_submitted_at} onChange={(e) => set('employer_match_submitted_at', e.target.value)} /></div>
             </>
           )}
           {f.fundraising_methods.includes('sponsored') && (

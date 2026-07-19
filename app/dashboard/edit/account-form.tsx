@@ -16,7 +16,7 @@ export type AccountData = {
     ec_first: string; ec_last: string; ec_phone: string; ec_relationship: string
     fund: {
       show: boolean; locked: boolean; methods: string[]; target: number
-      employer_company: string; employer_pct: string; employer_portal: string
+      employer_company: string; employer_pct: string; employer_portal: string; employer_submitted_at: string
       sponsor_business: string; sponsor_contact: string; sponsor_amount: string
     }
   }[]
@@ -192,6 +192,7 @@ function FundraisingSection({ studentId, name, fund, onSaved }: { studentId: str
   const [empCompany, setEmpCompany] = useState(fund.employer_company)
   const [empPct, setEmpPct] = useState(fund.employer_pct)
   const [empPortal, setEmpPortal] = useState(fund.employer_portal)
+  const [empSubmittedAt, setEmpSubmittedAt] = useState(fund.employer_submitted_at)
   const [spBusiness, setSpBusiness] = useState(fund.sponsor_business)
   const [spContact, setSpContact] = useState(fund.sponsor_contact)
   const [spAmount, setSpAmount] = useState(fund.sponsor_amount)
@@ -219,7 +220,7 @@ function FundraisingSection({ studentId, name, fund, onSaved }: { studentId: str
     try {
       const res = await fetch('/api/family/fundraising', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student_id: studentId, methods, employer_company: empCompany, employer_pct: empPct, employer_portal: empPortal, sponsor_business: spBusiness, sponsor_contact: spContact, sponsor_amount: spAmount }),
+        body: JSON.stringify({ student_id: studentId, methods, employer_company: empCompany, employer_pct: empPct, employer_portal: empPortal, employer_match_submitted_at: empSubmittedAt, sponsor_business: spBusiness, sponsor_contact: spContact, sponsor_amount: spAmount }),
       })
       const d = await res.json().catch(() => ({}))
       setState(res.ok ? 'saved' : (d.error || 'Save failed.'))
@@ -245,6 +246,9 @@ function FundraisingSection({ studentId, name, fund, onSaved }: { studentId: str
               <option value="">Select…</option><option value="benevity">Benevity</option><option value="yourcause">YourCause</option><option value="employer_portal">Employer portal</option><option value="other">Other</option>
             </select>
           </div>
+          <FormField label="Date you submitted the match request" htmlFor={`fsub-${studentId}`} helpText="Once you've submitted it in your employer's portal, log the date here so we know it's in progress.">
+            <TextInput id={`fsub-${studentId}`} type="date" value={empSubmittedAt} onChange={(e) => setEmpSubmittedAt(e.target.value)} />
+          </FormField>
         </div>
       )}
       {hasSponsor && (

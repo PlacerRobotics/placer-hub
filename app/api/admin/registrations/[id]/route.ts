@@ -203,10 +203,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
       // Employer match lives on family (parent's employer) — set for corporate_match.
       if (methods.includes('corporate_match')) {
+        const submittedAt = String(body.employer_match_submitted_at ?? '').trim()
         await db.from('family').update({
           employer_match_company: body.employer_company || null,
           employer_match_pct: body.employer_pct ? Number(body.employer_pct) : null,
           employer_match_portal: body.employer_portal || null,
+          employer_match_submitted_at: /^\d{4}-\d{2}-\d{2}$/.test(submittedAt) ? submittedAt : null,
         }).eq('id', famId)
       }
       // Sponsorship interest — per student. Update the existing row if present

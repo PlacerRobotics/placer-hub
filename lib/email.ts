@@ -329,6 +329,193 @@ export function slackMsHsCatchUpHtml({ name, season, inviteUrl, joinEmail, progr
     `You're registered for ${season} — join the Slack workspace to stay in the loop.`)
 }
 
+// PART's mailing address for paper-check payments — used here and in the
+// register wizard's own payment step (app/register/register-wizard.tsx).
+const MAIL_ADDRESS = 'Placer Advanced Robotics and Technology, 9182 Cedar Ridge Drive, Granite Bay, CA 95746'
+const SPONSOR_CONTACT_EMAIL = 'vasu.vallurupalli@placerrobotics.org'
+
+const FUND_METHOD_LABELS: Record<string, string> = {
+  direct_donation: 'Direct contribution via Zeffy',
+  corporate_match: 'Employer / corporate match',
+  sponsored: 'Business sponsorship',
+  paper_check: 'Paper check',
+  pending: 'Financial assistance (pending)',
+}
+
+// Per-method fundraising follow-up instructions, personalized where we have the
+// specifics on file (employer portal, sponsor business name). feeDue merges the
+// direct_donation guidance with the registration fee into ONE Zeffy call-to-action
+// (they're the same campaign/checkout) instead of two separate, confusing
+// "pay via Zeffy" mentions — this is also the encouraged path: pay both at once
+// whenever possible, rather than the fee now and a contribution separately later.
+function fundraisingMethodGuidance({ methods, zeffyUrl, employerPortal, employerCompany, sponsorBusiness, feeDue, feeAmount, fundraisingTarget, paymentReferenceCode, employerMatchSubmittedAt, dashboardEditUrl }: {
+  methods: string[]
+  zeffyUrl: string | null
+  employerPortal?: string | null
+  employerCompany?: string | null
+  sponsorBusiness?: string | null
+  feeDue: boolean
+  feeAmount?: number
+  fundraisingTarget?: number
+  paymentReferenceCode?: string | null
+  employerMatchSubmittedAt?: string | null
+  dashboardEditUrl?: string | null
+}): string {
+  if (!methods.length) {
+    return `<p style="margin:0;color:#3a4a63;font-size:14px;line-height:1.6;">Let us know how you'd like to fulfill this — a direct contribution, an employer/corporate match, a business sponsorship, or a paper check are all fine. Contact registrar@placerrobotics.org any time.</p>`
+  }
+  const blocks = methods.map((m) => {
+    if (m === 'direct_donation') {
+      if (!zeffyUrl) return `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Direct contribution:</strong> a secure Zeffy link will be provided shortly.</p>`
+      const link = `<a href="${zeffyUrl}" style="color:#0E2558;font-weight:600;">pay via Zeffy</a>`
+      if (feeDue) {
+        return `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Pay both together, when you can:</strong> ${link}${paymentReferenceCode ? ` — reference code <strong>${paymentReferenceCode}</strong>` : ''}. You can pay just the $${(feeAmount ?? 0).toFixed(0)} registration fee, or choose a higher ticket to put money toward your $${(fundraisingTarget ?? 0).toFixed(0)} fundraising commitment in the same transaction — you can always give more later.</p>`
+      }
+      return `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Direct contribution:</strong> ${link} any time — it counts toward this total.</p>`
+    }
+    if (m === 'corporate_match') {
+      const portalLabel = employerPortal === 'benevity' ? 'Benevity' : 'giving platform'
+      if (employerMatchSubmittedAt) {
+        return `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Employer match (${portalLabel}):</strong> you logged this as submitted on <strong>${new Date(employerMatchSubmittedAt).toLocaleDateString()}</strong> — thanks! We're watching for the match to arrive; no need to do anything else unless it's rejected or needs more info.</p>`
+      }
+      const editLink = dashboardEditUrl ? `<a href="${dashboardEditUrl}" style="color:#0E2558;font-weight:600;">log the date on your Hub account</a>` : 'let us know the date'
+      const submitAction = employerPortal === 'benevity'
+        ? `log into your ${employerCompany ? `<strong>${employerCompany}</strong> ` : ''}Benevity portal and submit a matching-gift request to <strong>Placer Advanced Robotics &amp; Technology</strong>`
+        : `submit a matching-gift request through your ${employerCompany ? `<strong>${employerCompany}</strong> ` : ''}employer's giving platform for <strong>Placer Advanced Robotics &amp; Technology</strong>`
+      return `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Employer match (${portalLabel}):</strong> ${submitAction}. Once it's in, ${editLink} so we can track it — that's the "Date you submitted the match request" field under your fundraising info.</p>`
+    }
+    if (m === 'sponsored') {
+      return sponsorBusiness
+        ? `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Business sponsorship:</strong> we have <strong>${sponsorBusiness}</strong> on file as a sponsor in progress — reach out to <a href="mailto:${SPONSOR_CONTACT_EMAIL}" style="color:#0E2558;font-weight:600;">${SPONSOR_CONTACT_EMAIL}</a> to finalize the details.</p>`
+        : `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Business sponsorship:</strong> we don't have a sponsor on file for you yet — email the business name and contact to <a href="mailto:${SPONSOR_CONTACT_EMAIL}" style="color:#0E2558;font-weight:600;">${SPONSOR_CONTACT_EMAIL}</a> and he can help line one up.</p>`
+    }
+    if (m === 'paper_check') {
+      return `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Paper check:</strong> make it payable to <strong>Placer Advanced Robotics and Technology</strong> and either drop it in the metal drop box at the lab, or mail it to ${MAIL_ADDRESS}. Please include your reference code in the memo.</p>`
+    }
+    if (m === 'pending') {
+      return `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>Financial assistance:</strong> if you haven't submitted a financial aid request yet, that's the next step — contact registrar@placerrobotics.org and we'll send you the link. We don't have one on file for you yet.</p>`
+    }
+    return ''
+  })
+  return blocks.join('')
+}
+
+export type ReminderStudent = {
+  name: string
+  registerUrl?: string | null
+  program?: string | null
+  feeAmount?: number
+  feePaid?: boolean
+  feeStatus?: 'unpaid' | 'paid' | 'waived'
+  paymentReferenceCode?: string | null
+  zeffyUrl?: string | null
+  fundraisingTarget?: number
+  fundraisingDone?: boolean
+  fundraisingMethods?: string[]
+  employerPortal?: string | null
+  employerCompany?: string | null
+  employerMatchSubmittedAt?: string | null
+  sponsorBusiness?: string | null
+}
+
+// Personalized "finish your registration" reminder — one email per family,
+// covering every student who isn't fully done (not yet registered, fee
+// unpaid, and/or fundraising commitment not yet marked received). A student
+// with registerUrl set is treated as not-yet-registered (steps-to-register
+// branch); otherwise the fee/fundraising follow-up branch applies.
+export function registrationReminderHtml({ guardianName, season, dueDate, students, dashboardEditUrl }: {
+  guardianName: string
+  season: string
+  dueDate: string
+  students: ReminderStudent[]
+  dashboardEditUrl?: string | null
+}): string {
+  const notRegistered = students.filter((s) => s.registerUrl)
+  const needsFollowUp = students.filter((s) => !s.registerUrl)
+
+  const registerBlock = notRegistered.length ? `
+    <p style="margin:0 0 8px;color:#0E2558;font-size:15px;font-weight:700;">Finish registration</p>
+    ${notRegistered.map((s) => `
+      <div style="margin:0 0 14px;padding:14px 16px;background-color:#f4f6fb;border:1px solid #e6eaf1;border-radius:8px;">
+        <p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;"><strong>${s.name}</strong> is cleared to register but hasn't started yet — it takes about 10 minutes (student details, waivers, and choosing how you'll cover the fee and fundraising commitment).</p>
+        ${emailButton(s.registerUrl!, `Register ${s.name} →`)}
+      </div>`).join('')}` : ''
+
+  let totalDue = 0
+  const followUpBlock = needsFollowUp.length ? `
+    <p style="margin:${notRegistered.length ? '20px' : '0'} 0 8px;color:#0E2558;font-size:15px;font-weight:700;">Complete your payment &amp; fundraising commitment</p>
+    ${needsFollowUp.map((s) => {
+      const feeDue = s.feeStatus === 'unpaid'
+      const fundDue = !s.fundraisingDone && (s.fundraisingTarget ?? 0) > 0
+      if (feeDue) totalDue += s.feeAmount ?? 0
+      if (fundDue) totalDue += s.fundraisingTarget ?? 0
+      const feeRow = `<div style="margin:0 0 4px;color:#3a4a63;font-size:14px;">Registration fee: <strong>$${(s.feeAmount ?? 0).toFixed(0)}</strong> — <span style="color:${feeDue ? '#B54708' : '#1a7f37'};font-weight:700;">${s.feeStatus === 'waived' ? 'WAIVED' : feeDue ? 'DUE' : 'PAID'}</span></div>`
+      const fundRow = (s.fundraisingTarget ?? 0) > 0
+        ? `<div style="margin:0 0 10px;color:#3a4a63;font-size:14px;">Fundraising commitment: <strong>$${(s.fundraisingTarget ?? 0).toFixed(0)}</strong> — <span style="color:${fundDue ? '#B54708' : '#1a7f37'};font-weight:700;">${fundDue ? 'OPEN' : 'DONE'}</span></div>`
+        : ''
+      // If fundraising is also open via direct_donation, that guidance below
+      // already covers the fee in the SAME Zeffy call-to-action — a standalone
+      // "pay the fee" line first would just repeat it. Otherwise (fee due with
+      // no open direct-donation fundraising to merge into) it stands alone.
+      const feeMergesIntoDirectDonation = feeDue && fundDue && (s.fundraisingMethods ?? []).includes('direct_donation')
+      const zeffyRow = feeDue && !feeMergesIntoDirectDonation
+        ? `<p style="margin:0 0 10px;color:#3a4a63;font-size:14px;line-height:1.6;">Pay the registration fee${s.paymentReferenceCode ? ` — reference code <strong>${s.paymentReferenceCode}</strong>` : ''}: ${s.zeffyUrl ? `<a href="${s.zeffyUrl}" style="color:#0E2558;font-weight:600;">pay via Zeffy</a>` : 'a secure link will be provided shortly'}.</p>`
+        : ''
+      const fundGuidance = fundDue ? fundraisingMethodGuidance({
+        methods: s.fundraisingMethods ?? [], zeffyUrl: s.zeffyUrl ?? null,
+        employerPortal: s.employerPortal, employerCompany: s.employerCompany, sponsorBusiness: s.sponsorBusiness,
+        feeDue, feeAmount: s.feeAmount, fundraisingTarget: s.fundraisingTarget, paymentReferenceCode: s.paymentReferenceCode,
+        employerMatchSubmittedAt: s.employerMatchSubmittedAt, dashboardEditUrl,
+      }) : ''
+      return `
+      <div style="margin:0 0 14px;padding:14px 16px;background-color:#f4f6fb;border:1px solid #e6eaf1;border-radius:8px;">
+        <p style="margin:0 0 8px;color:#0E2558;font-size:14px;font-weight:700;">${s.name}${s.program ? ` · ${s.program}` : ''}</p>
+        ${feeRow}${fundRow}${zeffyRow}${fundGuidance}
+      </div>`
+    }).join('')}` : ''
+
+  const totalDueBlock = totalDue > 0 ? `
+    <div style="margin:4px 0 20px;padding:12px 16px;background-color:#fff8ea;border:1px solid #f2e2b8;border-radius:8px;">
+      <span style="color:#0E2558;font-size:15px;font-weight:700;">Total due: $${totalDue.toFixed(0)}</span>
+    </div>` : ''
+
+  return emailShell(`Complete your ${season} registration by ${dueDate}`, `
+    <p style="${P}">Hi ${guardianName || 'there'}, a quick check-in on your ${season} Placer Robotics registration — here's what's still outstanding.</p>
+    <div style="margin:0 0 18px;padding:12px 16px;background-color:#fdeeee;border:1px solid #f3c9c9;border-radius:8px;">
+      <span style="color:#8a2c2c;font-size:14px;font-weight:700;">Please complete these steps by ${dueDate}.</span>
+    </div>
+    ${registerBlock}
+    ${totalDueBlock}
+    ${followUpBlock}
+    <p style="margin:18px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">Questions about any of this? Contact registrar@placerrobotics.org.</p>`,
+    `Please complete these steps by ${dueDate}.`)
+}
+
+// Student-facing companion to registrationReminderHtml — informational only, no
+// login-gated action links. Registration, payment, and fundraising all require a
+// guardian's session (matched by guardian.login_email), so a student clicking a
+// "Register"/"Pay" button here would just dead-end at a sign-in wall. This tells
+// them where things stand and points them to their parent(s) instead.
+export function registrationReminderStudentHtml({ name, season, dueDate, notRegistered, feeDue, fundraisingDue }: {
+  name: string
+  season: string
+  dueDate: string
+  notRegistered: boolean
+  feeDue: boolean
+  fundraisingDue: boolean
+}): string {
+  const items: string[] = []
+  if (notRegistered) items.push('Registration isn’t finished yet')
+  if (feeDue) items.push('Registration fee not yet paid')
+  if (fundraisingDue) items.push('Fundraising commitment still open')
+  const list = items.map((i) => `<li style="margin-bottom:4px;color:#3a4a63;font-size:14px;">${i}</li>`).join('')
+  return emailShell(`A few ${season} registration steps left — due ${dueDate}`, `
+    <p style="${P}">Hi ${name || 'there'}, here's where things stand with your Placer Robotics registration for ${season} — everything needs to be wrapped up by <strong>${dueDate}</strong>:</p>
+    <ul style="margin:0 0 16px;padding-left:18px;">${list}</ul>
+    <p style="margin:0;color:#3a4a63;font-size:14px;line-height:1.6;">These steps happen through your parent/guardian's account, so check in with them to help get this finished up before ${dueDate}. Thanks for being part of the team!</p>`,
+    `Due ${dueDate} — check in with your parent(s).`)
+}
+
 export function registrationConfirmationHtml({
   studentName,
   programLabel,

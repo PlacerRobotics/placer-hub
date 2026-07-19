@@ -122,7 +122,7 @@ export default async function RegistrationDetailPage({
   // Fundraising (Part 5) — method on family_season; employer-match on family;
   // sponsorship interest in family_sponsor_interest. Read via service role (admin).
   const adb = createAdminClient()
-  const { data: fam } = await adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', fs.family_id).maybeSingle()
+  const { data: fam } = await adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal, employer_match_submitted_at').eq('id', fs.family_id).maybeSingle()
   const { data: sponsor } = student
     ? await adb.from('family_sponsor_interest').select('business_name, contact_name, estimated_amount, status').eq('family_id', fs.family_id).eq('season', SEASON).eq('student_id', student.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
     : { data: null as any }
@@ -163,6 +163,7 @@ export default async function RegistrationDetailPage({
       { label: 'Employer', value: fam?.employer_match_company ?? '—' },
       { label: 'Match %', value: fam?.employer_match_pct != null ? `${fam.employer_match_pct}%` : '—' },
       { label: 'Submitted via', value: fam?.employer_match_portal ?? '—' },
+      { label: 'Match submitted', value: fam?.employer_match_submitted_at ? new Date(fam.employer_match_submitted_at).toLocaleDateString() : 'Not yet' },
     )
   }
   if (fundMethods.includes('sponsored')) {
@@ -193,6 +194,7 @@ export default async function RegistrationDetailPage({
               employer_company: fam?.employer_match_company ?? '',
               employer_pct: fam?.employer_match_pct != null ? String(fam.employer_match_pct) : '',
               employer_portal: fam?.employer_match_portal ?? '',
+              employer_match_submitted_at: fam?.employer_match_submitted_at ?? '',
               sponsor_business: sponsor?.business_name ?? '',
               sponsor_contact: sponsor?.contact_name ?? '',
               sponsor_amount: sponsor?.estimated_amount != null ? String(sponsor.estimated_amount) : '',

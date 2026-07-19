@@ -51,7 +51,7 @@ export default async function AccountPage() {
   // employer-match (family, shared) + per-student sponsor interest (admin-RLS) via service role.
   const adb = createAdminClient()
   const [{ data: fam }, { data: sponsors }] = await Promise.all([
-    adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal').eq('id', familyId).maybeSingle(),
+    adb.from('family').select('employer_match_company, employer_match_pct, employer_match_portal, employer_match_submitted_at').eq('id', familyId).maybeSingle(),
     adb.from('family_sponsor_interest').select('student_id, business_name, contact_name, estimated_amount').eq('family_id', familyId).eq('season', SEASON).eq('source', 'registration_wizard'),
   ])
   const sponsorByStudent: Record<string, any> = {}
@@ -97,6 +97,7 @@ export default async function AccountPage() {
           employer_company: fam?.employer_match_company ?? '',
           employer_pct: fam?.employer_match_pct != null ? String(fam.employer_match_pct) : '',
           employer_portal: fam?.employer_match_portal ?? '',
+          employer_submitted_at: fam?.employer_match_submitted_at ?? '',
           sponsor_business: sp?.business_name ?? '',
           sponsor_contact: sp?.contact_name ?? '',
           sponsor_amount: sp?.estimated_amount != null ? String(sp.estimated_amount) : '',
