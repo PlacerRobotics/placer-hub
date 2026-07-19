@@ -47,7 +47,8 @@ async function gatherGuardianAffiliations(db: any, season: string): Promise<Map<
   // (a) via enrolled students' team placement — a family's guardians inherit
   // their kid's program/team even before/without a coach-role team_member row.
   const { data: enrs } = await db.from('enrollment').select('student_id, program').eq('season', season)
-  const studentIds = [...new Set(((enrs ?? []) as any[]).map((e) => e.student_id).filter(Boolean))]
+  const enrolledStudentIds = new Set(((enrs ?? []) as any[]).map((e) => e.student_id).filter(Boolean))
+  const studentIds = [...enrolledStudentIds]
   const familyByStudent: Record<string, string> = {}
   if (studentIds.length) {
     const { data: studs } = await db.from('student').select('id, family_id').in('id', studentIds)
@@ -60,6 +61,20 @@ async function gatherGuardianAffiliations(db: any, season: string): Promise<Map<
   for (const e of (enrs ?? []) as any[]) {
     const teamNumber = studentTeamNumber[e.student_id] || null
     for (const gid of familyToGuardians[familyByStudent[e.student_id]] ?? []) add(gid, e.program, teamNumber)
+  }
+
+  // (a2) fallback for students who haven't registered yet (cleared_to_register,
+  // no enrollment row) — their application's program_interest is the only signal
+  // available. Without this, a not-yet-registered IQ-only family's guardians had
+  // an EMPTY affiliation and isMainWorkspaceExpected defaulted them to "expected"
+  // (its no-signal-don't-exclude rule), wrongly pulling IQ families into the main
+  // (V5/Combat) workspace's notJoined bucket and the Slack catch-up campaign.
+  // Skipped once a student has a real enrollment — that's authoritative.
+  const { data: apps } = await db.from('student_application').select('student_id, family_id, program_interest').eq('season', season)
+  for (const a of (apps ?? []) as any[]) {
+    if (enrolledStudentIds.has(a.student_id)) continue
+    const interests = a.program_interest === 'both' ? ['vex_v5', 'combat'] : a.program_interest ? [a.program_interest] : []
+    for (const gid of familyToGuardians[a.family_id] ?? []) for (const p of interests) add(gid, p, null)
   }
 
   // (b) via the guardian's own coach/manager/mentor team_member row.

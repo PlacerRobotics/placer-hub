@@ -20,6 +20,7 @@ function baseFixture(): Tables {
     volunteer_profile: [],
     guardian_email_alias: [],
     family: [],
+    student_application: [],
   }
 }
 
@@ -103,6 +104,48 @@ describe('gatherExpectedMembers — IQ program scoping', () => {
     t.enrollment = [{ student_id: 's1', season: SEASON, program: 'vex_iq' }]
     t.volunteer_clearance = [{ volunteer_id: 'vp1', season: SEASON, status: 'cleared' }]
     t.volunteer_profile = [{ id: 'vp1', guardian_id: 'g1', guardian: { id: 'g1', first_name: 'Iq', last_name: 'Vol', login_email: 'iqvol@ex.com', slack_email: null } }]
+
+    const expected = await gatherExpectedMembers(makeAdminClient(t), SEASON)
+    expect(expected).toEqual([])
+  })
+
+  it('excludes a cleared_to_register guardian whose only student has a pending vex_iq application and no enrollment yet', async () => {
+    // Regression: a not-yet-registered IQ family had an EMPTY affiliation (only
+    // enrollment/team_member were consulted), so isMainWorkspaceExpected's
+    // no-signal-don't-exclude default wrongly counted them as main-workspace
+    // expected — inflating "Not joined" and the MS/HS Slack catch-up campaign
+    // with families who were never going to join the V5/Combat workspace.
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'cleared_to_register' }]
+    t.guardian = [{ id: 'g1', family_id: 'fam1', first_name: 'Pending', last_name: 'Iq', login_email: 'pendingiq@ex.com', slack_email: null }]
+    t.student = [{ id: 's1', family_id: 'fam1' }]
+    t.student_application = [{ student_id: 's1', family_id: 'fam1', season: SEASON, program_interest: 'vex_iq' }]
+
+    const expected = await gatherExpectedMembers(makeAdminClient(t), SEASON)
+    expect(expected).toEqual([])
+  })
+
+  it('includes a cleared_to_register guardian whose only student has a pending vex_v5 application and no enrollment yet', async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'cleared_to_register' }]
+    t.guardian = [{ id: 'g1', family_id: 'fam1', first_name: 'Pending', last_name: 'V5', login_email: 'pendingv5@ex.com', slack_email: null }]
+    t.student = [{ id: 's1', family_id: 'fam1' }]
+    t.student_application = [{ student_id: 's1', family_id: 'fam1', season: SEASON, program_interest: 'vex_v5' }]
+
+    const expected = await gatherExpectedMembers(makeAdminClient(t), SEASON)
+    expect(expected.map((p) => p.email)).toEqual(['pendingv5@ex.com'])
+  })
+
+  it('prefers a real enrollment over a stale/superseded application program_interest', async () => {
+    const t = baseFixture()
+    t.family_season = [{ family_id: 'fam1', season: SEASON, status: 'registered' }]
+    t.guardian = [{ id: 'g1', family_id: 'fam1', first_name: 'Registered', last_name: 'Iq', login_email: 'registerediq@ex.com', slack_email: null }]
+    t.student = [{ id: 's1', family_id: 'fam1' }]
+    // Applied 'both' originally, but ended up registered for IQ only — the
+    // application fallback must not resurrect the vex_v5 side once a real
+    // enrollment exists for that student.
+    t.student_application = [{ student_id: 's1', family_id: 'fam1', season: SEASON, program_interest: 'both' }]
+    t.enrollment = [{ student_id: 's1', season: SEASON, program: 'vex_iq' }]
 
     const expected = await gatherExpectedMembers(makeAdminClient(t), SEASON)
     expect(expected).toEqual([])
