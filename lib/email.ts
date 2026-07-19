@@ -298,6 +298,37 @@ export function slackInviteSection({ inviteUrl, joinEmail }: { inviteUrl: string
     </div>`
 }
 
+const CHANNEL_GUIDANCE: Record<string, { channel: string; label: string }> = {
+  vex_v5: { channel: '#vex', label: 'VEX V5' },
+  combat: { channel: '#combat', label: 'Combat' },
+}
+
+// MS/HS "you're registered but haven't joined Slack yet" catch-up campaign
+// (task: admin-triggered one-time send, /admin/slack). programs is this
+// guardian's known V5/Combat affiliation(s) — empty when we can't yet tell
+// (e.g. registered but no team/program set), in which case both channels are
+// suggested rather than guessing wrong.
+export function slackMsHsCatchUpHtml({ name, season, inviteUrl, joinEmail, programs }: {
+  name: string
+  season: string
+  inviteUrl: string
+  joinEmail?: string | null
+  programs: string[]
+}): string {
+  const known = programs.map((p) => CHANNEL_GUIDANCE[p]).filter(Boolean) as { channel: string; label: string }[]
+  const shown = known.length ? known : Object.values(CHANNEL_GUIDANCE)
+  const channelList = shown
+    .map((c) => `<li style="margin-bottom:4px;color:#3a4a63;font-size:14px;"><strong>${c.channel}</strong> — ${c.label} team announcements &amp; coordination</li>`)
+    .join('')
+  return emailShell(`Join us on Slack — Placer Robotics ${season}`, `
+    <p style="${P}">Hi ${name || 'there'}, you're registered for the ${season} season, but we don't see you in the Placer Robotics Slack workspace yet — that's where we post team announcements, schedule changes, and day-to-day coordination, so you don't want to miss it.</p>
+    ${slackInviteSection({ inviteUrl, joinEmail })}
+    <p style="margin:20px 0 8px;color:#0E2558;font-size:14px;font-weight:700;">Once you're in, join your team's channel${shown.length > 1 ? 's' : ''}:</p>
+    <ul style="margin:0 0 4px;padding-left:18px;">${channelList}</ul>
+    <p style="margin:12px 0 0;color:#7a879c;font-size:13px;line-height:1.6;">You'll also be added to your specific team's channel automatically once you join — this just gets you started. Questions? Contact registrar@placerrobotics.org</p>`,
+    `You're registered for ${season} — join the Slack workspace to stay in the loop.`)
+}
+
 export function registrationConfirmationHtml({
   studentName,
   programLabel,

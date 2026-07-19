@@ -6,6 +6,7 @@ import { runSlackReconciliation, computeFuzzyMatches, gatherSlackDispositions, g
 import { type FlaggedRow } from './removal-queue'
 import { type MatchRow } from './alt-email-matches'
 import SlackDashboard from './dashboard'
+import CatchupCampaign from './catchup-campaign'
 
 const SEASON = '2026-27'
 
@@ -44,6 +45,15 @@ export default async function SlackAdminPage() {
     : []
   const needsReviewCount = run ? run.recon.unexpected.filter((u) => !dispositions[u.slackUserId]?.tags.length).length : 0
 
+  // MS/HS catch-up campaign candidates — guardian-kind notJoined entries. Already
+  // scoped to vex_v5/combat (the main workspace's programs), which in this club's
+  // roster IS the MS/HS population — VEX IQ (elementary-only) has its own separate
+  // workspace/invite and is excluded upstream in gatherExpectedMembers.
+  const catchupTargets = run ? run.recon.notJoined.filter((p) => p.kind === 'guardian') : []
+  const catchupV5 = catchupTargets.filter((p) => (p.programs ?? []).includes('vex_v5') && !(p.programs ?? []).includes('combat')).length
+  const catchupCombat = catchupTargets.filter((p) => (p.programs ?? []).includes('combat') && !(p.programs ?? []).includes('vex_v5')).length
+  const catchupBoth = catchupTargets.filter((p) => (p.programs ?? []).includes('vex_v5') && (p.programs ?? []).includes('combat')).length
+
   return (
     <AdminShell activePath="/admin/slack">
       <PageHeader title="Slack" subtitle={`Workspace reconciliation for ${SEASON}. Nightly job records matches and places members into team channels; removals are confirmed here (D11).`} />
@@ -73,6 +83,8 @@ export default async function SlackAdminPage() {
               </div>
             ))}
           </div>
+
+          <CatchupCampaign candidateCount={catchupTargets.length} v5Count={catchupV5} combatCount={catchupCombat} bothCount={catchupBoth} />
 
           <SlackDashboard
             removalRows={removalRows}
