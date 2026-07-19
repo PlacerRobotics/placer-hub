@@ -15,6 +15,21 @@ const SEASON = '2026-27'
 const REGISTRATION_DUE_DATE = 'July 31, 2026'
 const FUNDRAISING_DUE_DATE = 'August 14, 2026'
 
+// Resend rate-limits by requests/sec; the send loop below is otherwise back-to-back
+// with no delay, which is what produced a batch of silent failures (~29) on the
+// first live run — captured after the fact via notification_log, never surfaced to
+// the admin. sleep() paces sends; sendWithRetry gives a 429 one backed-off retry
+// before it's counted as a real failure.
+function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)) }
+const SEND_DELAY_MS = 350
+
+async function sendWithRetry(args: Parameters<typeof sendEmail>[0]) {
+  const res = await sendEmail(args)
+  if (res.ok || res.error !== 'resend_429') return res
+  await sleep(2000)
+  return sendEmail(args)
+}
+
 // POST /api/admin/registrations/reminders — one-time "finish your registration"
 // campaign for cleared-to-register/registered MS/HS families with outstanding
 // steps. body: { mode: 'sample' | 'send' }.
@@ -52,38 +67,75 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: 2 })
   }
 
-  // mode === 'send' — the real, one-time campaign.
+  // mode === 'send' — the real campaign. Not fully one-time any more: families
+  // become newly eligible over time, so we dedupe against notification_log
+  // (anyone already logged 'sent' for these types is skipped) — that makes a
+  // re-run safe and is also how a partially-failed batch gets retried: just hit
+  // Send again and only the gap goes out.
   const db = createAdminClient()
   const { families } = await gatherRegistrationReminders(db, SEASON, siteUrl)
 
-  let guardianEmailsSent = 0, guardianEmailsFailed = 0, studentEmailsSent = 0, studentEmailsFailed = 0
+  const { data: alreadySent } = await db
+    .from('notification_log')
+    .select('recipient_email, notification_type')
+    .in('notification_type', ['registration_reminder_guardian', 'registration_reminder_student'])
+    .eq('status', 'sent')
+  const sentKey = (type: string, email: string) => `${type}:${email.trim().toLowerCase()}`
+  const alreadySentSet = new Set((alreadySent ?? []).map((r: any) => sentKey(r.notification_type, r.recipient_email)))
+
+  let guardianEmailsSent = 0, guardianEmailsFailed = 0, guardianEmailsSkipped = 0
+  let studentEmailsSent = 0, studentEmailsFailed = 0, studentEmailsSkipped = 0
+  const failures: { recipient: string; type: 'guardian' | 'student'; familyId: string; error: string }[] = []
 
   for (const fam of families) {
-    const html = registrationReminderHtml({
-      guardianName: fam.guardianFirstName, season: SEASON, registrationDueDate: REGISTRATION_DUE_DATE, fundraisingDueDate: FUNDRAISING_DUE_DATE, dashboardEditUrl, students: fam.students,
-    })
-    const res = await sendEmail({
-      to: fam.guardianEmails,
-      cc: fam.needsSponsorCc ? [SPONSOR_CONTACT_EMAIL] : undefined,
-      subject: `Complete your ${SEASON} registration`,
-      html,
-    })
-    if (res.ok) {
-      guardianEmailsSent++
-      for (const email of fam.guardianEmails) {
-        await db.from('notification_log').insert({ family_id: fam.familyId, recipient_email: email, notification_type: 'registration_reminder_guardian', subject: 'Registration reminder', provider: 'resend', status: 'sent', sent_at: new Date().toISOString() })
+    const guardianTargets = fam.guardianEmails.filter((e) => !alreadySentSet.has(sentKey('registration_reminder_guardian', e)))
+    guardianEmailsSkipped += fam.guardianEmails.length - guardianTargets.length
+
+    if (guardianTargets.length) {
+      const html = registrationReminderHtml({
+        guardianName: fam.guardianFirstName, season: SEASON, registrationDueDate: REGISTRATION_DUE_DATE, fundraisingDueDate: FUNDRAISING_DUE_DATE, dashboardEditUrl, students: fam.students,
+      })
+      const res = await sendWithRetry({
+        to: guardianTargets,
+        cc: fam.needsSponsorCc ? [SPONSOR_CONTACT_EMAIL] : undefined,
+        subject: `Complete your ${SEASON} registration`,
+        html,
+      })
+      if (res.ok) {
+        guardianEmailsSent++
+        for (const email of guardianTargets) {
+          await db.from('notification_log').insert({ family_id: fam.familyId, recipient_email: email, notification_type: 'registration_reminder_guardian', subject: 'Registration reminder', provider: 'resend', status: 'sent', sent_at: new Date().toISOString() })
+        }
+      } else {
+        guardianEmailsFailed++
+        for (const email of guardianTargets) {
+          failures.push({ recipient: email, type: 'guardian', familyId: fam.familyId, error: res.error ?? 'unknown' })
+          await db.from('notification_log').insert({ family_id: fam.familyId, recipient_email: email, notification_type: 'registration_reminder_guardian', subject: 'Registration reminder', provider: 'resend', status: 'failed', error_message: res.error ?? 'unknown', sent_at: new Date().toISOString() })
+        }
       }
-    } else guardianEmailsFailed++
+      await sleep(SEND_DELAY_MS)
+    }
 
     for (const sr of fam.studentRecipients) {
+      if (alreadySentSet.has(sentKey('registration_reminder_student', sr.email))) { studentEmailsSkipped++; continue }
       const shtml = registrationReminderStudentHtml({ name: sr.name, season: SEASON, registrationDueDate: REGISTRATION_DUE_DATE, fundraisingDueDate: FUNDRAISING_DUE_DATE, notRegistered: sr.notRegistered, feeDue: sr.feeDue, fundraisingDue: sr.fundraisingDue })
-      const sres = await sendEmail({ to: [sr.email], subject: `A few ${SEASON} registration steps left`, html: shtml })
+      const sres = await sendWithRetry({ to: [sr.email], subject: `A few ${SEASON} registration steps left`, html: shtml })
       if (sres.ok) {
         studentEmailsSent++
         await db.from('notification_log').insert({ family_id: fam.familyId, recipient_email: sr.email, notification_type: 'registration_reminder_student', subject: 'Registration reminder', provider: 'resend', status: 'sent', sent_at: new Date().toISOString() })
-      } else studentEmailsFailed++
+      } else {
+        studentEmailsFailed++
+        failures.push({ recipient: sr.email, type: 'student', familyId: fam.familyId, error: sres.error ?? 'unknown' })
+        await db.from('notification_log').insert({ family_id: fam.familyId, recipient_email: sr.email, notification_type: 'registration_reminder_student', subject: 'Registration reminder', provider: 'resend', status: 'failed', error_message: sres.error ?? 'unknown', sent_at: new Date().toISOString() })
+      }
+      await sleep(SEND_DELAY_MS)
     }
   }
 
-  return NextResponse.json({ ok: true, families: families.length, guardianEmailsSent, guardianEmailsFailed, studentEmailsSent, studentEmailsFailed })
+  return NextResponse.json({
+    ok: true, families: families.length,
+    guardianEmailsSent, guardianEmailsFailed, guardianEmailsSkipped,
+    studentEmailsSent, studentEmailsFailed, studentEmailsSkipped,
+    failures,
+  })
 }

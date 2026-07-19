@@ -18,20 +18,26 @@ export default function ReminderCampaign({ notRegistered, unpaid, fundraisingOpe
 }) {
   const [busy, setBusy] = useState<'sample' | 'send' | null>(null)
   const [msg, setMsg] = useState('')
+  const [failures, setFailures] = useState<{ recipient: string; type: 'guardian' | 'student'; familyId: string; error: string }[]>([])
   const [confirming, setConfirming] = useState(false)
   const [confirmText, setConfirmText] = useState('')
 
   const outstanding = notRegistered + unpaid + fundraisingOpen
 
   async function post(mode: 'sample' | 'send') {
-    setBusy(mode); setMsg('')
+    setBusy(mode); setMsg(''); setFailures([])
     try {
       const res = await fetch('/api/admin/registrations/reminders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setMsg(d.error || 'Failed.'); return }
-      setMsg(mode === 'sample'
-        ? 'Sample sent to kevin.miller@placerrobotics.org (guardian + student versions) — check your inbox.'
-        : `Sent to ${d.families} families (${d.guardianEmailsSent} guardian emails, ${d.studentEmailsSent} student emails). ${d.guardianEmailsFailed + d.studentEmailsFailed} failed.`)
+      if (mode === 'sample') {
+        setMsg('Sample sent to kevin.miller@placerrobotics.org (guardian + student versions) — check your inbox.')
+      } else {
+        const failedCount = d.guardianEmailsFailed + d.studentEmailsFailed
+        const skippedCount = (d.guardianEmailsSkipped ?? 0) + (d.studentEmailsSkipped ?? 0)
+        setMsg(`Sent to ${d.families} families (${d.guardianEmailsSent} guardian emails, ${d.studentEmailsSent} student emails). ${failedCount} failed.${skippedCount ? ` ${skippedCount} already had a successful send on record and were skipped.` : ''}`)
+        setFailures(d.failures ?? [])
+      }
       setConfirming(false); setConfirmText('')
     } catch { setMsg('Network error.') } finally { setBusy(null) }
   }
@@ -71,7 +77,29 @@ export default function ReminderCampaign({ notRegistered, unpaid, fundraisingOpe
         )}
       </div>
       {msg && <p style={{ margin: '0.75rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{msg}</p>}
-      <p style={{ margin: '0.75rem 0 0', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Registration steps due July 31, 2026; fundraising commitment (sponsor/Benevity submissions, etc.) due August 14, 2026 — fixed for this round. One-time campaign — there's no dedup against a prior run, so only use "Send to all" once you're happy with the sample.</p>
+      {failures.length > 0 && (
+        <div style={{ margin: '0.5rem 0 0', border: '1px solid var(--color-border)', borderRadius: 6, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8125rem' }}>
+            <thead>
+              <tr style={{ backgroundColor: 'var(--color-bg-light)' }}>
+                <th style={{ textAlign: 'left', padding: '6px 10px' }}>Recipient</th>
+                <th style={{ textAlign: 'left', padding: '6px 10px' }}>Type</th>
+                <th style={{ textAlign: 'left', padding: '6px 10px' }}>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {failures.map((f, i) => (
+                <tr key={i} style={{ borderTop: '1px solid var(--color-border)' }}>
+                  <td style={{ padding: '6px 10px' }}>{f.recipient}</td>
+                  <td style={{ padding: '6px 10px' }}>{f.type}</td>
+                  <td style={{ padding: '6px 10px' }}>{f.error}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p style={{ margin: '0.75rem 0 0', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Registration steps due July 31, 2026; fundraising commitment (sponsor/Benevity submissions, etc.) due August 14, 2026 — fixed for this round. Safe to re-run: anyone already logged as sent is skipped automatically, so "Send to all" only reaches families/students who haven't gotten it yet.</p>
     </div>
   )
 }
