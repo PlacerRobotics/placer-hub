@@ -29,3 +29,18 @@ export async function requireSection(href: string): Promise<AdminAccess> {
   }
   return access
 }
+
+// Same as requireSection, but passes if the admin can access ANY of the given
+// hrefs — for a page shared by more than one list view (e.g.
+// /admin/registrations/[id] is linked from both /admin/registrations and
+// /admin/registrations-iq). Granting the detail page's own section list
+// isn't right here — that would also expose the OTHER list's nav item/page.
+export async function requireAnySection(hrefs: string[]): Promise<AdminAccess> {
+  const access = await getAdminAccess()
+  if (!access) redirect('/dashboard')
+  if (!hrefs.some((href) => canAccessAdmin(access.roles, access.isSuper, href))) {
+    const home = adminHome(access.roles, access.isSuper)
+    redirect(hrefs.includes(home) ? '/dashboard' : home)
+  }
+  return access
+}

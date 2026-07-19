@@ -131,6 +131,10 @@ const btn: React.CSSProperties = { padding: '4px 9px', fontSize: '0.75rem', font
 
 export default function RegistrationsManager({ rows, teams, schools }: { rows: RegRow[]; teams: TeamOpt[]; schools: string[] }) {
   const router = useRouter()
+  // /admin/registrations and /admin/registrations-iq each only ever pass one
+  // side of the program split — no point offering dropdown options that can
+  // never match anything on that page.
+  const availablePrograms = useMemo(() => [...new Set(rows.map((r) => r.program))].filter((p) => p && p !== '—'), [rows])
   const [fStatus, setFStatus] = useState('all')
   const [fProgram, setFProgram] = useState('all')
   const [fDivision, setFDivision] = useState('all')
@@ -306,7 +310,7 @@ export default function RegistrationsManager({ rows, teams, schools }: { rows: R
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
         <input placeholder="Search name or email…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...sel, minWidth: 200 }} />
         <select style={sel} value={fStatus} onChange={(e) => { setFStatus(e.target.value); setActiveCard(null) }}><option value="all">All statuses</option><option value="cleared_to_register">Cleared to Register</option><option value="registered">Registered</option><option value="applied">Applied</option><option value="suspended">Suspended</option><option value="cancelled">Cancelled</option></select>
-        <select style={sel} value={fProgram} onChange={(e) => setFProgram(e.target.value)}><option value="all">All programs</option><option value="vex_v5">VEX V5</option><option value="combat">Combat</option><option value="both">Both</option><option value="vex_iq">VEX IQ</option></select>
+        <select style={sel} value={fProgram} onChange={(e) => setFProgram(e.target.value)}><option value="all">All programs</option>{availablePrograms.map((p) => <option key={p} value={p}>{PROGRAM_LABELS[p] ?? p}</option>)}</select>
         <select style={sel} value={fDivision} onChange={(e) => setFDivision(e.target.value)}><option value="all">All divisions</option><option value="ES">ES</option><option value="MS">MS</option><option value="HS">HS</option></select>
         <select style={sel} value={fTeam} onChange={(e) => { setFTeam(e.target.value); setActiveCard(null) }}><option value="all">All teams</option><option value="unassigned">Unassigned</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
         <select style={sel} value={fSchool} onChange={(e) => setFSchool(e.target.value)}><option value="all">All schools</option>{schools.map((s) => <option key={s} value={s}>{s}</option>)}</select>

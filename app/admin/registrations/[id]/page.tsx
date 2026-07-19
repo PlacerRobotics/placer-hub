@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { requireSection } from '@/lib/auth/admin-access'
+import { requireAnySection } from '@/lib/auth/admin-access'
 import { programScopeFor, programInScope } from '@/lib/auth/roles'
 import { formatPhoneDisplay } from '@/lib/phone-input'
 import { AdminShell, PageHeader, AdminDetailPanel, StatusBadge } from '@/components/ui'
@@ -27,7 +27,9 @@ export default async function RegistrationDetailPage({
 }) {
   const { id } = await params
   const { student: studentParam } = await searchParams
-  const access = await requireSection('/admin/registrations')
+  // Shared detail page — linked from both /admin/registrations (V5/Combat) and
+  // /admin/registrations-iq, so either section's access is enough to open it.
+  const access = await requireAnySection(['/admin/registrations', '/admin/registrations-iq'])
   const scope = programScopeFor(access, '/admin/registrations')
   const supabase = await createClient()
 

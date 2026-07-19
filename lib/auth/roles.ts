@@ -35,6 +35,8 @@ export const ADMIN_SECTION_ROLES: Record<string, string[]> = {
   '/admin/applications': ['registration_admin', 'program_lead', 'board_member', 'read_only_admin'],
   '/admin/financial-aid': ['financial_aid_admin', 'read_only_admin'],
   '/admin/registrations': ['registration_admin', 'program_lead', 'read_only_admin'],
+  '/admin/registrations-iq': ['iq_coordinator', 'payment_admin', 'registration_admin', 'read_only_admin'],
+  '/admin/reports': ['registration_admin', 'payment_admin', 'read_only_admin'],
   '/admin/payments': ['payment_admin', 'read_only_admin'],
   '/admin/sponsors': ['payment_admin', 'communications_admin', 'read_only_admin'],
   '/admin/teams': ['registration_admin', 'program_lead', 'read_only_admin'],

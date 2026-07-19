@@ -20,6 +20,8 @@ const NAV_ITEMS = [
   { href: '/admin/applications', label: 'Applications' },
   { href: '/admin/financial-aid', label: 'Financial Aid' },
   { href: '/admin/registrations', label: 'Registrations' },
+  { href: '/admin/registrations-iq', label: 'IQ Registrations' },
+  { href: '/admin/reports', label: 'Reports' },
   { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/sponsors', label: 'Sponsors' },
   { href: '/admin/teams', label: 'Teams' },
