@@ -36,19 +36,22 @@ function htmlToText(html: string): string {
 
 export async function sendEmail({
   to,
+  cc,
   subject,
   html,
 }: {
   to: string[]
+  cc?: string[]
   subject: string
   html: string
 }): Promise<{ ok: boolean; error?: string }> {
   const key = process.env.RESEND_API_KEY
   const from = process.env.EMAIL_FROM || 'Placer Robotics Hub <noreply@placerrobotics.org>'
   const recipients = [...new Set(to.filter(Boolean).map((e) => e.trim().toLowerCase()))]
+  const ccRecipients = [...new Set((cc ?? []).filter(Boolean).map((e) => e.trim().toLowerCase()))].filter((e) => !recipients.includes(e))
   if (!recipients.length) return { ok: false, error: 'no_recipients' }
   if (!key) {
-    console.log(`[email] RESEND_API_KEY not set — would send "${subject}" to ${recipients.join(', ')}`)
+    console.log(`[email] RESEND_API_KEY not set — would send "${subject}" to ${recipients.join(', ')}${ccRecipients.length ? ` (cc: ${ccRecipients.join(', ')})` : ''}`)
     return { ok: false, error: 'no_api_key' }
   }
   try {
@@ -58,6 +61,7 @@ export async function sendEmail({
       body: JSON.stringify({
         from,
         to: recipients,
+        ...(ccRecipients.length ? { cc: ccRecipients } : {}),
         subject,
         html,
         text: htmlToText(html),
@@ -332,7 +336,7 @@ export function slackMsHsCatchUpHtml({ name, season, inviteUrl, joinEmail, progr
 // PART's mailing address for paper-check payments — used here and in the
 // register wizard's own payment step (app/register/register-wizard.tsx).
 const MAIL_ADDRESS = 'Placer Advanced Robotics and Technology, 9182 Cedar Ridge Drive, Granite Bay, CA 95746'
-const SPONSOR_CONTACT_EMAIL = 'vasu.vallurupalli@placerrobotics.org'
+export const SPONSOR_CONTACT_EMAIL = 'vasu.vallurupalli@placerrobotics.org'
 
 const FUND_METHOD_LABELS: Record<string, string> = {
   direct_donation: 'Direct contribution via Zeffy',

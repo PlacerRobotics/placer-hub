@@ -4,6 +4,9 @@ import { programScopeFor, programInScope, PROGRAM_SCOPE_LABELS } from '@/lib/aut
 import { AdminShell, PageHeader } from '@/components/ui'
 import RosterDownload from './roster-download'
 import RegistrationsManager, { type RegRow, type TeamOpt } from './registrations-manager'
+import ReminderCampaign from './reminder-campaign'
+import { gatherRegistrationReminders } from '@/lib/registration-reminders'
+import { NEXT_PUBLIC_SITE_URL } from '@/lib/env'
 
 const SEASON = '2026-27'
 
@@ -13,6 +16,10 @@ export default async function AdminRegistrationsPage() {
   // with no program yet (not_sure / no application) stay registrar-only.
   const scope = programScopeFor(access, '/admin/registrations')
   const supabase = await createClient()
+
+  // Registration-reminder campaign summary — full registrar view only (spans
+  // every program, not just a lead's scope).
+  const reminderSummary = scope ? null : (await gatherRegistrationReminders(supabase, SEASON, NEXT_PUBLIC_SITE_URL.replace(/\/$/, ''))).summary
 
   // Family-season lifecycle rows for the season.
   const { data: fseasons } = await supabase
@@ -169,6 +176,14 @@ export default async function AdminRegistrationsPage() {
           : `Registration lifecycle for the ${SEASON} season.`}
         actions={<RosterDownload />}
       />
+      {reminderSummary && (
+        <ReminderCampaign
+          notRegistered={reminderSummary.notRegistered}
+          unpaid={reminderSummary.unpaid}
+          fundraisingOpen={reminderSummary.fundraisingOpen}
+          fullyDone={reminderSummary.fullyDone}
+        />
+      )}
       <RegistrationsManager rows={rows} teams={teamOpts} schools={schools} />
     </AdminShell>
   )
