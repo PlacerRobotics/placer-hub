@@ -8,9 +8,12 @@ import { NEXT_PUBLIC_SITE_URL } from '@/lib/env'
 
 const SEASON = '2026-27'
 // Fixed for this round — not derived from anywhere, since there's no "deadline"
-// concept anywhere else in the schema. Update here if a future reminder round
-// needs a different date.
-const DUE_DATE = 'July 31, 2026'
+// concept anywhere else in the schema. Two separate deadlines: registration
+// itself (including the $40 fee) closes first; the fundraising commitment
+// (sponsor/Benevity submissions etc., which take longer to process) closes
+// later. Update here if a future reminder round needs different dates.
+const REGISTRATION_DUE_DATE = 'July 31, 2026'
+const FUNDRAISING_DUE_DATE = 'August 14, 2026'
 
 // POST /api/admin/registrations/reminders — one-time "finish your registration"
 // campaign for cleared-to-register/registered MS/HS families with outstanding
@@ -27,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   if (mode === 'sample') {
     const guardianHtml = registrationReminderHtml({
-      guardianName: 'Kevin', season: SEASON, dueDate: DUE_DATE, dashboardEditUrl,
+      guardianName: 'Kevin', season: SEASON, registrationDueDate: REGISTRATION_DUE_DATE, fundraisingDueDate: FUNDRAISING_DUE_DATE, dashboardEditUrl,
       students: [
         { name: 'Sample Student A', registerUrl: `${siteUrl}/register?student=SAMPLE` },
         {
@@ -39,10 +42,10 @@ export async function POST(req: NextRequest) {
       ],
     })
     const studentHtml = registrationReminderStudentHtml({
-      name: 'Sample Student B', season: SEASON, dueDate: DUE_DATE, notRegistered: false, feeDue: true, fundraisingDue: true,
+      name: 'Sample Student B', season: SEASON, registrationDueDate: REGISTRATION_DUE_DATE, fundraisingDueDate: FUNDRAISING_DUE_DATE, notRegistered: false, feeDue: true, fundraisingDue: true,
     })
     const [g, s] = await Promise.all([
-      sendEmail({ to: ['kevin.miller@placerrobotics.org'], subject: `[SAMPLE] Complete your ${SEASON} registration by ${DUE_DATE}`, html: guardianHtml }),
+      sendEmail({ to: ['kevin.miller@placerrobotics.org'], subject: `[SAMPLE] Complete your ${SEASON} registration`, html: guardianHtml }),
       sendEmail({ to: ['kevin.miller@placerrobotics.org'], subject: `[SAMPLE] A few ${SEASON} registration steps left`, html: studentHtml }),
     ])
     if (!g.ok || !s.ok) return NextResponse.json({ error: (g.error === 'no_api_key' || s.error === 'no_api_key') ? "Email isn't configured yet." : 'Send failed.' }, { status: 500 })
@@ -57,12 +60,12 @@ export async function POST(req: NextRequest) {
 
   for (const fam of families) {
     const html = registrationReminderHtml({
-      guardianName: fam.guardianFirstName, season: SEASON, dueDate: DUE_DATE, dashboardEditUrl, students: fam.students,
+      guardianName: fam.guardianFirstName, season: SEASON, registrationDueDate: REGISTRATION_DUE_DATE, fundraisingDueDate: FUNDRAISING_DUE_DATE, dashboardEditUrl, students: fam.students,
     })
     const res = await sendEmail({
       to: fam.guardianEmails,
       cc: fam.needsSponsorCc ? [SPONSOR_CONTACT_EMAIL] : undefined,
-      subject: `Complete your ${SEASON} registration by ${DUE_DATE}`,
+      subject: `Complete your ${SEASON} registration`,
       html,
     })
     if (res.ok) {
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest) {
     } else guardianEmailsFailed++
 
     for (const sr of fam.studentRecipients) {
-      const shtml = registrationReminderStudentHtml({ name: sr.name, season: SEASON, dueDate: DUE_DATE, notRegistered: sr.notRegistered, feeDue: sr.feeDue, fundraisingDue: sr.fundraisingDue })
+      const shtml = registrationReminderStudentHtml({ name: sr.name, season: SEASON, registrationDueDate: REGISTRATION_DUE_DATE, fundraisingDueDate: FUNDRAISING_DUE_DATE, notRegistered: sr.notRegistered, feeDue: sr.feeDue, fundraisingDue: sr.fundraisingDue })
       const sres = await sendEmail({ to: [sr.email], subject: `A few ${SEASON} registration steps left`, html: shtml })
       if (sres.ok) {
         studentEmailsSent++

@@ -71,7 +71,7 @@ export default function ReminderCampaign({ notRegistered, unpaid, fundraisingOpe
         )}
       </div>
       {msg && <p style={{ margin: '0.75rem 0 0', fontSize: '0.8125rem', color: 'var(--color-text-muted)' }}>{msg}</p>}
-      <p style={{ margin: '0.75rem 0 0', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Due date is fixed at July 31, 2026 for this round. One-time campaign — there's no dedup against a prior run, so only use "Send to all" once you're happy with the sample.</p>
+      <p style={{ margin: '0.75rem 0 0', fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>Registration steps due July 31, 2026; fundraising commitment (sponsor/Benevity submissions, etc.) due August 14, 2026 — fixed for this round. One-time campaign — there's no dedup against a prior run, so only use "Send to all" once you're happy with the sample.</p>
     </div>
   )
 }
